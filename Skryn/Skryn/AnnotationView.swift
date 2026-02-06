@@ -475,6 +475,13 @@ final class AnnotationView: NSView {
         return cgImage
     }
 
+    // MARK: - Testing Support
+
+    /// Injects annotations for unit testing `handleAt()`
+    func setAnnotations(forTesting newAnnotations: [Annotation]) {
+        annotations = newAnnotations
+    }
+
     // MARK: - Helpers
 
     func rectFromDrag(origin: CGPoint, current: CGPoint) -> CGRect {

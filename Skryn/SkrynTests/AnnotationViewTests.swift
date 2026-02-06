@@ -183,7 +183,21 @@ final class AnnotationViewTests: XCTestCase {
         }
     }
 
-    func testMoving_lineEndpoint() {
+    func testMoving_lineFromEndpoint() {
+        let annotation = Annotation.line(
+            from: CGPoint(x: 0, y: 0),
+            to: CGPoint(x: 100, y: 100)
+        )
+        let moved = annotation.moving(.from, to: CGPoint(x: 25, y: 30))
+        if case .line(let from, let to) = moved {
+            XCTAssertEqual(from, CGPoint(x: 25, y: 30))
+            XCTAssertEqual(to, CGPoint(x: 100, y: 100))
+        } else {
+            XCTFail("Expected line annotation")
+        }
+    }
+
+    func testMoving_lineToEndpoint() {
         let annotation = Annotation.line(
             from: CGPoint(x: 0, y: 0),
             to: CGPoint(x: 100, y: 100)
@@ -197,9 +211,8 @@ final class AnnotationViewTests: XCTestCase {
         }
     }
 
-    func testMoving_rectangleCorner() {
+    func testMoving_rectangleTopLeft() {
         let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
-        // Move topLeft to a new position — bottomRight (90,80) is the anchor
         let moved = annotation.moving(.topLeft, to: CGPoint(x: 5, y: 10))
         if case .rectangle(let rect) = moved {
             XCTAssertEqual(rect.origin.x, 5, accuracy: 0.001)
@@ -211,9 +224,64 @@ final class AnnotationViewTests: XCTestCase {
         }
     }
 
+    func testMoving_rectangleTopRight() {
+        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        // Anchor is bottomLeft (10, 80)
+        let moved = annotation.moving(.topRight, to: CGPoint(x: 100, y: 15))
+        if case .rectangle(let rect) = moved {
+            XCTAssertEqual(rect.origin.x, 10, accuracy: 0.001)
+            XCTAssertEqual(rect.origin.y, 15, accuracy: 0.001)
+            XCTAssertEqual(rect.width, 90, accuracy: 0.001)
+            XCTAssertEqual(rect.height, 65, accuracy: 0.001)
+        } else {
+            XCTFail("Expected rectangle annotation")
+        }
+    }
+
+    func testMoving_rectangleBottomLeft() {
+        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        // Anchor is topRight (90, 20)
+        let moved = annotation.moving(.bottomLeft, to: CGPoint(x: 0, y: 90))
+        if case .rectangle(let rect) = moved {
+            XCTAssertEqual(rect.origin.x, 0, accuracy: 0.001)
+            XCTAssertEqual(rect.origin.y, 20, accuracy: 0.001)
+            XCTAssertEqual(rect.width, 90, accuracy: 0.001)
+            XCTAssertEqual(rect.height, 70, accuracy: 0.001)
+        } else {
+            XCTFail("Expected rectangle annotation")
+        }
+    }
+
+    func testMoving_rectangleBottomRight() {
+        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        // Anchor is topLeft (10, 20)
+        let moved = annotation.moving(.bottomRight, to: CGPoint(x: 95, y: 85))
+        if case .rectangle(let rect) = moved {
+            XCTAssertEqual(rect.origin.x, 10, accuracy: 0.001)
+            XCTAssertEqual(rect.origin.y, 20, accuracy: 0.001)
+            XCTAssertEqual(rect.width, 85, accuracy: 0.001)
+            XCTAssertEqual(rect.height, 65, accuracy: 0.001)
+        } else {
+            XCTFail("Expected rectangle annotation")
+        }
+    }
+
+    func testMoving_rectangleFlipsPastOppositeCorner() {
+        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        // Drag topLeft past bottomRight — rect should flip correctly
+        let moved = annotation.moving(.topLeft, to: CGPoint(x: 100, y: 90))
+        if case .rectangle(let rect) = moved {
+            XCTAssertEqual(rect.origin.x, 90, accuracy: 0.001)
+            XCTAssertEqual(rect.origin.y, 80, accuracy: 0.001)
+            XCTAssertEqual(rect.width, 10, accuracy: 0.001)
+            XCTAssertEqual(rect.height, 10, accuracy: 0.001)
+        } else {
+            XCTFail("Expected rectangle annotation")
+        }
+    }
+
     func testMoving_cropCorner() {
         let annotation = Annotation.crop(rect: CGRect(x: 0, y: 0, width: 100, height: 50))
-        // Move bottomRight — topLeft (0,0) is the anchor
         let moved = annotation.moving(.bottomRight, to: CGPoint(x: 120, y: 80))
         if case .crop(let rect) = moved {
             XCTAssertEqual(rect.origin.x, 0, accuracy: 0.001)
@@ -227,21 +295,80 @@ final class AnnotationViewTests: XCTestCase {
 
     // MARK: - handleAt hit testing
 
-    func testHandleAt_hitsNearestHandle() {
-        let view = makeView()
-        // Add an arrow — handleAt is internal (non-private), so we can call it
-        // The view is 1:1 with screenshot, so screenshot coords == view coords
-        // We test handleAt directly with screenshot-space points
-
-        // Arrow from (10,20) to (80,60) — test near the "to" endpoint
-        let result = view.handleAt(CGPoint(x: 79, y: 59))
-        // No annotations yet, should be nil
-        XCTAssertNil(result)
-    }
-
     func testHandleAt_returnsNilWhenNoAnnotations() {
         let view = makeView()
         let result = view.handleAt(CGPoint(x: 50, y: 50))
         XCTAssertNil(result)
+    }
+
+    func testHandleAt_hitsArrowToEndpoint() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .arrow(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 80, y: 60))
+        ])
+        // Click near the "to" endpoint (within 10pt radius at 1:1 scale)
+        let result = view.handleAt(CGPoint(x: 78, y: 58))
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.index, 0)
+        if case .to = result?.handle {} else { XCTFail("Expected .to handle") }
+    }
+
+    func testHandleAt_hitsArrowFromEndpoint() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .arrow(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 80, y: 60))
+        ])
+        let result = view.handleAt(CGPoint(x: 12, y: 22))
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.index, 0)
+        if case .from = result?.handle {} else { XCTFail("Expected .from handle") }
+    }
+
+    func testHandleAt_missesWhenFarFromHandle() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .arrow(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 80, y: 60))
+        ])
+        // Click far from both endpoints
+        let result = view.handleAt(CGPoint(x: 50, y: 50))
+        XCTAssertNil(result)
+    }
+
+    func testHandleAt_hitsRectangleCorner() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40))
+        ])
+        // Click near bottomRight (80, 60)
+        let result = view.handleAt(CGPoint(x: 79, y: 59))
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.index, 0)
+        if case .bottomRight = result?.handle {} else {
+            XCTFail("Expected .bottomRight handle")
+        }
+    }
+
+    func testHandleAt_prefersTopmostAnnotation() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .arrow(from: CGPoint(x: 50, y: 50), to: CGPoint(x: 90, y: 90)),
+            .arrow(from: CGPoint(x: 50, y: 50), to: CGPoint(x: 10, y: 10))
+        ])
+        // Both annotations share the "from" point (50,50)
+        // Topmost (index 1) should win
+        let result = view.handleAt(CGPoint(x: 50, y: 50))
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.index, 1)
+    }
+
+    func testHandleAt_picksNearestHandleOnSameAnnotation() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .arrow(from: CGPoint(x: 10, y: 50), to: CGPoint(x: 30, y: 50))
+        ])
+        // Closer to "to" (30,50) than "from" (10,50)
+        let result = view.handleAt(CGPoint(x: 27, y: 50))
+        XCTAssertNotNil(result)
+        if case .to = result?.handle {} else { XCTFail("Expected .to handle") }
     }
 }

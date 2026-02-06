@@ -20,7 +20,7 @@ swiftlint --config .swiftlint.yml
 xcodebuild test -project Skryn/Skryn.xcodeproj -scheme Skryn -destination 'platform=macOS'
 ```
 
-Verify changes by building. Run lint and tests before committing.
+Verify changes by building. Run lint and tests before committing. Write tests for new logic — model/pure functions in `AnnotationViewTests.swift`. Use `setAnnotations(forTesting:)` to inject state for view-level tests like `handleAt()`.
 
 To run the built app (avoids Xcode re-signing permission issues with ScreenCaptureKit):
 ```bash
