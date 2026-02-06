@@ -28,7 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
-        setupGlobalHotkey()
+        installHotkeyHandler()
+        registerHotkey()
     }
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -348,6 +349,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.onSettingsChanged = { [weak self] in
             self?.lastUploadError = nil
             self?.resetIcon()
+            self?.registerHotkey()
         }
         settingsPanel = panel
         panel.makeKeyAndOrderFront(nil)
@@ -383,7 +385,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Global Hotkey
 
-    private func setupGlobalHotkey() {
+    private func installHotkeyHandler() {
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
@@ -404,12 +406,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Unmanaged.passUnretained(self).toOpaque(),
             nil
         )
+    }
 
-        // Cmd+Shift+5 (kVK_ANSI_5 = 0x17)
+    private func unregisterHotkey() {
+        if let existing = hotKeyRef {
+            UnregisterEventHotKey(existing)
+            hotKeyRef = nil
+        }
+    }
+
+    private func registerHotkey() {
+        unregisterHotkey()
+
+        let defaults = UserDefaults.standard
+        let keyCode = defaults.object(forKey: "hotkeyKeyCode") as? UInt32 ?? UInt32(kVK_ANSI_5)
+        let mods = defaults.object(forKey: "hotkeyModifiers") as? UInt32 ?? UInt32(cmdKey | shiftKey)
+
         var hotKeyID = EventHotKeyID(signature: OSType(0x534B5259), id: 1)
         RegisterEventHotKey(
-            UInt32(kVK_ANSI_5),
-            UInt32(cmdKey | shiftKey),
+            keyCode,
+            mods,
             hotKeyID,
             GetApplicationEventTarget(),
             0,
@@ -418,6 +434,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     fileprivate func hotkeyPressed() {
+        if settingsPanel?.isRecordingHotkey == true {
+            settingsPanel?.confirmCurrentHotkey()
+            return
+        }
         guard annotationWindow == nil else { return }
         captureScreen()
     }

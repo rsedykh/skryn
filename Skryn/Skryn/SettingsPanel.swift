@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 
 final class SettingsPanel: NSPanel {
     private let localRadio = NSButton(radioButtonWithTitle: "Save to local folder", target: nil, action: nil)
@@ -8,12 +9,20 @@ final class SettingsPanel: NSPanel {
     private let chooseButton = NSButton(title: "Choose…", target: nil, action: nil)
     private let keyField = NSTextField(frame: .zero)
     private let keyLabel = NSTextField(labelWithString: "Public key:")
+    private let hotkeyLabel = NSTextField(labelWithString: "Screenshot shortcut:")
+    private let hotkeyRecorder = HotkeyRecorderButton(frame: .zero)
 
     var onSettingsChanged: (() -> Void)?
 
+    var isRecordingHotkey: Bool { hotkeyRecorder.isRecording }
+
+    func confirmCurrentHotkey() {
+        hotkeyRecorder.cancelRecording()
+    }
+
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 220),
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 280),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -83,6 +92,17 @@ final class SettingsPanel: NSPanel {
         cloudSection.spacing = 6
         keyRow.leadingAnchor.constraint(equalTo: cloudSection.leadingAnchor, constant: 18).isActive = true
 
+        let separator = NSBox()
+        separator.boxType = .separator
+
+        let defaultButton = NSButton(title: "Default", target: self, action: #selector(resetHotkeyClicked))
+        defaultButton.bezelStyle = .rounded
+        defaultButton.toolTip = "Reset to ⌘⇧5"
+
+        let hotkeyRow = NSStackView(views: [hotkeyLabel, hotkeyRecorder, defaultButton])
+        hotkeyRow.orientation = .horizontal
+        hotkeyRow.spacing = 8
+
         let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelClicked))
         cancelButton.bezelStyle = .rounded
         cancelButton.keyEquivalent = "\u{1b}"
@@ -98,7 +118,9 @@ final class SettingsPanel: NSPanel {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
 
-        let mainStack = NSStackView(views: [localSection, cloudSection, spacer, buttonRow])
+        let mainStack = NSStackView(
+            views: [localSection, cloudSection, separator, hotkeyRow, spacer, buttonRow]
+        )
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
         mainStack.spacing = 16
@@ -118,6 +140,8 @@ final class SettingsPanel: NSPanel {
         buttonRow.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor, constant: -20).isActive = true
         folderRow.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor, constant: -20).isActive = true
         keyRow.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor, constant: -20).isActive = true
+        separator.leadingAnchor.constraint(equalTo: mainStack.leadingAnchor, constant: 20).isActive = true
+        separator.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor, constant: -20).isActive = true
     }
 
     private func loadSettings() {
@@ -140,6 +164,11 @@ final class SettingsPanel: NSPanel {
             ?? "~/Desktop"
         folderLabel.stringValue = abbreviatePath(folderPath)
         folderLabel.toolTip = folderPath
+
+        let defaults = UserDefaults.standard
+        let keyCode = defaults.object(forKey: "hotkeyKeyCode") as? UInt32 ?? UInt32(kVK_ANSI_5)
+        let mods = defaults.object(forKey: "hotkeyModifiers") as? UInt32 ?? UInt32(cmdKey | shiftKey)
+        hotkeyRecorder.setHotkey(keyCode: keyCode, carbonModifiers: mods)
     }
 
     private func abbreviatePath(_ path: String) -> String {
@@ -183,6 +212,10 @@ final class SettingsPanel: NSPanel {
         }
     }
 
+    @objc private func resetHotkeyClicked() {
+        hotkeyRecorder.setHotkey(keyCode: UInt32(kVK_ANSI_5), carbonModifiers: UInt32(cmdKey | shiftKey))
+    }
+
     @objc private func cancelClicked() {
         close()
     }
@@ -201,10 +234,6 @@ final class SettingsPanel: NSPanel {
             UserDefaults.standard.set(key, forKey: "uploadcarePublicKey")
             UserDefaults.standard.removeObject(forKey: "saveFolderPath")
         } else {
-            let wasCloud = UserDefaults.standard.string(forKey: "saveMode") == "cloud"
-                || (UserDefaults.standard.string(forKey: "saveMode") == nil
-                    && UserDefaults.standard.string(forKey: "uploadcarePublicKey") != nil)
-
             UserDefaults.standard.set("local", forKey: "saveMode")
             if !key.isEmpty {
                 UserDefaults.standard.set(key, forKey: "uploadcarePublicKey")
@@ -212,19 +241,22 @@ final class SettingsPanel: NSPanel {
 
             // Save folder path from the label's tooltip (full path)
             if let fullPath = folderLabel.toolTip {
-                let desktopPath = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.path
+                let desktopPath = FileManager.default.urls(
+                    for: .desktopDirectory, in: .userDomainMask
+                ).first?.path
                 if fullPath == desktopPath {
                     UserDefaults.standard.removeObject(forKey: "saveFolderPath")
                 } else {
                     UserDefaults.standard.set(fullPath, forKey: "saveFolderPath")
                 }
             }
-
-            if wasCloud {
-                onSettingsChanged?()
-            }
         }
 
+        // Persist hotkey
+        UserDefaults.standard.set(hotkeyRecorder.recordedKeyCode, forKey: "hotkeyKeyCode")
+        UserDefaults.standard.set(hotkeyRecorder.recordedCarbonModifiers, forKey: "hotkeyModifiers")
+
+        onSettingsChanged?()
         close()
     }
 }

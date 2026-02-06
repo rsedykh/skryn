@@ -17,6 +17,7 @@
 		AA000008 /* UploadcareService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000011 /* UploadcareService.swift */; };
 		AA000009 /* UploadHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012 /* UploadHistory.swift */; };
 		AA000010 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000013 /* SettingsPanel.swift */; };
+		AA000011 /* HotkeyRecorderButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000014 /* HotkeyRecorderButton.swift */; };
 		AA100001 /* AnnotationViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100001 /* AnnotationViewTests.swift */; };
 		AA100002 /* UploadcareServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100003 /* UploadcareServiceTests.swift */; };
 		AA100003 /* UploadHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100004 /* UploadHistoryTests.swift */; };
@@ -46,6 +47,7 @@
 		AB000011 /* UploadcareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadcareService.swift; sourceTree = "<group>"; };
 		AB000012 /* UploadHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadHistory.swift; sourceTree = "<group>"; };
 		AB000013 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
+		AB000014 /* HotkeyRecorderButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderButton.swift; sourceTree = "<group>"; };
 		AB100001 /* AnnotationViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationViewTests.swift; sourceTree = "<group>"; };
 		AB100002 /* SkrynTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SkrynTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB100003 /* UploadcareServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadcareServiceTests.swift; sourceTree = "<group>"; };
@@ -91,6 +93,7 @@
 				AB000011 /* UploadcareService.swift */,
 				AB000012 /* UploadHistory.swift */,
 				AB000013 /* SettingsPanel.swift */,
+				AB000014 /* HotkeyRecorderButton.swift */,
 				AB000007 /* Assets.xcassets */,
 				AB000008 /* Skryn.entitlements */,
 				AB000009 /* Info.plist */,
@@ -225,6 +228,7 @@
 				AA000008 /* UploadcareService.swift in Sources */,
 				AA000009 /* UploadHistory.swift in Sources */,
 				AA000010 /* SettingsPanel.swift in Sources */,
+				AA000011 /* HotkeyRecorderButton.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

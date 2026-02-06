@@ -19,7 +19,7 @@ Since the app is unsigned, macOS may revoke Screen Recording permission after up
 
 ## Usage
 
-Click the camera icon in the menu bar to capture your screen. An annotation window opens where you can draw before saving.
+Click the camera icon in the menu bar or press **Cmd+Shift+5** (configurable in Settings) to capture your screen. An annotation window opens where you can draw before saving.
 
 **Tools** (hold modifier key while dragging):
 
