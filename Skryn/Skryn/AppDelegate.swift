@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import ImageIO
+import UniformTypeIdentifiers
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
@@ -26,6 +27,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.target = self
             button.action = #selector(statusItemClicked(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+
+            let dropView = StatusItemDropView(frame: button.bounds)
+            dropView.appDelegate = self
+            dropView.autoresizingMask = [.width, .height]
+            button.addSubview(dropView)
         }
 
         installHotkeyHandler()
@@ -267,6 +273,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     print("Upload failed: \(error.localizedDescription)")
                 }
             }
+        }
+    }
+
+    func uploadDroppedFile(_ url: URL) {
+        guard let publicKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey"),
+              !publicKey.isEmpty else {
+            showRejectedFileIcon()
+            return
+        }
+
+        guard let fileData = try? Data(contentsOf: url) else { return }
+
+        let filename = url.lastPathComponent
+        let utType = UTType(filenameExtension: url.pathExtension) ?? .data
+        let contentType = utType.preferredMIMEType ?? "application/octet-stream"
+
+        guard let cachePath = UploadHistory.cachePNGData(fileData, filename: filename) else { return }
+
+        let upload = RecentUpload(filename: filename, cdnURL: nil, date: Date(), cacheFilePath: cachePath)
+        UploadHistory.add(upload)
+
+        lastUploadError = nil
+        startIconAnimation()
+
+        uploadTask = Task {
+            do {
+                let cdnURL = try await UploadcareService.upload(
+                    fileData: fileData, filename: filename, contentType: contentType,
+                    publicKey: publicKey
+                )
+                await MainActor.run {
+                    UploadHistory.updateCDNURL(for: filename, url: cdnURL)
+                    copyToClipboard(cdnURL)
+                    stopIconAnimation(failed: false)
+                    self.lastUploadError = nil
+                    print("Uploaded: \(cdnURL)")
+                }
+            } catch {
+                await MainActor.run {
+                    stopIconAnimation(failed: true)
+                    self.lastUploadError = "Upload failed: \(error.localizedDescription)"
+                    print("Upload failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    func showRejectedFileIcon() {
+        statusItem.button?.image = NSImage(
+            systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Invalid file"
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.resetIcon()
         }
     }
 
@@ -529,5 +588,50 @@ extension AppDelegate: NSWindowDelegate {
             NSApp.mainMenu = nil
             NSApp.setActivationPolicy(.accessory)
         }
+    }
+}
+
+// MARK: - Menu Bar Drop Target
+
+final class StatusItemDropView: NSView {
+    weak var appDelegate: AppDelegate?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        registerForDraggedTypes([.fileURL])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard allFilesAreImages(sender) else {
+            appDelegate?.showRejectedFileIcon()
+            return []
+        }
+        return .copy
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        guard let urls = fileURLs(from: sender), !urls.isEmpty else { return false }
+        for url in urls {
+            appDelegate?.uploadDroppedFile(url)
+        }
+        return true
+    }
+
+    private func allFilesAreImages(_ info: any NSDraggingInfo) -> Bool {
+        guard let urls = fileURLs(from: info), !urls.isEmpty else { return false }
+        return urls.allSatisfy { url in
+            guard let utType = UTType(filenameExtension: url.pathExtension) else { return false }
+            return utType.conforms(to: .image)
+        }
+    }
+
+    private func fileURLs(from info: any NSDraggingInfo) -> [URL]? {
+        info.draggingPasteboard.readObjects(forClasses: [NSURL.self],
+                                            options: [.urlReadingFileURLsOnly: true]) as? [URL]
     }
 }

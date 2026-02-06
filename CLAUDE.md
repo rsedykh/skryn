@@ -63,6 +63,8 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **UserDefaults keys:** `"saveMode"` (`"local"` or `"cloud"`), `"uploadcarePublicKey"` (String, persisted even when mode is local), `"recentUploads"` (JSON-encoded `[RecentUpload]`), `"saveFolderPath"` (String, custom save folder), `"hotkeyKeyCode"` (UInt32, Carbon key code, default `kVK_ANSI_5`), `"hotkeyModifiers"` (UInt32, Carbon modifier bitmask, default `cmdKey | shiftKey`).
 
+**Drag-and-drop upload:** Dropping image files onto the menu bar icon uploads them to Uploadcare (regardless of save mode setting — drag-and-drop is always a cloud action). Requires a public key configured in settings. Non-image files are rejected with a "!" icon for 2 seconds. `StatusItemDropView` (NSView subclass at bottom of AppDelegate.swift) sits on top of `statusItem.button`, returns nil from `hitTest` so clicks pass through, but receives drag events via frame containment.
+
 **Right-click menu structure:**
 - Recent Uploads submenu (only if uploads exist) / error message (if any) / "Settings…" (⌘,, opens settings panel) / Quit
 
