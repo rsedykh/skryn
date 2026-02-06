@@ -489,19 +489,9 @@ final class AnnotationView: NSView {
                 }
             }
         }
-        if event.keyCode == 36 && event.modifierFlags.contains(.control) { // CTRL+ENTER
+        if event.keyCode == 36, let action = SaveAction.action(for: event.modifierFlags) {
             finalizeTextEditing()
-            copyToClipboardAndClose()
-            return true
-        }
-        if event.keyCode == 36 && event.modifierFlags.contains(.option) { // OPT+ENTER
-            finalizeTextEditing()
-            alternateAndClose()
-            return true
-        }
-        if event.keyCode == 36 && event.modifierFlags.contains(.command) { // CMD+ENTER
-            finalizeTextEditing()
-            saveAndClose()
+            performAction(action)
             return true
         }
         return super.performKeyEquivalent(with: event)
@@ -772,38 +762,16 @@ final class AnnotationView: NSView {
 
     // MARK: - Save
 
-    private func saveAndClose() {
-        guard let cgImage = compositeAsCGImage() else {
-            print("AnnotationView: failed to create image")
-            window?.close()
-            return
-        }
-
-        appDelegate?.handleSave(cgImage: cgImage)
-
-        window?.close()
-    }
-
-    private func copyToClipboardAndClose() {
-        guard let cgImage = compositeAsCGImage() else {
-            window?.close()
-            return
-        }
-        let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.writeObjects([nsImage])
-        window?.close()
-    }
-
-    private func alternateAndClose() {
+    private func performAction(_ action: SaveAction) {
         guard let cgImage = compositeAsCGImage() else {
             window?.close()
             return
         }
 
-        appDelegate?.handleAlternateSave(cgImage: cgImage)
-
-        window?.close()
+        let succeeded = appDelegate?.handleAction(action, cgImage: cgImage) ?? true
+        if succeeded {
+            window?.close()
+        }
     }
 
     private func compositeAsCGImage() -> CGImage? {

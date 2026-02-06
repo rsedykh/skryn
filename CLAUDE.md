@@ -31,13 +31,13 @@ open ~/Library/Developer/Xcode/DerivedData/Skryn-*/Build/Products/Debug/Skryn.ap
 
 macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`); all real work is AppKit.
 
-**Flow:** Menu bar click → `ScreenCapture.capture()` (ScreenCaptureKit, 2x resolution) → `AnnotationWindow` (90% of screen, borderless, rounded corners, shadow) → `AnnotationView` (drawing + input) → `AppDelegate.handleSave(cgImage:)` → local save or Uploadcare cloud upload. AnnotationView holds a `weak var appDelegate` reference set at window creation — do NOT use `NSApp.delegate as? AppDelegate` (see SwiftUI gotcha below).
+**Flow:** Menu bar click → `ScreenCapture.capture()` (ScreenCaptureKit, 2x resolution) → `AnnotationWindow` (90% of screen, borderless, rounded corners, shadow) → `AnnotationView` (drawing + input) → `AppDelegate.handleAction(_:cgImage:)` → local save, clipboard copy, or Uploadcare cloud upload. AnnotationView holds a `weak var appDelegate` reference set at window creation — do NOT use `NSApp.delegate as? AppDelegate` (see SwiftUI gotcha below).
 
 **Coordinate system:** Annotations are stored in **screenshot point coordinates** (NSImage size), not view coordinates. Mouse input is converted via `viewToScreenshot()`. On-screen drawing uses `NSAffineTransform` to map screenshot space back to view space. `compositeAsCGImage()` uses a `CGBitmapContext` at full pixel resolution — it draws the CGImage first, then applies a point-to-pixel transform for annotation drawing. PNG is written directly via `CGImageDestination` (no TIFF/BitmapRep intermediates).
 
 **Activation policy toggle:** The app is `LSUIElement=true` (no Dock icon). When the annotation window opens, it switches to `.regular` (appears in Cmd+Tab) and installs a main menu. On window close, it reverts to `.accessory`.
 
-**Keyboard shortcuts** are handled via the installed `NSApp.mainMenu` (Cmd+W, Cmd+Z, Cmd+Shift+Z, Cmd+Q) for proper cross-layout support. ESC uses `keyDown` (layout-independent keyCode). Cmd+Enter, Option+Enter, and Ctrl+Enter use `performKeyEquivalent` — the menu system intercepts modifier combos before they reach `keyDown`. Option+Enter triggers alternate save (opposite of configured default: local↔cloud). Ctrl+Enter copies the annotated screenshot to the system clipboard.
+**Keyboard shortcuts** are handled via the installed `NSApp.mainMenu` (Cmd+W, Cmd+Z, Cmd+Shift+Z, Cmd+Q) for proper cross-layout support. ESC uses `keyDown` (layout-independent keyCode). Modifier+Enter uses `performKeyEquivalent` — the menu system intercepts modifier combos before they reach `keyDown`. Each of the three save actions (local, clipboard, cloud) has a configurable modifier key (Cmd/Opt/Ctrl) stored in UserDefaults. `SaveAction.action(for:)` maps the pressed modifier to the correct action.
 
 **Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Option = rectangle, Command = crop. T key enters text mode (I-beam cursor, click to place). Only one crop allowed at a time.
 
@@ -53,15 +53,15 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Files:** `UploadcareService.swift` (HTTP multipart POST via URLSession, no dependencies), `UploadHistory.swift` (recent uploads + PNG cache).
 
-**Upload flow:** `AppDelegate.handleSave()` → if public key set: cache PNG to `~/Library/Application Support/Skryn/uploads/`, start async upload via URLSession, animate menu bar icon (spinning arrows). On success: copy CDN URL to clipboard. On failure: icon turns red, error shown in menu, screenshot saved locally as fallback.
+**Upload flow:** `AppDelegate.handleAction(.cloud, cgImage:)` → if public key set: cache PNG to `~/Library/Application Support/Skryn/uploads/`, start async upload via URLSession, animate menu bar icon (spinning arrows). On success: copy CDN URL to clipboard. On failure: icon turns red, error shown in menu, screenshot saved locally as fallback. If no key configured, beeps and returns `false` (window stays open).
 
 **Icon animation:** Layer transforms don't work on `NSStatusBarButton` — the menu bar compositor ignores them. Use image swapping with a `Timer` cycling through SF Symbols (`arrow.up` → `arrow.up.right` → ... 8 directional arrows at 120ms).
 
-**Settings panel:** `SettingsPanel.swift` — NSPanel with radio buttons for local folder vs Uploadcare, plus a hotkey recorder (`HotkeyRecorderButton.swift`). Opened via right-click menu "Settings…" (⌘,). Uses `installEditOnlyMenu()` + `.regular` activation policy so Cmd+V works in the key field. `windowWillClose` only reverts to `.accessory` when both annotation window and settings panel are nil.
+**Settings panel:** `SettingsPanel.swift` — NSPanel with three save action rows (local folder, clipboard, cloud upload), each with an `NSPopUpButton` to choose the modifier key (Cmd/Opt/Ctrl). Auto-swap prevents duplicate modifiers. Also has a hotkey recorder (`HotkeyRecorderButton.swift`) and launch-at-login checkbox. Opened via right-click menu "Settings…" (⌘,). Uses `installEditOnlyMenu()` + `.regular` activation policy so Cmd+V works in the key field. `windowWillClose` only reverts to `.accessory` when both annotation window and settings panel are nil.
 
 **ObjC bridging:** Swift structs in `NSMenuItem.representedObject` (bridged from ObjC `id`) may fail `as?` casts. `RecentUploadBox` (NSObject subclass in `UploadHistory.swift`) wraps `RecentUpload` struct for reliable casting.
 
-**UserDefaults keys:** `"saveMode"` (`"local"` or `"cloud"`), `"uploadcarePublicKey"` (String, persisted even when mode is local), `"recentUploads"` (JSON-encoded `[RecentUpload]`), `"saveFolderPath"` (String, custom save folder), `"hotkeyKeyCode"` (UInt32, Carbon key code, default `kVK_ANSI_5`), `"hotkeyModifiers"` (UInt32, Carbon modifier bitmask, default `cmdKey | shiftKey`).
+**UserDefaults keys:** `"modifierLocal"` / `"modifierClipboard"` / `"modifierCloud"` (String: `"cmd"`, `"opt"`, or `"ctrl"`, defaults opt/cmd/ctrl), `"uploadcarePublicKey"` (String), `"recentUploads"` (JSON-encoded `[RecentUpload]`), `"saveFolderPath"` (String, custom save folder), `"hotkeyKeyCode"` (UInt32, Carbon key code, default `kVK_ANSI_5`), `"hotkeyModifiers"` (UInt32, Carbon modifier bitmask, default `cmdKey | shiftKey`). Legacy `"saveMode"` is migrated and removed on first launch.
 
 **Drag-and-drop upload:** Dropping image files onto the menu bar icon uploads them to Uploadcare (regardless of save mode setting — drag-and-drop is always a cloud action). Requires a public key configured in settings. Non-image files are rejected with a "!" icon for 2 seconds. `StatusItemDropView` (NSView subclass at bottom of AppDelegate.swift) sits on top of `statusItem.button`, returns nil from `hitTest` so clicks pass through, but receives drag events via frame containment.
 

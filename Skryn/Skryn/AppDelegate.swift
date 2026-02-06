@@ -34,8 +34,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.addSubview(dropView)
         }
 
+        migrateModifierDefaults()
         installHotkeyHandler()
         registerHotkey()
+    }
+
+    private func migrateModifierDefaults() {
+        let defaults = UserDefaults.standard
+        // Already migrated
+        if defaults.string(forKey: "modifierLocal") != nil { return }
+
+        let oldMode = defaults.string(forKey: "saveMode")
+        let hasKey = defaults.string(forKey: "uploadcarePublicKey") != nil
+
+        if oldMode == "cloud" || (oldMode == nil && hasKey) {
+            // Old user had cloud as default (Cmd) — preserve that mapping
+            defaults.set("opt", forKey: "modifierLocal")
+            defaults.set("ctrl", forKey: "modifierClipboard")
+            defaults.set("cmd", forKey: "modifierCloud")
+        } else {
+            defaults.set("opt", forKey: "modifierLocal")
+            defaults.set("cmd", forKey: "modifierClipboard")
+            defaults.set("ctrl", forKey: "modifierCloud")
+        }
+
+        defaults.removeObject(forKey: "saveMode")
     }
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -181,44 +204,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Save / Upload
 
-    func handleSave(cgImage: CGImage) {
+    /// Performs the given save action. Returns false if the action cannot proceed
+    /// (e.g. cloud upload without a key configured), so the caller can keep the window open.
+    @discardableResult
+    func handleAction(_ action: SaveAction, cgImage: CGImage) -> Bool {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMddHHmmss"
         let filename = "skryn-\(formatter.string(from: Date())).png"
 
-        guard let pngData = pngData(from: cgImage) else {
-            print("AppDelegate: failed to create PNG data")
-            return
-        }
+        switch action {
+        case .clipboard:
+            let nsImage = NSImage(
+                cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)
+            )
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.writeObjects([nsImage])
+            return true
 
-        if let publicKey = uploadcarePublicKey {
-            uploadToCloud(pngData: pngData, filename: filename, publicKey: publicKey)
-        } else {
-            saveLocally(pngData: pngData, filename: filename)
-        }
-    }
-
-    func handleAlternateSave(cgImage: CGImage) {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMddHHmmss"
-        let filename = "skryn-\(formatter.string(from: Date())).png"
-
-        guard let pngData = pngData(from: cgImage) else {
-            print("AppDelegate: failed to create PNG data")
-            return
-        }
-
-        if uploadcarePublicKey != nil {
-            // Cloud is default → alternate saves locally
-            saveLocally(pngData: pngData, filename: filename)
-        } else {
-            // Local is default → alternate uploads to cloud (if key exists)
-            let key = UserDefaults.standard.string(forKey: "uploadcarePublicKey") ?? ""
-            if key.isEmpty {
-                NSSound.beep()
-                return
+        case .local:
+            guard let pngData = pngData(from: cgImage) else {
+                print("AppDelegate: failed to create PNG data")
+                return true
             }
-            uploadToCloud(pngData: pngData, filename: filename, publicKey: key)
+            saveLocally(pngData: pngData, filename: filename)
+            return true
+
+        case .cloud:
+            guard let publicKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey"),
+                  !publicKey.isEmpty else {
+                NSSound.beep()
+                return false
+            }
+            guard let pngData = pngData(from: cgImage) else {
+                print("AppDelegate: failed to create PNG data")
+                return true
+            }
+            uploadToCloud(pngData: pngData, filename: filename, publicKey: publicKey)
+            return true
         }
     }
 
@@ -331,7 +353,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func retryUpload(_ sender: NSMenuItem) {
         guard let box = sender.representedObject as? RecentUploadBox,
-              let publicKey = uploadcarePublicKey,
+              let publicKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey"),
+              !publicKey.isEmpty,
               let pngData = UploadHistory.cachedData(at: box.value.cacheFilePath) else { return }
         let upload = box.value
 
@@ -416,16 +439,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.image = NSImage(
             systemSymbolName: "camera", accessibilityDescription: "Skryn"
         )
-    }
-
-    // MARK: - Uploadcare Key Management
-
-    private var uploadcarePublicKey: String? {
-        let key = UserDefaults.standard.string(forKey: "uploadcarePublicKey")
-        let mode = UserDefaults.standard.string(forKey: "saveMode")
-        // Backwards compat: if no saveMode, use cloud when key exists
-        if mode == nil { return key }
-        return mode == "cloud" ? key : nil
     }
 
     // MARK: - Settings Panel

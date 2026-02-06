@@ -2,21 +2,68 @@ import AppKit
 import Carbon.HIToolbox
 import ServiceManagement
 
+enum SaveModifier: String, CaseIterable {
+    case cmd
+    case opt
+    case ctrl
+
+    var label: String {
+        switch self {
+        case .cmd: return "\u{2318}\u{23CE}"
+        case .opt: return "\u{2325}\u{23CE}"
+        case .ctrl: return "\u{2303}\u{23CE}"
+        }
+    }
+
+    var flags: NSEvent.ModifierFlags {
+        switch self {
+        case .cmd: return .command
+        case .opt: return .option
+        case .ctrl: return .control
+        }
+    }
+}
+
+enum SaveAction: Equatable {
+    case local, clipboard, cloud
+
+    static func action(for flags: NSEvent.ModifierFlags) -> SaveAction? {
+        let relevant = flags.intersection([.command, .option, .control])
+        let defaults = UserDefaults.standard
+        let localMod = SaveModifier(
+            rawValue: defaults.string(forKey: "modifierLocal") ?? "opt"
+        ) ?? .opt
+        let clipboardMod = SaveModifier(
+            rawValue: defaults.string(forKey: "modifierClipboard") ?? "cmd"
+        ) ?? .cmd
+        let cloudMod = SaveModifier(
+            rawValue: defaults.string(forKey: "modifierCloud") ?? "ctrl"
+        ) ?? .ctrl
+
+        if relevant == localMod.flags { return .local }
+        if relevant == clipboardMod.flags { return .clipboard }
+        if relevant == cloudMod.flags { return .cloud }
+        return nil
+    }
+}
+
 final class SettingsPanel: NSPanel {
-    private let localRadio = NSButton(radioButtonWithTitle: "Save to local folder", target: nil, action: nil)
-    private let cloudRadio = NSButton(radioButtonWithTitle: "Upload to ", target: nil, action: nil)
-    private let uploadcareLink = NSTextField(labelWithString: "")
-    private let cloudSuffix = NSTextField(labelWithString: " cloud")
     private let folderLabel = NSTextField(labelWithString: "")
-    private let chooseButton = NSButton(title: "Choose…", target: nil, action: nil)
+    private let chooseButton = NSButton(title: "Change", target: nil, action: nil)
     private let keyField = NSTextField(frame: .zero)
-    private let keyLabel = NSTextField(labelWithString: "Public key:")
-    private let hintLabel = NSTextField(labelWithString: "")
-    private let hotkeyLabel = NSTextField(labelWithString: "Screenshot shortcut:")
+    private let hotkeyLabel = NSTextField(labelWithString: "App shortcut:")
     private let hotkeyRecorder = HotkeyRecorderButton(frame: .zero)
     private let launchAtLoginCheckbox = NSButton(
         checkboxWithTitle: "Launch at login", target: nil, action: nil
     )
+
+    private let localPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let clipboardPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let cloudPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+
+    private var modifierLocal: SaveModifier = .opt
+    private var modifierClipboard: SaveModifier = .cmd
+    private var modifierCloud: SaveModifier = .ctrl
 
     var onSettingsChanged: (() -> Void)?
 
@@ -28,7 +75,7 @@ final class SettingsPanel: NSPanel {
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 310),
+            contentRect: NSRect(x: 0, y: 0, width: 325, height: 340),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -40,91 +87,106 @@ final class SettingsPanel: NSPanel {
         setupControls()
         setupLayout()
         loadSettings()
-        updateEnabledStates()
+        initialFirstResponder = contentView
     }
 
     private func setupControls() {
-        localRadio.target = self
-        localRadio.action = #selector(radioChanged)
-        cloudRadio.target = self
-        cloudRadio.action = #selector(radioChanged)
-
-        let radioFont = cloudRadio.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
-        let linkURL = "https://app.uploadcare.com"
-        let linkString = NSMutableAttributedString(
-            string: "Uploadcare",
-            attributes: [
-                .link: linkURL,
-                .font: radioFont,
-                .underlineStyle: NSUnderlineStyle.single.rawValue
-            ]
-        )
-        uploadcareLink.attributedStringValue = linkString
-        uploadcareLink.allowsEditingTextAttributes = true
-        uploadcareLink.isSelectable = true
-        cloudSuffix.font = radioFont
-
         chooseButton.target = self
         chooseButton.action = #selector(chooseFolderClicked)
         chooseButton.bezelStyle = .rounded
 
-        hintLabel.font = NSFont.systemFont(ofSize: 11)
-        hintLabel.textColor = .secondaryLabelColor
-        hintLabel.alignment = .left
-
-        keyField.placeholderString = "Your public key"
+        keyField.placeholderString = "Public key"
         keyField.lineBreakMode = .byTruncatingTail
         keyField.cell?.usesSingleLineMode = true
         folderLabel.lineBreakMode = .byTruncatingMiddle
         folderLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         keyField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        for popup in [localPopup, clipboardPopup, cloudPopup] {
+            for mod in SaveModifier.allCases {
+                popup.addItem(withTitle: mod.label)
+            }
+            popup.target = self
+            popup.action = #selector(modifierPopupChanged(_:))
+            popup.setContentHuggingPriority(.required, for: .horizontal)
+        }
+    }
+
+    private func makeActionRow(
+        label: String, popup: NSPopUpButton, linkText: String? = nil
+    ) -> NSStackView {
+        var views: [NSView]
+        if let linkText {
+            let prefix = NSTextField(labelWithString: "Upload to ")
+            let linkField = NSTextField(labelWithString: "")
+            let suffix = NSTextField(labelWithString: "")
+            let fontSize = prefix.font?.pointSize ?? NSFont.systemFontSize
+            let boldFont = NSFont.boldSystemFont(ofSize: fontSize)
+            let linkString = NSMutableAttributedString(
+                string: linkText,
+                attributes: [
+                    .link: "https://app.uploadcare.com",
+                    .font: boldFont,
+                    .underlineStyle: NSUnderlineStyle.single.rawValue,
+                    .underlineColor: NSColor.linkColor
+                ]
+            )
+            linkField.attributedStringValue = linkString
+            linkField.allowsEditingTextAttributes = true
+            linkField.isSelectable = true
+            suffix.font = NSFont.systemFont(ofSize: fontSize)
+
+            let textRow = NSStackView(views: [prefix, linkField, suffix])
+            textRow.orientation = .horizontal
+            textRow.spacing = 0
+            textRow.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            views = [textRow]
+        } else {
+            let textLabel = NSTextField(labelWithString: label)
+            textLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            views = [textLabel]
+        }
+        views.append(popup)
+
+        let row = NSStackView(views: views)
+        row.orientation = .horizontal
+        row.spacing = 8
+        row.distribution = .fill
+        return row
     }
 
     private func setupLayout() {
+        let clipboardRow = makeActionRow(label: "Copy to clipboard", popup: clipboardPopup)
+
+        let localRow = makeActionRow(label: "Save to local folder", popup: localPopup)
         let folderRow = NSStackView(views: [folderLabel, chooseButton])
         folderRow.orientation = .horizontal
         folderRow.spacing = 8
 
-        let localSection = NSStackView(views: [localRadio, folderRow])
+        let localSection = NSStackView(views: [localRow, folderRow])
         localSection.orientation = .vertical
         localSection.alignment = .leading
         localSection.spacing = 6
-        folderRow.leadingAnchor.constraint(equalTo: localSection.leadingAnchor, constant: 18).isActive = true
+        folderRow.leadingAnchor.constraint(equalTo: localSection.leadingAnchor).isActive = true
 
-        let cloudRadioRow = NSStackView(views: [cloudRadio, uploadcareLink, cloudSuffix])
-        cloudRadioRow.orientation = .horizontal
-        cloudRadioRow.spacing = 0
+        let cloudRow = makeActionRow(label: "", popup: cloudPopup, linkText: "Uploadcare")
+        keyField.widthAnchor.constraint(equalToConstant: 180).isActive = true
 
-        let keyRow = NSStackView(views: [keyLabel, keyField])
-        keyRow.orientation = .horizontal
-        keyRow.spacing = 8
-
-        let cloudSection = NSStackView(views: [cloudRadioRow, keyRow])
+        let cloudSection = NSStackView(views: [cloudRow, keyField])
         cloudSection.orientation = .vertical
         cloudSection.alignment = .leading
         cloudSection.spacing = 6
-        keyRow.leadingAnchor.constraint(equalTo: cloudSection.leadingAnchor, constant: 18).isActive = true
 
         let separator = makeSeparator()
-
-        let defaultButton = NSButton(title: "Reset to default", target: self, action: #selector(resetHotkeyClicked))
-        defaultButton.bezelStyle = .rounded
-        defaultButton.toolTip = "Reset to ⌘⇧5"
-
-        let hotkeyRow = NSStackView(views: [hotkeyLabel, hotkeyRecorder, defaultButton])
-        hotkeyRow.orientation = .horizontal
-        hotkeyRow.spacing = 8
-
-        let separator2 = makeSeparator()
-
+        let hotkeyRow = makeHotkeyRow()
         let buttonRow = makeButtonRow()
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         let mainStack = NSStackView(
-            views: [localSection, cloudSection, hintLabel, separator, hotkeyRow,
-                    separator2, launchAtLoginCheckbox, spacer, buttonRow]
+            views: [clipboardRow, localSection, cloudSection, separator, hotkeyRow,
+                    launchAtLoginCheckbox, spacer, buttonRow]
         )
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
@@ -142,11 +204,28 @@ final class SettingsPanel: NSPanel {
             ])
         }
 
-        pinTrailingToStack(views: [buttonRow, folderRow, keyRow], stack: mainStack)
-        for sep in [separator, separator2] {
-            sep.leadingAnchor.constraint(equalTo: mainStack.leadingAnchor, constant: 20).isActive = true
-            sep.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor, constant: -20).isActive = true
-        }
+        pinTrailingToStack(
+            views: [buttonRow, folderRow, localRow, clipboardRow, cloudRow],
+            stack: mainStack
+        )
+        separator.leadingAnchor.constraint(
+            equalTo: mainStack.leadingAnchor, constant: 20
+        ).isActive = true
+        separator.trailingAnchor.constraint(
+            equalTo: mainStack.trailingAnchor, constant: -20
+        ).isActive = true
+    }
+
+    private func makeHotkeyRow() -> NSStackView {
+        let defaultButton = NSButton(
+            title: "Reset to default", target: self, action: #selector(resetHotkeyClicked)
+        )
+        defaultButton.bezelStyle = .rounded
+        defaultButton.toolTip = "Reset to \u{2318}\u{21E7}5"
+        let row = NSStackView(views: [hotkeyLabel, hotkeyRecorder, defaultButton])
+        row.orientation = .horizontal
+        row.spacing = 8
+        return row
     }
 
     private func makeButtonRow() -> NSStackView {
@@ -156,7 +235,7 @@ final class SettingsPanel: NSPanel {
         let saveButton = NSButton(title: "Save", target: self, action: #selector(saveClicked))
         saveButton.bezelStyle = .rounded
         saveButton.keyEquivalent = "\r"
-        let row = NSStackView(views: [cancelButton, saveButton])
+        let row = NSStackView(views: [saveButton, cancelButton])
         row.orientation = .horizontal
         row.spacing = 8
         return row
@@ -175,27 +254,23 @@ final class SettingsPanel: NSPanel {
     }
 
     private func loadSettings() {
-        let savedKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey") ?? ""
-        let mode = UserDefaults.standard.string(forKey: "saveMode")
-        // Backwards compat: if no saveMode, infer from key presence
-        let isCloud = mode == "cloud" || (mode == nil && !savedKey.isEmpty)
+        let defaults = UserDefaults.standard
 
-        if isCloud {
-            cloudRadio.state = .on
-            localRadio.state = .off
-        } else {
-            localRadio.state = .on
-            cloudRadio.state = .off
-        }
-        keyField.stringValue = savedKey
+        keyField.stringValue = defaults.string(forKey: "uploadcarePublicKey") ?? ""
 
-        let folderPath = UserDefaults.standard.string(forKey: "saveFolderPath")
+        let folderPath = defaults.string(forKey: "saveFolderPath")
             ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.path
             ?? "~/Desktop"
         folderLabel.stringValue = abbreviatePath(folderPath)
         folderLabel.toolTip = folderPath
 
-        let defaults = UserDefaults.standard
+        modifierLocal = SaveModifier(rawValue: defaults.string(forKey: "modifierLocal") ?? "opt") ?? .opt
+        modifierClipboard = SaveModifier(
+            rawValue: defaults.string(forKey: "modifierClipboard") ?? "cmd"
+        ) ?? .cmd
+        modifierCloud = SaveModifier(rawValue: defaults.string(forKey: "modifierCloud") ?? "ctrl") ?? .ctrl
+        syncPopups()
+
         let keyCode = defaults.object(forKey: "hotkeyKeyCode") as? UInt32 ?? UInt32(kVK_ANSI_5)
         let mods = defaults.object(forKey: "hotkeyModifiers") as? UInt32 ?? UInt32(cmdKey | shiftKey)
         hotkeyRecorder.setHotkey(keyCode: keyCode, carbonModifiers: mods)
@@ -204,36 +279,50 @@ final class SettingsPanel: NSPanel {
         launchAtLoginCheckbox.state = (status == .enabled) ? .on : .off
     }
 
+    private func syncPopups() {
+        localPopup.selectItem(at: SaveModifier.allCases.firstIndex(of: modifierLocal) ?? 0)
+        clipboardPopup.selectItem(at: SaveModifier.allCases.firstIndex(of: modifierClipboard) ?? 1)
+        cloudPopup.selectItem(at: SaveModifier.allCases.firstIndex(of: modifierCloud) ?? 2)
+    }
+
+    private func modifierFor(popup: NSPopUpButton) -> SaveModifier {
+        SaveModifier.allCases[popup.indexOfSelectedItem]
+    }
+
+    @objc private func modifierPopupChanged(_ sender: NSPopUpButton) {
+        let newValue = modifierFor(popup: sender)
+
+        // Find which property this popup controls and its previous value
+        let previous: SaveModifier
+        if sender === localPopup {
+            previous = modifierLocal
+            modifierLocal = newValue
+        } else if sender === clipboardPopup {
+            previous = modifierClipboard
+            modifierClipboard = newValue
+        } else {
+            previous = modifierCloud
+            modifierCloud = newValue
+        }
+
+        // Auto-swap: if another popup has the same value, give it our previous value
+        if sender !== localPopup && modifierLocal == newValue {
+            modifierLocal = previous
+        } else if sender !== clipboardPopup && modifierClipboard == newValue {
+            modifierClipboard = previous
+        } else if sender !== cloudPopup && modifierCloud == newValue {
+            modifierCloud = previous
+        }
+
+        syncPopups()
+    }
+
     private func abbreviatePath(_ path: String) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         if path.hasPrefix(home) {
             return "~" + path.dropFirst(home.count)
         }
         return path
-    }
-
-    @objc private func radioChanged(_ sender: NSButton) {
-        // Radio buttons in different stack views don't auto-group — toggle manually
-        if sender === localRadio {
-            cloudRadio.state = .off
-        } else {
-            localRadio.state = .off
-        }
-        updateEnabledStates()
-    }
-
-    private func updateEnabledStates() {
-        let isLocal = localRadio.state == .on
-        folderLabel.textColor = isLocal ? .labelColor : .tertiaryLabelColor
-        chooseButton.isEnabled = isLocal
-        keyLabel.textColor = isLocal ? .tertiaryLabelColor : .labelColor
-        keyField.isEnabled = !isLocal
-
-        if isLocal {
-            hintLabel.stringValue = "\u{2318}\u{21A9}: Save locally. \u{2325}\u{21A9}: Upload to cloud."
-        } else {
-            hintLabel.stringValue = "\u{2318}\u{21A9}: Upload to cloud. \u{2325}\u{21A9}: Save locally."
-        }
     }
 
     @objc private func chooseFolderClicked() {
@@ -260,40 +349,39 @@ final class SettingsPanel: NSPanel {
     }
 
     @objc private func saveClicked() {
-        // Always persist the key (even when switching to local)
+        let defaults = UserDefaults.standard
         let key = keyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if cloudRadio.state == .on {
-            if key.isEmpty {
-                keyField.window?.makeFirstResponder(keyField)
-                NSSound.beep()
-                return
-            }
-            UserDefaults.standard.set("cloud", forKey: "saveMode")
-            UserDefaults.standard.set(key, forKey: "uploadcarePublicKey")
-            UserDefaults.standard.removeObject(forKey: "saveFolderPath")
+        // Persist Uploadcare key
+        if key.isEmpty {
+            defaults.removeObject(forKey: "uploadcarePublicKey")
         } else {
-            UserDefaults.standard.set("local", forKey: "saveMode")
-            if !key.isEmpty {
-                UserDefaults.standard.set(key, forKey: "uploadcarePublicKey")
-            }
+            defaults.set(key, forKey: "uploadcarePublicKey")
+        }
 
-            // Save folder path from the label's tooltip (full path)
-            if let fullPath = folderLabel.toolTip {
-                let desktopPath = FileManager.default.urls(
-                    for: .desktopDirectory, in: .userDomainMask
-                ).first?.path
-                if fullPath == desktopPath {
-                    UserDefaults.standard.removeObject(forKey: "saveFolderPath")
-                } else {
-                    UserDefaults.standard.set(fullPath, forKey: "saveFolderPath")
-                }
+        // Persist folder path
+        if let fullPath = folderLabel.toolTip {
+            let desktopPath = FileManager.default.urls(
+                for: .desktopDirectory, in: .userDomainMask
+            ).first?.path
+            if fullPath == desktopPath {
+                defaults.removeObject(forKey: "saveFolderPath")
+            } else {
+                defaults.set(fullPath, forKey: "saveFolderPath")
             }
         }
 
+        // Persist modifier assignments
+        defaults.set(modifierLocal.rawValue, forKey: "modifierLocal")
+        defaults.set(modifierClipboard.rawValue, forKey: "modifierClipboard")
+        defaults.set(modifierCloud.rawValue, forKey: "modifierCloud")
+
+        // Remove legacy key
+        defaults.removeObject(forKey: "saveMode")
+
         // Persist hotkey
-        UserDefaults.standard.set(hotkeyRecorder.recordedKeyCode, forKey: "hotkeyKeyCode")
-        UserDefaults.standard.set(hotkeyRecorder.recordedCarbonModifiers, forKey: "hotkeyModifiers")
+        defaults.set(hotkeyRecorder.recordedKeyCode, forKey: "hotkeyKeyCode")
+        defaults.set(hotkeyRecorder.recordedCarbonModifiers, forKey: "hotkeyModifiers")
 
         // Launch at login
         let service = SMAppService.mainApp
