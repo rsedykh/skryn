@@ -135,9 +135,11 @@ final class AnnotationView: NSView {
     private func drawHandles(for annotation: Annotation) {
         // Draw dotted border for text annotations
         if case .text(let origin, let width, let content, let fontSize) = annotation {
-            let rect = Annotation.textBoundingRect(
+            let padding: CGFloat = 4.0 / screenshotToViewScale()
+            let baseRect = Annotation.textBoundingRect(
                 origin: origin, width: width, content: content, fontSize: fontSize
             )
+            let rect = baseRect.insetBy(dx: -padding, dy: 0)
             let borderPath = NSBezierPath(rect: rect)
             borderPath.lineWidth = 1.5
             let dashPattern: [CGFloat] = [4.0, 4.0]
@@ -147,10 +149,17 @@ final class AnnotationView: NSView {
         }
 
         let handleRadius: CGFloat = 6.0
-        for (_, point) in annotation.handles {
+        let isText: Bool
+        if case .text = annotation { isText = true } else { isText = false }
+        let textPadding: CGFloat = isText ? 4.0 / screenshotToViewScale() : 0
+        for (handle, point) in annotation.handles {
+            var drawPoint = point
+            if isText {
+                drawPoint.x += (handle == .left ? -textPadding : textPadding)
+            }
             let handleRect = CGRect(
-                x: point.x - handleRadius,
-                y: point.y - handleRadius,
+                x: drawPoint.x - handleRadius,
+                y: drawPoint.y - handleRadius,
                 width: handleRadius * 2,
                 height: handleRadius * 2
             )
@@ -165,8 +174,9 @@ final class AnnotationView: NSView {
 
     private func drawActiveTextBorder(textView: NSTextView) {
         let viewFrame = textView.frame
-        let topLeft = viewToScreenshot(CGPoint(x: viewFrame.minX, y: viewFrame.minY))
-        let bottomRight = viewToScreenshot(CGPoint(x: viewFrame.maxX, y: viewFrame.maxY))
+        let padding: CGFloat = 4.0
+        let topLeft = viewToScreenshot(CGPoint(x: viewFrame.minX - padding, y: viewFrame.minY))
+        let bottomRight = viewToScreenshot(CGPoint(x: viewFrame.maxX + padding, y: viewFrame.maxY))
         let rect = CGRect(
             x: topLeft.x, y: topLeft.y,
             width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y
@@ -677,6 +687,7 @@ final class AnnotationView: NSView {
             let range = NSRange(location: 0, length: (textView.string as NSString).length)
             textView.textStorage?.addAttribute(.font, value: font, range: range)
         }
+        needsDisplay = true
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
