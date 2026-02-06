@@ -118,10 +118,15 @@ final class AnnotationView: NSView {
             draw(current)
         }
 
-        // Draw handles for hovered annotation
-        if currentAnnotation == nil, let idx = hoveredAnnotationIndex,
+        // Draw handles for hovered annotation (skip when actively editing text)
+        if activeTextView == nil, currentAnnotation == nil, let idx = hoveredAnnotationIndex,
            idx < annotations.count {
             drawHandles(for: annotations[idx])
+        }
+
+        // Draw live border around active text view during editing
+        if let textView = activeTextView {
+            drawActiveTextBorder(textView: textView)
         }
 
         NSGraphicsContext.restoreGraphicsState()
@@ -148,6 +153,38 @@ final class AnnotationView: NSView {
                 y: point.y - handleRadius,
                 width: handleRadius * 2,
                 height: handleRadius * 2
+            )
+            let path = NSBezierPath(ovalIn: handleRect)
+            NSColor.white.setFill()
+            path.fill()
+            NSColor.red.setStroke()
+            path.lineWidth = 2.0
+            path.stroke()
+        }
+    }
+
+    private func drawActiveTextBorder(textView: NSTextView) {
+        let viewFrame = textView.frame
+        let topLeft = viewToScreenshot(CGPoint(x: viewFrame.minX, y: viewFrame.minY))
+        let bottomRight = viewToScreenshot(CGPoint(x: viewFrame.maxX, y: viewFrame.maxY))
+        let rect = CGRect(
+            x: topLeft.x, y: topLeft.y,
+            width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y
+        )
+
+        let borderPath = NSBezierPath(rect: rect)
+        borderPath.lineWidth = 1.5
+        let dashPattern: [CGFloat] = [4.0, 4.0]
+        borderPath.setLineDash(dashPattern, count: dashPattern.count, phase: 0)
+        NSColor.red.withAlphaComponent(0.5).setStroke()
+        borderPath.stroke()
+
+        let handleRadius: CGFloat = 6.0
+        let midY = (topLeft.y + bottomRight.y) / 2
+        for x in [topLeft.x, bottomRight.x] {
+            let handleRect = CGRect(
+                x: x - handleRadius, y: midY - handleRadius,
+                width: handleRadius * 2, height: handleRadius * 2
             )
             let path = NSBezierPath(ovalIn: handleRect)
             NSColor.white.setFill()
@@ -857,6 +894,10 @@ final class AnnotationView: NSView {
 // MARK: - NSTextViewDelegate
 
 extension AnnotationView: NSTextViewDelegate {
+    func textDidChange(_ notification: Notification) {
+        needsDisplay = true
+    }
+
     func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         if selector == #selector(insertNewline(_:)) {
             if let event = NSApp.currentEvent, event.modifierFlags.contains(.shift) {
