@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import ServiceManagement
 
 final class SettingsPanel: NSPanel {
     private let localRadio = NSButton(radioButtonWithTitle: "Save to local folder", target: nil, action: nil)
@@ -12,6 +13,9 @@ final class SettingsPanel: NSPanel {
     private let hintLabel = NSTextField(labelWithString: "")
     private let hotkeyLabel = NSTextField(labelWithString: "Screenshot shortcut:")
     private let hotkeyRecorder = HotkeyRecorderButton(frame: .zero)
+    private let launchAtLoginCheckbox = NSButton(
+        checkboxWithTitle: "Launch at login", target: nil, action: nil
+    )
 
     var onSettingsChanged: (() -> Void)?
 
@@ -23,7 +27,7 @@ final class SettingsPanel: NSPanel {
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 280),
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 310),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -97,8 +101,7 @@ final class SettingsPanel: NSPanel {
         cloudSection.spacing = 6
         keyRow.leadingAnchor.constraint(equalTo: cloudSection.leadingAnchor, constant: 18).isActive = true
 
-        let separator = NSBox()
-        separator.boxType = .separator
+        let separator = makeSeparator()
 
         let defaultButton = NSButton(title: "Default", target: self, action: #selector(resetHotkeyClicked))
         defaultButton.bezelStyle = .rounded
@@ -108,23 +111,16 @@ final class SettingsPanel: NSPanel {
         hotkeyRow.orientation = .horizontal
         hotkeyRow.spacing = 8
 
-        let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelClicked))
-        cancelButton.bezelStyle = .rounded
-        cancelButton.keyEquivalent = "\u{1b}"
+        let separator2 = makeSeparator()
 
-        let saveButton = NSButton(title: "Save", target: self, action: #selector(saveClicked))
-        saveButton.bezelStyle = .rounded
-        saveButton.keyEquivalent = "\r"
-
-        let buttonRow = NSStackView(views: [cancelButton, saveButton])
-        buttonRow.orientation = .horizontal
-        buttonRow.spacing = 8
+        let buttonRow = makeButtonRow()
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         let mainStack = NSStackView(
-            views: [localSection, cloudSection, hintLabel, separator, hotkeyRow, spacer, buttonRow]
+            views: [localSection, cloudSection, hintLabel, separator, hotkeyRow,
+                    separator2, launchAtLoginCheckbox, spacer, buttonRow]
         )
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
@@ -142,11 +138,36 @@ final class SettingsPanel: NSPanel {
             ])
         }
 
-        buttonRow.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor, constant: -20).isActive = true
-        folderRow.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor, constant: -20).isActive = true
-        keyRow.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor, constant: -20).isActive = true
-        separator.leadingAnchor.constraint(equalTo: mainStack.leadingAnchor, constant: 20).isActive = true
-        separator.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor, constant: -20).isActive = true
+        pinTrailingToStack(views: [buttonRow, folderRow, keyRow], stack: mainStack)
+        for sep in [separator, separator2] {
+            sep.leadingAnchor.constraint(equalTo: mainStack.leadingAnchor, constant: 20).isActive = true
+            sep.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor, constant: -20).isActive = true
+        }
+    }
+
+    private func makeButtonRow() -> NSStackView {
+        let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelClicked))
+        cancelButton.bezelStyle = .rounded
+        cancelButton.keyEquivalent = "\u{1b}"
+        let saveButton = NSButton(title: "Save", target: self, action: #selector(saveClicked))
+        saveButton.bezelStyle = .rounded
+        saveButton.keyEquivalent = "\r"
+        let row = NSStackView(views: [cancelButton, saveButton])
+        row.orientation = .horizontal
+        row.spacing = 8
+        return row
+    }
+
+    private func makeSeparator() -> NSBox {
+        let sep = NSBox()
+        sep.boxType = .separator
+        return sep
+    }
+
+    private func pinTrailingToStack(views: [NSView], stack: NSStackView) {
+        for view in views {
+            view.trailingAnchor.constraint(equalTo: stack.trailingAnchor, constant: -20).isActive = true
+        }
     }
 
     private func loadSettings() {
@@ -174,6 +195,9 @@ final class SettingsPanel: NSPanel {
         let keyCode = defaults.object(forKey: "hotkeyKeyCode") as? UInt32 ?? UInt32(kVK_ANSI_5)
         let mods = defaults.object(forKey: "hotkeyModifiers") as? UInt32 ?? UInt32(cmdKey | shiftKey)
         hotkeyRecorder.setHotkey(keyCode: keyCode, carbonModifiers: mods)
+
+        let status = SMAppService.mainApp.status
+        launchAtLoginCheckbox.state = (status == .enabled) ? .on : .off
     }
 
     private func abbreviatePath(_ path: String) -> String {
@@ -266,6 +290,14 @@ final class SettingsPanel: NSPanel {
         // Persist hotkey
         UserDefaults.standard.set(hotkeyRecorder.recordedKeyCode, forKey: "hotkeyKeyCode")
         UserDefaults.standard.set(hotkeyRecorder.recordedCarbonModifiers, forKey: "hotkeyModifiers")
+
+        // Launch at login
+        let service = SMAppService.mainApp
+        if launchAtLoginCheckbox.state == .on {
+            try? service.register()
+        } else {
+            try? service.unregister()
+        }
 
         onSettingsChanged?()
         close()
