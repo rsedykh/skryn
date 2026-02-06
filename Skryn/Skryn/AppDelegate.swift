@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let settingsItem = NSMenuItem(
-            title: "Save Settings…", action: #selector(showSaveDestination), keyEquivalent: ","
+            title: "Settings…", action: #selector(showSaveDestination), keyEquivalent: ","
         )
         settingsItem.target = self
         settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")
@@ -331,7 +331,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return mode == "cloud" ? key : nil
     }
 
-    // MARK: - Save Destination Panel
+    // MARK: - Settings Panel
 
     @objc private func showSaveDestination() {
         if let existing = settingsPanel {

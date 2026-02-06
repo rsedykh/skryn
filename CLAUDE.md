@@ -51,14 +51,14 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Icon animation:** Layer transforms don't work on `NSStatusBarButton` — the menu bar compositor ignores them. Use image swapping with a `Timer` cycling through SF Symbols (`arrow.up` → `arrow.up.right` → ... 8 directional arrows at 120ms).
 
-**Save Settings panel:** `SettingsPanel.swift` — NSPanel with radio buttons for local folder vs Uploadcare, opened via right-click menu "Save Settings…" (⌘,). Uses `installEditOnlyMenu()` + `.regular` activation policy so Cmd+V works in the key field. `windowWillClose` only reverts to `.accessory` when both annotation window and settings panel are nil.
+**Settings panel:** `SettingsPanel.swift` — NSPanel with radio buttons for local folder vs Uploadcare, opened via right-click menu "Settings…" (⌘,). Uses `installEditOnlyMenu()` + `.regular` activation policy so Cmd+V works in the key field. `windowWillClose` only reverts to `.accessory` when both annotation window and settings panel are nil.
 
 **ObjC bridging:** Swift structs in `NSMenuItem.representedObject` (bridged from ObjC `id`) may fail `as?` casts. `RecentUploadBox` (NSObject subclass in `UploadHistory.swift`) wraps `RecentUpload` struct for reliable casting.
 
 **UserDefaults keys:** `"saveMode"` (`"local"` or `"cloud"`), `"uploadcarePublicKey"` (String, persisted even when mode is local), `"recentUploads"` (JSON-encoded `[RecentUpload]`), `"saveFolderPath"` (String, custom save folder).
 
 **Right-click menu structure:**
-- Recent Uploads submenu (only if uploads exist) / error message (if any) / "Save Settings…" (⌘,, opens settings panel) / Quit
+- Recent Uploads submenu (only if uploads exist) / error message (if any) / "Settings…" (⌘,, opens settings panel) / Quit
 
 ## App Icon
 

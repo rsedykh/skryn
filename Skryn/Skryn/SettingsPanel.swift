@@ -19,7 +19,7 @@ final class SettingsPanel: NSPanel {
             defer: false
         )
 
-        title = "Save Settings"
+        title = "Settings"
         isReleasedWhenClosed = false
         center()
         setupControls()
