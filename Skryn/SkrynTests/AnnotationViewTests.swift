@@ -371,4 +371,175 @@ final class AnnotationViewTests: XCTestCase {
         XCTAssertNotNil(result)
         if case .to = result?.handle {} else { XCTFail("Expected .to handle") }
     }
+
+    // MARK: - Text annotation handles
+
+    func testHandles_textReturnsTwoMidpoints() {
+        let annotation = Annotation.text(
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+        )
+        let handles = annotation.handles
+        XCTAssertEqual(handles.count, 2)
+
+        let rect = Annotation.textBoundingRect(
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+        )
+        XCTAssertEqual(handles[0].point.x, rect.minX, accuracy: 0.001)
+        XCTAssertEqual(handles[0].point.y, rect.midY, accuracy: 0.001)
+        XCTAssertEqual(handles[1].point.x, rect.maxX, accuracy: 0.001)
+        XCTAssertEqual(handles[1].point.y, rect.midY, accuracy: 0.001)
+
+        if case .left = handles[0].handle {} else { XCTFail("Expected .left handle") }
+        if case .right = handles[1].handle {} else { XCTFail("Expected .right handle") }
+    }
+
+    func testMoving_textRightHandle() {
+        let annotation = Annotation.text(
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+        )
+        let moved = annotation.moving(.right, to: CGPoint(x: 400, y: 120))
+        if case .text(let origin, let width, _, _) = moved {
+            XCTAssertEqual(origin.x, 50, accuracy: 0.001)
+            XCTAssertEqual(width, 350, accuracy: 0.001) // 400 - 50
+        } else {
+            XCTFail("Expected text annotation")
+        }
+    }
+
+    func testMoving_textLeftHandle() {
+        let annotation = Annotation.text(
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+        )
+        // Right edge is at 350. Move left handle to x=100
+        let moved = annotation.moving(.left, to: CGPoint(x: 100, y: 120))
+        if case .text(let origin, let width, _, _) = moved {
+            XCTAssertEqual(origin.x, 100, accuracy: 0.001)
+            XCTAssertEqual(width, 250, accuracy: 0.001) // 350 - 100
+        } else {
+            XCTFail("Expected text annotation")
+        }
+    }
+
+    func testMoving_textMinimumWidth() {
+        let annotation = Annotation.text(
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+        )
+        // Move right handle very close to origin
+        let moved = annotation.moving(.right, to: CGPoint(x: 55, y: 120))
+        if case .text(_, let width, _, _) = moved {
+            XCTAssertEqual(width, 20, accuracy: 0.001) // clamped to minimum
+        } else {
+            XCTFail("Expected text annotation")
+        }
+    }
+
+    // MARK: - textAnnotationAt hit testing
+
+    func testTextAnnotationAt_hitsTextBounds() {
+        let view = makeView(imageSize: NSSize(width: 800, height: 600))
+        view.setAnnotations(forTesting: [
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24)
+        ])
+        let result = view.textAnnotationAt(CGPoint(x: 150, y: 110))
+        XCTAssertEqual(result, 0)
+    }
+
+    func testTextAnnotationAt_missesOutsideBounds() {
+        let view = makeView(imageSize: NSSize(width: 800, height: 600))
+        view.setAnnotations(forTesting: [
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24)
+        ])
+        let result = view.textAnnotationAt(CGPoint(x: 50, y: 50))
+        XCTAssertNil(result)
+    }
+
+    func testTextAnnotationAt_prefersTopmostText() {
+        let view = makeView(imageSize: NSSize(width: 800, height: 600))
+        view.setAnnotations(forTesting: [
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "First", fontSize: 24),
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Second", fontSize: 24)
+        ])
+        // Both overlap at (150, 110) — topmost (index 1) should win
+        let result = view.textAnnotationAt(CGPoint(x: 150, y: 110))
+        XCTAssertEqual(result, 1)
+    }
+
+    // MARK: - textBoundingRect
+
+    func testTextBoundingRect_nonEmpty() {
+        let rect = Annotation.textBoundingRect(
+            origin: CGPoint(x: 10, y: 20), width: 200, content: "Hello World", fontSize: 24
+        )
+        XCTAssertGreaterThan(rect.height, 0)
+        XCTAssertEqual(rect.origin.x, 10, accuracy: 0.001)
+        XCTAssertEqual(rect.origin.y, 20, accuracy: 0.001)
+        XCTAssertEqual(rect.width, 200, accuracy: 0.001)
+    }
+
+    func testTextBoundingRect_empty() {
+        let rect = Annotation.textBoundingRect(
+            origin: CGPoint(x: 10, y: 20), width: 200, content: "", fontSize: 24
+        )
+        // Minimum height = fontSize * 1.5 = 36
+        XCTAssertGreaterThanOrEqual(rect.height, 36)
+    }
+
+    // MARK: - Annotation.offsetBy
+
+    func testOffsetBy_arrow() {
+        let a = Annotation.arrow(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 50, y: 60))
+        let moved = a.offsetBy(dx: 5, dy: -10)
+        if case .arrow(let from, let to) = moved {
+            XCTAssertEqual(from, CGPoint(x: 15, y: 10))
+            XCTAssertEqual(to, CGPoint(x: 55, y: 50))
+        } else { XCTFail("Expected arrow") }
+    }
+
+    func testOffsetBy_rectangle() {
+        let a = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        let moved = a.offsetBy(dx: -5, dy: 15)
+        if case .rectangle(let rect) = moved {
+            XCTAssertEqual(rect, CGRect(x: 5, y: 35, width: 80, height: 60))
+        } else { XCTFail("Expected rectangle") }
+    }
+
+    // MARK: - annotationBodyAt hit testing
+
+    func testAnnotationBodyAt_hitsArrowLine() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .arrow(from: CGPoint(x: 10, y: 50), to: CGPoint(x: 100, y: 50))
+        ])
+        // Point on the line
+        let result = view.annotationBodyAt(CGPoint(x: 50, y: 50))
+        XCTAssertEqual(result, 0)
+    }
+
+    func testAnnotationBodyAt_missesArrowFarAway() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .arrow(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 100, y: 10))
+        ])
+        let result = view.annotationBodyAt(CGPoint(x: 50, y: 80))
+        XCTAssertNil(result)
+    }
+
+    func testAnnotationBodyAt_hitsRectangleInterior() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40))
+        ])
+        let result = view.annotationBodyAt(CGPoint(x: 50, y: 40))
+        XCTAssertEqual(result, 0)
+    }
+
+    func testAnnotationBodyAt_prefersTopmostAnnotation() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40)),
+            .rectangle(rect: CGRect(x: 30, y: 30, width: 40, height: 20))
+        ])
+        let result = view.annotationBodyAt(CGPoint(x: 50, y: 40))
+        XCTAssertEqual(result, 1)
+    }
 }

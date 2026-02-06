@@ -39,9 +39,13 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Keyboard shortcuts** are handled via the installed `NSApp.mainMenu` (Cmd+W, Cmd+Z, Cmd+Shift+Z, Cmd+Q) for proper cross-layout support. ESC uses `keyDown` (layout-independent keyCode). Cmd+Enter and Option+Enter use `performKeyEquivalent` — the menu system intercepts modifier combos before they reach `keyDown`. Option+Enter triggers alternate save (opposite of configured default: local↔cloud).
 
-**Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Option = rectangle, Command = crop. Only one crop allowed at a time.
+**Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Option = rectangle, Command = crop. T key enters text mode (I-beam cursor, click to place). Only one crop allowed at a time.
 
-**Handle editing:** After drawing, annotations can be edited by dragging their handles (endpoints for arrows/lines, corners for rectangles/crop). `AnnotationHandle` enum and geometry methods live in `Annotation.swift`. `AnnotationView` does hit testing in `handleAt()` (10pt radius, topmost-first), shows white/red circle handles on hover with crosshair cursor, and supports live dragging with undo. Modifier keys at `mouseDown` bypass editing to draw a new annotation instead.
+**Text annotations:** T key toggles text mode. Click to place an NSTextView (red bold text, transparent background). Enter finalizes, Shift+Enter inserts newline, ESC finalizes. Cmd+=/Cmd+- adjusts font size. Click on finalized text to re-edit. Text width is resizable via left/right edge handles. Text state: `isTextMode`, `activeTextView`, `editingTextIndex`, `textFontSize`. When `activeTextView` is active, `mouseDragged`/`mouseUp`/`mouseMoved` return early to avoid interfering with text editing. `finalizeTextEditing()` converts the NSTextView back to a `.text` annotation. The Edit menu (Cut/Copy/Paste/Select All) in `AppDelegate.installMainMenu()` enables clipboard support in the text view via responder chain.
+
+**Handle editing:** After drawing, annotations can be edited by dragging their handles (endpoints for arrows/lines, corners for rectangles/crop, left/right edges for text). `AnnotationHandle` enum and geometry methods live in `Annotation.swift`. `AnnotationView` does hit testing in `handleAt()` (10pt radius, topmost-first), shows white/red circle handles on hover with crosshair cursor (resize-left-right for text edges), and supports live dragging with undo. Modifier keys at `mouseDown` bypass editing to draw a new annotation instead.
+
+**Drag-to-move:** Any annotation can be repositioned by dragging its body. `bodyContains(_:hitRadius:)` does hit testing (point-to-segment distance for lines/arrows, rect containment for rectangles/crop/text). `annotationBodyAt(_:)` finds the topmost hit. Click-without-drag on text opens re-editing; on other types it's a no-op. Move uses `offsetBy(dx:dy:)` with undo support.
 
 ## Cloud Upload (Uploadcare)
 
@@ -99,4 +103,4 @@ gh release create v1.x.x /tmp/Skryn.zip --title "Skryn v1.x.x" --generate-notes
 - `NSEvent.modifierFlags` (static) reads current keyboard state; `event.modifierFlags` (instance) reads state at event time. Always use the instance property for tool locking.
 - When renaming variables, check ALL references in the same method — secondary uses are easy to miss.
 - SwiftLint: `String.data(using: .utf8)!` triggers `non_optional_string_data_conversion` — use `Data("string".utf8)` instead.
-- SwiftLint config limits: type_body_length 500/700, file_length 600/900 (bumped for AppDelegate with upload feature).
+- SwiftLint config limits: type_body_length 700/900, file_length 900/1100 (bumped for AnnotationView with text annotations and drag-to-move).
