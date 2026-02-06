@@ -21,6 +21,7 @@
 		AA100001 /* AnnotationViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100001 /* AnnotationViewTests.swift */; };
 		AA100002 /* UploadcareServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100003 /* UploadcareServiceTests.swift */; };
 		AA100003 /* UploadHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100004 /* UploadHistoryTests.swift */; };
+		AA100004 /* HotkeyRecorderButtonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100005 /* HotkeyRecorderButtonTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,6 +53,7 @@
 		AB100002 /* SkrynTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SkrynTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB100003 /* UploadcareServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadcareServiceTests.swift; sourceTree = "<group>"; };
 		AB100004 /* UploadHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadHistoryTests.swift; sourceTree = "<group>"; };
+		AB100005 /* HotkeyRecorderButtonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderButtonTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -114,6 +116,7 @@
 			isa = PBXGroup;
 			children = (
 				AB100001 /* AnnotationViewTests.swift */,
+				AB100005 /* HotkeyRecorderButtonTests.swift */,
 				AB100003 /* UploadcareServiceTests.swift */,
 				AB100004 /* UploadHistoryTests.swift */,
 			);
@@ -237,6 +240,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA100001 /* AnnotationViewTests.swift in Sources */,
+				AA100004 /* HotkeyRecorderButtonTests.swift in Sources */,
 				AA100002 /* UploadcareServiceTests.swift in Sources */,
 				AA100003 /* UploadHistoryTests.swift in Sources */,
 			);

@@ -92,7 +92,7 @@ gh release create v1.x.x /tmp/Skryn.zip --title "Skryn v1.x.x" --generate-notes
 
 - **`NSApp.delegate` is SwiftUI's wrapper, not our `AppDelegate`.** With `@NSApplicationDelegateAdaptor`, `NSApp.delegate as? AppDelegate` returns nil. Always pass direct references (e.g., `weak var appDelegate`) instead of casting `NSApp.delegate`.
 - **Cmd+ shortcuts need `performKeyEquivalent`, not `keyDown`.** When a main menu is installed, the menu system intercepts Cmd+ key combos via `performKeyEquivalent` before they reach `keyDown`. Use `performKeyEquivalent` for Cmd+ shortcuts in views.
-- `project.pbxproj` is hand-crafted with simple hex IDs (AA000001, AB000001). Keep this convention when adding files. IDs `AB000008`/`AB000009` are taken by Skryn.entitlements and Info.plist. Latest source file IDs: `AB000014` (file ref), `AA000011` (build file).
+- `project.pbxproj` is hand-crafted with simple hex IDs (AA000001, AB000001). Keep this convention when adding files. IDs `AB000008`/`AB000009` are taken by Skryn.entitlements and Info.plist. Latest source file IDs: `AB000014` (file ref), `AA000011` (build file). Latest test file IDs: `AB100005` (file ref), `AA100004` (build file).
 - Borderless windows don't support `performClose(_:)` — Close routes through `AppDelegate.closeAnnotationWindow()` instead.
 - `NSEvent.modifierFlags` (static) reads current keyboard state; `event.modifierFlags` (instance) reads state at event time. Always use the instance property for tool locking.
 - When renaming variables, check ALL references in the same method — secondary uses are easy to miss.
