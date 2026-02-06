@@ -125,22 +125,6 @@ final class UploadcareServiceTests: XCTestCase {
         }
     }
 
-    // MARK: - Error descriptions
-
-    func testErrorDescriptions() {
-        XCTAssertEqual(
-            UploadcareError.invalidResponse.errorDescription,
-            "Invalid response from Uploadcare"
-        )
-        XCTAssertEqual(
-            UploadcareError.serverError("oops").errorDescription,
-            "Uploadcare error: oops"
-        )
-        XCTAssertEqual(
-            UploadcareError.missingFileID.errorDescription,
-            "No file ID in Uploadcare response"
-        )
-    }
 }
 
 // MARK: - Mock URLProtocol

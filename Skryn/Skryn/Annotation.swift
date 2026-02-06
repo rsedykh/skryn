@@ -1,5 +1,11 @@
 import AppKit
 
+enum AnnotationHitTestResult {
+    case handle(index: Int, handle: AnnotationHandle)
+    case body(index: Int)
+    case none
+}
+
 enum Annotation: Equatable {
     case arrow(from: CGPoint, to: CGPoint)
     case line(from: CGPoint, to: CGPoint)
@@ -119,17 +125,32 @@ extension Annotation {
         return hypot(point.x - closestX, point.y - closestY)
     }
 
+    private struct TextHeightCacheKey: Hashable {
+        let width: CGFloat
+        let content: String
+        let fontSize: CGFloat
+    }
+
+    private static var textHeightCache: [TextHeightCacheKey: CGFloat] = [:]
+
     static func textBoundingRect(
         origin: CGPoint, width: CGFloat, content: String, fontSize: CGFloat
     ) -> CGRect {
-        let font = NSFont.boldSystemFont(ofSize: fontSize)
-        let attrs: [NSAttributedString.Key: Any] = [.font: font]
-        let boundingSize = CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)
-        let textRect = (content as NSString).boundingRect(
-            with: boundingSize, options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: attrs
-        )
-        let height = max(textRect.height, fontSize * 1.5)
+        let cacheKey = TextHeightCacheKey(width: width, content: content, fontSize: fontSize)
+        let height: CGFloat
+        if let cached = textHeightCache[cacheKey] {
+            height = cached
+        } else {
+            let font = NSFont.boldSystemFont(ofSize: fontSize)
+            let attrs: [NSAttributedString.Key: Any] = [.font: font]
+            let boundingSize = CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+            let textRect = (content as NSString).boundingRect(
+                with: boundingSize, options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: attrs
+            )
+            height = max(textRect.height, fontSize * 1.5)
+            textHeightCache[cacheKey] = height
+        }
         return CGRect(x: origin.x, y: origin.y, width: width, height: height)
     }
 

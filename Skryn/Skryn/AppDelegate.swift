@@ -18,6 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         "arrow.up", "arrow.up.right", "arrow.right", "arrow.down.right",
         "arrow.down", "arrow.down.left", "arrow.left", "arrow.up.left"
     ]
+    private lazy var spinnerImages: [NSImage] = spinnerSymbols.compactMap {
+        NSImage(systemSymbolName: $0, accessibilityDescription: "Uploading")
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -253,11 +256,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let fileURL = saveFolder.appendingPathComponent(filename)
 
-        do {
-            try pngData.write(to: fileURL)
-            print("Saved: \(fileURL.path)")
-        } catch {
-            print("AppDelegate: save failed — \(error.localizedDescription)")
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try pngData.write(to: fileURL)
+                print("Saved: \(fileURL.path)")
+            } catch {
+                print("AppDelegate: save failed — \(error.localizedDescription)")
+            }
         }
     }
 
@@ -274,6 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lastUploadError = nil
         startIconAnimation()
 
+        uploadTask?.cancel()
         uploadTask = Task {
             do {
                 let cdnURL = try await UploadcareService.upload(
@@ -319,6 +325,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lastUploadError = nil
         startIconAnimation()
 
+        uploadTask?.cancel()
         uploadTask = Task {
             do {
                 let cdnURL = try await UploadcareService.upload(
@@ -362,6 +369,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startIconAnimation()
 
         let filename = upload.filename
+        uploadTask?.cancel()
         uploadTask = Task {
             do {
                 let cdnURL = try await UploadcareService.upload(
@@ -412,11 +420,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         animationFrameIndex = 0
 
         iconTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            let symbol = self.spinnerSymbols[self.animationFrameIndex % self.spinnerSymbols.count]
-            self.statusItem.button?.image = NSImage(
-                systemSymbolName: symbol, accessibilityDescription: "Uploading"
-            )
+            guard let self, !self.spinnerImages.isEmpty else { return }
+            self.statusItem.button?.image = self.spinnerImages[
+                self.animationFrameIndex % self.spinnerImages.count
+            ]
             self.animationFrameIndex += 1
         }
     }
@@ -555,18 +562,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func captureScreen() {
         Task {
-            guard let image = await ScreenCapture.capture() else { return }
+            guard let screenshot = await ScreenCapture.capture() else { return }
 
             await MainActor.run {
-                showAnnotationWindow(with: image)
+                showAnnotationWindow(with: screenshot)
             }
         }
     }
 
-    private func showAnnotationWindow(with image: NSImage) {
+    private func showAnnotationWindow(with screenshot: NSImage) {
         guard let screen = NSScreen.main else { return }
 
-        let window = AnnotationWindow(screen: screen, image: image)
+        let window = AnnotationWindow(screen: screen, screenshot: screenshot)
         (window.contentView as? AnnotationView)?.appDelegate = self
         window.delegate = self
         annotationWindow = window

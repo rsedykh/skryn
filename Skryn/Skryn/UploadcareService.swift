@@ -36,7 +36,8 @@ enum UploadcareService {
 
         // File data
         body.append(Data("--\(boundary)\r\n".utf8))
-        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".utf8))
+        let safeFilename = filename.replacingOccurrences(of: "\"", with: "\\\"")
+        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(safeFilename)\"\r\n".utf8))
         body.append(Data("Content-Type: image/png\r\n\r\n".utf8))
         body.append(pngData)
         body.append(Data("\r\n".utf8))
@@ -80,7 +81,8 @@ enum UploadcareService {
         body.appendMultipart(boundary: boundary, name: "UPLOADCARE_STORE", value: "1")
 
         body.append(Data("--\(boundary)\r\n".utf8))
-        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".utf8))
+        let safeFilename = filename.replacingOccurrences(of: "\"", with: "\\\"")
+        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(safeFilename)\"\r\n".utf8))
         body.append(Data("Content-Type: \(contentType)\r\n\r\n".utf8))
         body.append(fileData)
         body.append(Data("\r\n".utf8))

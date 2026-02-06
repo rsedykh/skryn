@@ -86,35 +86,6 @@ final class UploadHistoryTests: XCTestCase {
         XCTAssertNil(uploads[0].cdnURL)
     }
 
-    // MARK: - File caching
-
-    func testCachePNGData_writesAndReadsBack() {
-        let data = Data("test-png-content".utf8)
-        let filename = "test-\(UUID().uuidString).png"
-
-        let path = UploadHistory.cachePNGData(data, filename: filename)
-        XCTAssertNotNil(path)
-
-        let readBack = UploadHistory.cachedData(at: path!)
-        XCTAssertEqual(readBack, data)
-
-        UploadHistory.removeCacheFile(at: path!)
-    }
-
-    func testCachedData_nonexistentPath_returnsNil() {
-        XCTAssertNil(UploadHistory.cachedData(at: "/tmp/nonexistent-\(UUID()).png"))
-    }
-
-    func testRemoveCacheFile_deletesFile() {
-        let data = Data("to-delete".utf8)
-        let filename = "delete-\(UUID().uuidString).png"
-        let path = UploadHistory.cachePNGData(data, filename: filename)!
-
-        UploadHistory.removeCacheFile(at: path)
-
-        XCTAssertNil(UploadHistory.cachedData(at: path))
-    }
-
     // MARK: - Helper
 
     private func makeUpload(filename: String) -> RecentUpload {

@@ -1,7 +1,7 @@
 import AppKit
 
 final class AnnotationWindow: NSWindow {
-    init(screen: NSScreen, image: NSImage) {
+    init(screen: NSScreen, screenshot: NSImage) {
         let inset = screen.frame.width * 0.05
         let windowRect = screen.frame.insetBy(dx: inset, dy: inset)
 
@@ -19,7 +19,7 @@ final class AnnotationWindow: NSWindow {
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         self.contentView = AnnotationView(
             frame: NSRect(origin: .zero, size: windowRect.size),
-            image: image
+            screenshot: screenshot
         )
     }
 

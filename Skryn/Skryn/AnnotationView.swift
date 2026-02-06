@@ -27,7 +27,7 @@ final class AnnotationView: NSView {
     private var movingStartPoint: CGPoint = .zero
 
     /// Rect where the screenshot is drawn on screen
-    private var imageRect: NSRect { bounds }
+    private var screenshotRect: NSRect { bounds }
 
     /// Full screenshot coordinate space
     private var screenshotBounds: NSRect {
@@ -41,8 +41,8 @@ final class AnnotationView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
-    init(frame: NSRect, image: NSImage) {
-        self.screenshot = image
+    init(frame: NSRect, screenshot: NSImage) {
+        self.screenshot = screenshot
         super.init(frame: frame)
         wantsLayer = true
         layer?.cornerRadius = 10
@@ -69,7 +69,7 @@ final class AnnotationView: NSView {
 
     /// Converts a view-space point to screenshot coordinates
     func viewToScreenshot(_ point: CGPoint) -> CGPoint {
-        let ir = imageRect
+        let ir = screenshotRect
         let scale = screenshot.size.width / ir.width
         let x = (point.x - ir.origin.x) * scale
         let y = (point.y - ir.origin.y) * scale
@@ -81,7 +81,7 @@ final class AnnotationView: NSView {
 
     /// Converts a screenshot-space point to view coordinates
     func screenshotToView(_ point: CGPoint) -> CGPoint {
-        let ir = imageRect
+        let ir = screenshotRect
         let scale = ir.width / screenshot.size.width
         return CGPoint(
             x: ir.origin.x + point.x * scale,
@@ -91,13 +91,13 @@ final class AnnotationView: NSView {
 
     /// Scale factor from screenshot coords to view coords
     private func screenshotToViewScale() -> CGFloat {
-        imageRect.width / screenshot.size.width
+        screenshotRect.width / screenshot.size.width
     }
 
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
-        let ir = imageRect
+        let ir = screenshotRect
 
         screenshot.draw(in: ir)
 
@@ -448,25 +448,23 @@ final class AnnotationView: NSView {
         let viewPoint = convert(event.locationInWindow, from: nil)
         let screenshotPoint = viewToScreenshot(viewPoint)
 
-        if let (index, handle) = handleAt(screenshotPoint) {
-            if case .left = handle {
-                NSCursor.resizeLeftRight.set()
-            } else if case .right = handle {
-                NSCursor.resizeLeftRight.set()
-            } else {
-                NSCursor.crosshair.set()
-            }
+        let hit = hitTestAnnotations(at: screenshotPoint)
+
+        switch hit {
+        case .handle(let index, let handle):
+            let isTextEdge = (handle == .left || handle == .right)
+            (isTextEdge ? NSCursor.resizeLeftRight : NSCursor.crosshair).set()
             if hoveredAnnotationIndex != index {
                 hoveredAnnotationIndex = index
                 needsDisplay = true
             }
-        } else if let index = annotationBodyAt(screenshotPoint) {
+        case .body(let index):
             NSCursor.openHand.set()
             if hoveredAnnotationIndex != index {
                 hoveredAnnotationIndex = index
                 needsDisplay = true
             }
-        } else {
+        case .none:
             NSCursor.arrow.set()
             if hoveredAnnotationIndex != nil {
                 hoveredAnnotationIndex = nil
@@ -550,12 +548,8 @@ final class AnnotationView: NSView {
 
     /// Returns the index of an annotation whose body contains the given screenshot-space point
     func annotationBodyAt(_ point: CGPoint) -> Int? {
-        let ir = imageRect
-        let scale = ir.width / screenshot.size.width
-        let hitRadius: CGFloat = 5.0 / scale  // 5 view points → screenshot space for lines
-        for i in stride(from: annotations.count - 1, through: 0, by: -1)
-            where annotations[i].bodyContains(point, hitRadius: hitRadius) {
-            return i
+        if case .body(let index) = hitTestAnnotations(at: point) {
+            return index
         }
         return nil
     }
@@ -699,31 +693,41 @@ final class AnnotationView: NSView {
 
     // MARK: - Hit Testing
 
-    /// Returns the annotation index and handle at the given screenshot-space point
-    func handleAt(_ point: CGPoint) -> (index: Int, handle: AnnotationHandle)? {
-        let ir = imageRect
+    /// Single-pass hit test: checks handles first, then body, for each annotation top-to-bottom
+    private func hitTestAnnotations(at point: CGPoint) -> AnnotationHitTestResult {
+        let ir = screenshotRect
         let scale = ir.width / screenshot.size.width
-        let hitRadius: CGFloat = 10.0 / scale  // 10 view points → screenshot space
-
-        var bestIndex: Int?
-        var bestHandle: AnnotationHandle?
-        var bestDist = CGFloat.greatestFiniteMagnitude
+        let handleHitRadius: CGFloat = 10.0 / scale
+        let bodyHitRadius: CGFloat = 5.0 / scale
 
         for i in stride(from: annotations.count - 1, through: 0, by: -1) {
+            // Check handles first
+            var bestHandle: AnnotationHandle?
+            var bestDist = CGFloat.greatestFiniteMagnitude
             for (handle, handlePoint) in annotations[i].handles {
                 let dist = hypot(point.x - handlePoint.x, point.y - handlePoint.y)
-                if dist <= hitRadius && dist < bestDist {
+                if dist <= handleHitRadius && dist < bestDist {
                     bestDist = dist
-                    bestIndex = i
                     bestHandle = handle
                 }
             }
-            // If we found a handle on a top annotation, stop checking lower ones
-            if bestIndex == i { break }
+            if let handle = bestHandle {
+                return .handle(index: i, handle: handle)
+            }
+            // Check body
+            if annotations[i].bodyContains(point, hitRadius: bodyHitRadius) {
+                return .body(index: i)
+            }
         }
+        return .none
+    }
 
-        guard let index = bestIndex, let handle = bestHandle else { return nil }
-        return (index, handle)
+    /// Returns the annotation index and handle at the given screenshot-space point
+    func handleAt(_ point: CGPoint) -> (index: Int, handle: AnnotationHandle)? {
+        if case .handle(let index, let handle) = hitTestAnnotations(at: point) {
+            return (index, handle)
+        }
+        return nil
     }
 
     // MARK: - Annotations + Undo

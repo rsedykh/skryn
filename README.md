@@ -15,26 +15,30 @@ Since the app is unsigned, macOS may revoke Screen Recording permission after up
 
 1. Go to System Settings → Privacy & Security → Screen Recording
 2. Remove Skryn from the list
-3. Re-add it (toggling off/on doesn't work — you must remove and re-add)
+3. Re-add it; the app will prompt for permission again
 
 ## Usage
 
 Click the camera icon in the menu bar or press **Cmd+Shift+5** (configurable in Settings) to capture your screen. An annotation window opens where you can draw before saving.
 
-**Tools** (hold modifier key while dragging):
+**Annotations**
 
 - **Drag** — Arrow
 - **Shift + Drag** — Line
 - **Option + Drag** — Rectangle
+- **T** — Toggle text mode
+- **Cmd + + / Cmd + -** — Increase / Decrease text size
+- **Shift + Enter** — new text line (Enter will exit text mode)
 - **Cmd + Drag** — Crop
 
-**Shortcuts:**
+You can also hover over the annotation and change its size or drag it.
 
-- **Cmd+Enter** — Save
-- **Option+Enter** — Alternate save (local↔cloud)
+**Shortcuts**
+
+- **Cmd+Enter** and **Option+Enter** and **Control+Enter** — Save to different locations (configurable in Settings)
 - **Cmd+Z / Cmd+Shift+Z** — Undo / Redo
 - **Esc** — Remove crop
-- **Cmd+W** — Cancel
+- **Cmd+W** — Cancel screenshot
 - **Cmd+Q** or **right-click** menu bar icon — Quit
 
 ## Build
