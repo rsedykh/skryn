@@ -41,6 +41,8 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Option = rectangle, Command = crop. Only one crop allowed at a time.
 
+**Handle editing:** After drawing, annotations can be edited by dragging their handles (endpoints for arrows/lines, corners for rectangles/crop). `AnnotationHandle` enum and geometry methods live in `Annotation.swift`. `AnnotationView` does hit testing in `handleAt()` (10pt radius, topmost-first), shows white/red circle handles on hover with crosshair cursor, and supports live dragging with undo. Modifier keys at `mouseDown` bypass editing to draw a new annotation instead.
+
 ## Cloud Upload (Uploadcare)
 
 **API reference:** https://uploadcare.com/api-refs/upload-api/ — we use the `/base/` direct upload endpoint. The official Swift SDK (https://github.com/uploadcare/uploadcare-swift) is not used — too heavy for a small app — but its source is a good reference for edge cases.

@@ -9,6 +9,12 @@ final class AnnotationView: NSView {
     private var dragOrigin: CGPoint = .zero
     private var dragModifiers: NSEvent.ModifierFlags = []
 
+    // Handle editing state
+    private var editingIndex: Int?
+    private var editingHandle: AnnotationHandle?
+    private var editingOriginal: Annotation?
+    private var hoveredAnnotationIndex: Int?
+
     /// Rect where the screenshot is drawn on screen
     private var imageRect: NSRect { bounds }
 
@@ -30,6 +36,19 @@ final class AnnotationView: NSView {
         wantsLayer = true
         layer?.cornerRadius = 10
         layer?.masksToBounds = true
+        updateTrackingAreas()
+    }
+
+    override func updateTrackingAreas() {
+        for area in trackingAreas { removeTrackingArea(area) }
+        super.updateTrackingAreas()
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
     }
 
     @available(*, unavailable)
@@ -72,7 +91,31 @@ final class AnnotationView: NSView {
             draw(current)
         }
 
+        // Draw handles for hovered annotation
+        if currentAnnotation == nil, let idx = hoveredAnnotationIndex,
+           idx < annotations.count {
+            drawHandles(for: annotations[idx])
+        }
+
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawHandles(for annotation: Annotation) {
+        let handleRadius: CGFloat = 6.0
+        for (_, point) in annotation.handles {
+            let handleRect = CGRect(
+                x: point.x - handleRadius,
+                y: point.y - handleRadius,
+                width: handleRadius * 2,
+                height: handleRadius * 2
+            )
+            let path = NSBezierPath(ovalIn: handleRect)
+            NSColor.white.setFill()
+            path.fill()
+            NSColor.red.setStroke()
+            path.lineWidth = 2.0
+            path.stroke()
+        }
     }
 
     private func draw(_ annotation: Annotation) {
@@ -156,13 +199,35 @@ final class AnnotationView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let viewPoint = convert(event.locationInWindow, from: nil)
-        dragOrigin = viewToScreenshot(viewPoint)
+        let screenshotPoint = viewToScreenshot(viewPoint)
         dragModifiers = event.modifierFlags
+
+        let hasDrawModifiers = dragModifiers.contains(.shift)
+            || dragModifiers.contains(.option)
+            || dragModifiers.contains(.command)
+
+        if !hasDrawModifiers, let (index, handle) = handleAt(screenshotPoint) {
+            editingIndex = index
+            editingHandle = handle
+            editingOriginal = annotations[index]
+            return
+        }
+
+        dragOrigin = screenshotPoint
+        editingIndex = nil
+        editingHandle = nil
+        editingOriginal = nil
     }
 
     override func mouseDragged(with event: NSEvent) {
         let viewPoint = convert(event.locationInWindow, from: nil)
         let point = viewToScreenshot(viewPoint)
+
+        if let idx = editingIndex, let handle = editingHandle {
+            annotations[idx] = annotations[idx].moving(handle, to: point)
+            needsDisplay = true
+            return
+        }
 
         if dragModifiers.contains(.command) {
             currentAnnotation = .crop(rect: rectFromDrag(origin: dragOrigin, current: point))
@@ -178,6 +243,15 @@ final class AnnotationView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if let idx = editingIndex, let original = editingOriginal {
+            let edited = annotations[idx]
+            replaceAnnotation(at: idx, with: edited, old: original)
+            editingIndex = nil
+            editingHandle = nil
+            editingOriginal = nil
+            return
+        }
+
         guard let annotation = currentAnnotation else { return }
         currentAnnotation = nil
 
@@ -189,6 +263,33 @@ final class AnnotationView: NSView {
         if dx < 2 && dy < 2 { return }
 
         addAnnotation(annotation)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        let screenshotPoint = viewToScreenshot(viewPoint)
+
+        if let (index, _) = handleAt(screenshotPoint) {
+            NSCursor.crosshair.set()
+            if hoveredAnnotationIndex != index {
+                hoveredAnnotationIndex = index
+                needsDisplay = true
+            }
+        } else {
+            NSCursor.arrow.set()
+            if hoveredAnnotationIndex != nil {
+                hoveredAnnotationIndex = nil
+                needsDisplay = true
+            }
+        }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        NSCursor.arrow.set()
+        if hoveredAnnotationIndex != nil {
+            hoveredAnnotationIndex = nil
+            needsDisplay = true
+        }
     }
 
     // MARK: - Key Events
@@ -225,7 +326,44 @@ final class AnnotationView: NSView {
         needsDisplay = true
     }
 
+    // MARK: - Hit Testing
+
+    /// Returns the annotation index and handle at the given screenshot-space point
+    func handleAt(_ point: CGPoint) -> (index: Int, handle: AnnotationHandle)? {
+        let ir = imageRect
+        let scale = ir.width / screenshot.size.width
+        let hitRadius: CGFloat = 10.0 / scale  // 10 view points → screenshot space
+
+        var bestIndex: Int?
+        var bestHandle: AnnotationHandle?
+        var bestDist = CGFloat.greatestFiniteMagnitude
+
+        for i in stride(from: annotations.count - 1, through: 0, by: -1) {
+            for (handle, handlePoint) in annotations[i].handles {
+                let dist = hypot(point.x - handlePoint.x, point.y - handlePoint.y)
+                if dist <= hitRadius && dist < bestDist {
+                    bestDist = dist
+                    bestIndex = i
+                    bestHandle = handle
+                }
+            }
+            // If we found a handle on a top annotation, stop checking lower ones
+            if bestIndex == i { break }
+        }
+
+        guard let index = bestIndex, let handle = bestHandle else { return nil }
+        return (index, handle)
+    }
+
     // MARK: - Annotations + Undo
+
+    private func replaceAnnotation(at index: Int, with new: Annotation, old: Annotation) {
+        annotations[index] = new
+        undoManager?.registerUndo(withTarget: self) { target in
+            target.replaceAnnotation(at: index, with: old, old: new)
+        }
+        needsDisplay = true
+    }
 
     private func addAnnotation(_ annotation: Annotation) {
         if case .crop = annotation {
