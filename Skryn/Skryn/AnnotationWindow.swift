@@ -2,18 +2,25 @@ import AppKit
 
 final class AnnotationWindow: NSWindow {
     init(screen: NSScreen, image: NSImage) {
+        let inset = screen.frame.width * 0.05
+        let windowRect = screen.frame.insetBy(dx: inset, dy: inset)
+
         super.init(
-            contentRect: screen.frame,
+            contentRect: windowRect,
             styleMask: .borderless,
             backing: .buffered,
             defer: false
         )
-        self.level = .floating
-        self.isOpaque = true
-        self.hasShadow = false
+        self.level = .normal
+        self.isOpaque = false
+        self.backgroundColor = .clear
+        self.hasShadow = true
         self.isReleasedWhenClosed = false
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        self.contentView = AnnotationView(frame: screen.frame, image: image)
+        self.contentView = AnnotationView(
+            frame: NSRect(origin: .zero, size: windowRect.size),
+            image: image
+        )
     }
 
     override var canBecomeKey: Bool { true }

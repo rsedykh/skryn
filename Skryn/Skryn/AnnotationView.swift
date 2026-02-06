@@ -7,6 +7,14 @@ final class AnnotationView: NSView {
     private var dragOrigin: CGPoint = .zero
     private var dragModifiers: NSEvent.ModifierFlags = []
 
+    /// Rect where the screenshot is drawn on screen
+    private var imageRect: NSRect { bounds }
+
+    /// Full screenshot coordinate space
+    private var screenshotBounds: NSRect {
+        NSRect(origin: .zero, size: screenshot.size)
+    }
+
     private lazy var _undoManager = UndoManager()
     override var undoManager: UndoManager? { _undoManager }
 
@@ -17,6 +25,9 @@ final class AnnotationView: NSView {
     init(frame: NSRect, image: NSImage) {
         self.screenshot = image
         super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerRadius = 10
+        layer?.masksToBounds = true
     }
 
     @available(*, unavailable)
@@ -24,10 +35,32 @@ final class AnnotationView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// Converts a view-space point to screenshot coordinates
+    private func viewToScreenshot(_ point: CGPoint) -> CGPoint {
+        let ir = imageRect
+        let scale = screenshot.size.width / ir.width
+        let x = (point.x - ir.origin.x) * scale
+        let y = (point.y - ir.origin.y) * scale
+        return CGPoint(
+            x: min(max(x, 0), screenshot.size.width),
+            y: min(max(y, 0), screenshot.size.height)
+        )
+    }
+
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
-        screenshot.draw(in: bounds)
+        let ir = imageRect
+
+        screenshot.draw(in: ir)
+
+        // Draw annotations in screenshot coordinate space
+        NSGraphicsContext.saveGraphicsState()
+        let xform = NSAffineTransform()
+        xform.translateX(by: ir.origin.x, yBy: ir.origin.y)
+        let s = ir.width / screenshot.size.width
+        xform.scaleX(by: s, yBy: s)
+        xform.concat()
 
         for annotation in annotations {
             draw(annotation)
@@ -36,12 +69,16 @@ final class AnnotationView: NSView {
         if let current = currentAnnotation {
             draw(current)
         }
+
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     private func draw(_ annotation: Annotation) {
         switch annotation {
         case .arrow(let from, let to):
             drawArrow(from: from, to: to)
+        case .line(let from, let to):
+            drawLine(from: from, to: to)
         case .rectangle(let rect):
             drawRectangle(rect)
         case .crop(let rect):
@@ -82,6 +119,15 @@ final class AnnotationView: NSView {
         head.fill()
     }
 
+    private func drawLine(from: CGPoint, to: CGPoint) {
+        NSColor.red.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 3.0
+        path.move(to: from)
+        path.line(to: to)
+        path.stroke()
+    }
+
     private func drawRectangle(_ rect: CGRect) {
         NSColor.red.setStroke()
         let path = NSBezierPath(rect: rect)
@@ -90,8 +136,8 @@ final class AnnotationView: NSView {
     }
 
     private func drawCrop(_ rect: CGRect) {
-        // Dim area outside crop
-        let overlay = NSBezierPath(rect: bounds)
+        // Dim area outside crop (uses screenshotBounds since we draw in screenshot space)
+        let overlay = NSBezierPath(rect: screenshotBounds)
         overlay.appendRect(rect)
         overlay.windingRule = .evenOdd
         NSColor.black.withAlphaComponent(0.5).setFill()
@@ -107,18 +153,21 @@ final class AnnotationView: NSView {
     // MARK: - Mouse Events
 
     override func mouseDown(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        dragOrigin = point
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        dragOrigin = viewToScreenshot(viewPoint)
         dragModifiers = event.modifierFlags
     }
 
     override func mouseDragged(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        let point = viewToScreenshot(viewPoint)
 
-        if dragModifiers.contains(.shift) {
+        if dragModifiers.contains(.command) {
             currentAnnotation = .crop(rect: rectFromDrag(origin: dragOrigin, current: point))
-        } else if dragModifiers.contains(.command) {
+        } else if dragModifiers.contains(.option) {
             currentAnnotation = .rectangle(rect: rectFromDrag(origin: dragOrigin, current: point))
+        } else if dragModifiers.contains(.shift) {
+            currentAnnotation = .line(from: dragOrigin, to: point)
         } else {
             currentAnnotation = .arrow(from: dragOrigin, to: point)
         }
@@ -131,7 +180,8 @@ final class AnnotationView: NSView {
         currentAnnotation = nil
 
         // Ignore negligible drags
-        let point = convert(event.locationInWindow, from: nil)
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        let point = viewToScreenshot(viewPoint)
         let dx = abs(point.x - dragOrigin.x)
         let dy = abs(point.y - dragOrigin.y)
         if dx < 2 && dy < 2 { return }
@@ -142,32 +192,36 @@ final class AnnotationView: NSView {
     // MARK: - Key Events
 
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { // ESC
-            window?.close()
-            return
-        }
-
-        if event.keyCode == 36 { // ENTER
-            saveAndClose()
-            return
-        }
-
-        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "z" {
-            if event.modifierFlags.contains(.shift) {
-                undoManager?.redo()
-            } else {
-                undoManager?.undo()
-            }
+        if event.keyCode == 53 { // ESC — remove crop
+            annotations.removeAll { if case .crop = $0 { return true }; return false }
             needsDisplay = true
+            return
+        }
+
+        if event.keyCode == 36 && event.modifierFlags.contains(.command) { // CMD+ENTER
+            saveAndClose()
             return
         }
 
         super.keyDown(with: event)
     }
 
+    @objc func undo(_ sender: Any?) {
+        undoManager?.undo()
+        needsDisplay = true
+    }
+
+    @objc func redo(_ sender: Any?) {
+        undoManager?.redo()
+        needsDisplay = true
+    }
+
     // MARK: - Annotations + Undo
 
     private func addAnnotation(_ annotation: Annotation) {
+        if case .crop = annotation {
+            annotations.removeAll { if case .crop = $0 { return true }; return false }
+        }
         annotations.append(annotation)
         undoManager?.registerUndo(withTarget: self) { target in
             target.removeLastAnnotation()
@@ -219,11 +273,11 @@ final class AnnotationView: NSView {
             return false
         })
 
-        let size = bounds.size
+        let size = screenshot.size
         let image = NSImage(size: size)
         image.lockFocus()
 
-        screenshot.draw(in: bounds)
+        screenshot.draw(in: NSRect(origin: .zero, size: size))
 
         for annotation in annotations {
             if case .crop = annotation { continue }
