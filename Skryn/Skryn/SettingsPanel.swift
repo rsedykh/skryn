@@ -6,6 +6,7 @@ final class SettingsPanel: NSPanel {
     private let localRadio = NSButton(radioButtonWithTitle: "Save to local folder", target: nil, action: nil)
     private let cloudRadio = NSButton(radioButtonWithTitle: "Upload to ", target: nil, action: nil)
     private let uploadcareLink = NSTextField(labelWithString: "")
+    private let cloudSuffix = NSTextField(labelWithString: " cloud")
     private let folderLabel = NSTextField(labelWithString: "")
     private let chooseButton = NSButton(title: "Choose…", target: nil, action: nil)
     private let keyField = NSTextField(frame: .zero)
@@ -48,17 +49,20 @@ final class SettingsPanel: NSPanel {
         cloudRadio.target = self
         cloudRadio.action = #selector(radioChanged)
 
+        let radioFont = cloudRadio.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
         let linkURL = "https://app.uploadcare.com"
         let linkString = NSMutableAttributedString(
             string: "Uploadcare",
             attributes: [
                 .link: linkURL,
-                .font: cloudRadio.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+                .font: radioFont,
+                .underlineStyle: NSUnderlineStyle.single.rawValue
             ]
         )
         uploadcareLink.attributedStringValue = linkString
         uploadcareLink.allowsEditingTextAttributes = true
         uploadcareLink.isSelectable = true
+        cloudSuffix.font = radioFont
 
         chooseButton.target = self
         chooseButton.action = #selector(chooseFolderClicked)
@@ -87,7 +91,7 @@ final class SettingsPanel: NSPanel {
         localSection.spacing = 6
         folderRow.leadingAnchor.constraint(equalTo: localSection.leadingAnchor, constant: 18).isActive = true
 
-        let cloudRadioRow = NSStackView(views: [cloudRadio, uploadcareLink])
+        let cloudRadioRow = NSStackView(views: [cloudRadio, uploadcareLink, cloudSuffix])
         cloudRadioRow.orientation = .horizontal
         cloudRadioRow.spacing = 0
 
@@ -103,7 +107,7 @@ final class SettingsPanel: NSPanel {
 
         let separator = makeSeparator()
 
-        let defaultButton = NSButton(title: "Default", target: self, action: #selector(resetHotkeyClicked))
+        let defaultButton = NSButton(title: "Reset to default", target: self, action: #selector(resetHotkeyClicked))
         defaultButton.bezelStyle = .rounded
         defaultButton.toolTip = "Reset to ⌘⇧5"
 
@@ -226,9 +230,9 @@ final class SettingsPanel: NSPanel {
         keyField.isEnabled = !isLocal
 
         if isLocal {
-            hintLabel.stringValue = "\u{2318}\u{21A9} will save locally. \u{2325}\u{21A9} will upload to the cloud."
+            hintLabel.stringValue = "\u{2318}\u{21A9}: Save locally. \u{2325}\u{21A9}: Upload to cloud."
         } else {
-            hintLabel.stringValue = "\u{2318}\u{21A9} will upload to the cloud. \u{2325}\u{21A9} will save locally."
+            hintLabel.stringValue = "\u{2318}\u{21A9}: Upload to cloud. \u{2325}\u{21A9}: Save locally."
         }
     }
 
