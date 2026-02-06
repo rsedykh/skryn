@@ -41,6 +41,20 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Option = rectangle, Command = crop. Only one crop allowed at a time.
 
+## App Icon
+
+- Located in `Assets.xcassets/AppIcon.appiconset/` — 10 PNGs (16px–1024px)
+- Current design: black "y" letter on white rounded rect (Helvetica font)
+- Generated via Python/Pillow script — no source vector file
+- Menu bar uses SF Symbol `"camera"` (set in AppDelegate.swift)
+
+## Distribution
+
+- No paid Apple Developer account — sharing as unsigned .app in a zip
+- Friends must right-click → Open on first launch to bypass Gatekeeper
+- Notarization (no warnings) requires $99/yr Apple Developer Program
+- Build Release zip: `cd ~/Library/Developer/Xcode/DerivedData/Skryn-*/Build/Products/Release && ditto -c -k --keepParent Skryn.app ~/Desktop/Skryn.zip`
+
 ## Key Gotchas
 
 - `project.pbxproj` is hand-crafted with simple hex IDs (AA000001, AB000001). Keep this convention when adding files.
