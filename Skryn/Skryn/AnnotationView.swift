@@ -251,8 +251,13 @@ final class AnnotationView: NSView {
         formatter.dateFormat = "yyyyMMddHHmmss"
         let filename = "skryn-\(formatter.string(from: Date())).png"
 
-        let desktopURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
-        let fileURL = desktopURL.appendingPathComponent(filename)
+        let saveFolder: URL
+        if let customPath = UserDefaults.standard.string(forKey: "saveFolderPath") {
+            saveFolder = URL(fileURLWithPath: customPath)
+        } else {
+            saveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
+        }
+        let fileURL = saveFolder.appendingPathComponent(filename)
 
         guard let dest = CGImageDestinationCreateWithURL(
             fileURL as CFURL, "public.png" as CFString, 1, nil

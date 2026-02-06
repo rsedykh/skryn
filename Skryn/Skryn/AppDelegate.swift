@@ -60,10 +60,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showQuitMenu() {
         let menu = NSMenu()
+
+        let chooseFolderItem = NSMenuItem(title: "Choose Save Folder…", action: #selector(chooseSaveFolder), keyEquivalent: "")
+        chooseFolderItem.target = self
+        menu.addItem(chooseFolderItem)
+
+        if UserDefaults.standard.string(forKey: "saveFolderPath") != nil {
+            let resetItem = NSMenuItem(title: "Reset Save Folder to Desktop", action: #selector(resetSaveFolder), keyEquivalent: "")
+            resetItem.target = self
+            menu.addItem(resetItem)
+        }
+
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Skryn", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
+    }
+
+    @objc private func chooseSaveFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Select"
+        panel.message = "Choose where to save screenshots"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            UserDefaults.standard.set(url.path, forKey: "saveFolderPath")
+        }
+    }
+
+    @objc private func resetSaveFolder() {
+        UserDefaults.standard.removeObject(forKey: "saveFolderPath")
     }
 
     private func setupGlobalHotkey() {
