@@ -69,10 +69,24 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 ## Distribution
 
-- No paid Apple Developer account — sharing as unsigned .app in a zip
-- Friends must right-click → Open on first launch to bypass Gatekeeper
-- Notarization (no warnings) requires $99/yr Apple Developer Program
-- Build Release zip: `cd ~/Library/Developer/Xcode/DerivedData/Skryn-*/Build/Products/Release && ditto -c -k --keepParent Skryn.app ~/Desktop/Skryn.zip`
+Unsigned app distributed via GitHub Releases. No paid Apple Developer account — notarization (no warnings) requires $99/yr Apple Developer Program.
+
+**Release workflow** (only when explicitly asked — never create releases autonomously):
+
+```bash
+# 1. Build Release
+xcodebuild -project Skryn/Skryn.xcodeproj -scheme Skryn -configuration Release build
+
+# 2. Zip the .app
+cd ~/Library/Developer/Xcode/DerivedData/Skryn-*/Build/Products/Release && ditto -c -k --keepParent Skryn.app /tmp/Skryn.zip
+
+# 3. Create GitHub release (bump version as appropriate)
+gh release create v1.x.x /tmp/Skryn.zip --title "Skryn v1.x.x" --generate-notes
+```
+
+**User install:** Download `Skryn.zip` from [Releases](https://github.com/rsedykh/skryn/releases) → unzip → drag to Applications → right-click → Open on first launch (bypasses Gatekeeper). Grant Screen Recording permission when prompted.
+
+**Screen Recording permission after update:** Since the app is unsigned, macOS may revoke Screen Recording permission after updating. Users must remove Skryn from System Settings → Privacy & Security → Screen Recording, then re-add it (toggling off/on doesn't work).
 
 ## Key Gotchas
 
