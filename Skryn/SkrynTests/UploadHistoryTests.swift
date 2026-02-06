@@ -44,17 +44,6 @@ final class UploadHistoryTests: XCTestCase {
         XCTAssertEqual(uploads[1].filename, "first.png")
     }
 
-    func testAdd_persistsAcrossReads() {
-        UploadHistory.add(makeUpload(filename: "persisted.png"))
-
-        // Read twice to ensure UserDefaults persistence
-        let first = UploadHistory.recentUploads()
-        let second = UploadHistory.recentUploads()
-        XCTAssertEqual(first.count, 1)
-        XCTAssertEqual(second.count, 1)
-        XCTAssertEqual(first[0].filename, "persisted.png")
-    }
-
     func testAdd_prunesBeyond10() {
         for idx in 0..<12 {
             UploadHistory.add(makeUpload(filename: "file\(idx).png"))

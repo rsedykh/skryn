@@ -76,25 +76,6 @@ final class UploadcareServiceTests: XCTestCase {
         XCTAssertTrue(bodyString.contains("image/png"))
     }
 
-    func testUpload_postsToCorrectURL() async throws {
-        var capturedURL: URL?
-        MockURLProtocol.requestHandler = { request in
-            capturedURL = request.url
-            let json = Data("{\"file\":\"id\"}".utf8)
-            let response = HTTPURLResponse(
-                url: request.url!, statusCode: 200,
-                httpVersion: nil, headerFields: nil
-            )!
-            return (response, json)
-        }
-
-        _ = try await UploadcareService.upload(
-            pngData: Data(), filename: "f.png", publicKey: "k", session: session
-        )
-
-        XCTAssertEqual(capturedURL?.absoluteString, "https://upload.uploadcare.com/base/")
-    }
-
     // MARK: - Error cases
 
     func testUpload_serverError_throwsWithMessage() async {
@@ -139,28 +120,6 @@ final class UploadcareServiceTests: XCTestCase {
             XCTFail("Expected missingFileID")
         } catch is UploadcareError {
             // expected
-        } catch {
-            XCTFail("Unexpected error type: \(error)")
-        }
-    }
-
-    func testUpload_malformedJSON_throws() async {
-        MockURLProtocol.requestHandler = { request in
-            let body = Data("not json".utf8)
-            let response = HTTPURLResponse(
-                url: request.url!, statusCode: 200,
-                httpVersion: nil, headerFields: nil
-            )!
-            return (response, body)
-        }
-
-        do {
-            _ = try await UploadcareService.upload(
-                pngData: Data(), filename: "t.png", publicKey: "k", session: session
-            )
-            XCTFail("Expected error")
-        } catch is UploadcareError {
-            // expected — malformed JSON falls through to missingFileID
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }

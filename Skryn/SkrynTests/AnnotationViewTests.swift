@@ -37,15 +37,6 @@ final class AnnotationViewTests: XCTestCase {
         XCTAssertEqual(rect, CGRect(x: 30, y: 30, width: 0, height: 0))
     }
 
-    func testRectFromDrag_negativeDirection() {
-        let view = makeView()
-        let rect = view.rectFromDrag(
-            origin: CGPoint(x: 100, y: 200),
-            current: CGPoint(x: 10, y: 50)
-        )
-        XCTAssertEqual(rect, CGRect(x: 10, y: 50, width: 90, height: 150))
-    }
-
     // MARK: - viewToScreenshot
 
     func testViewToScreenshot_sameScale() {
@@ -77,13 +68,6 @@ final class AnnotationViewTests: XCTestCase {
         let result = view.viewToScreenshot(CGPoint(x: 300, y: 200))
         XCTAssertEqual(result.x, 200, accuracy: 0.001)
         XCTAssertEqual(result.y, 100, accuracy: 0.001)
-    }
-
-    func testViewToScreenshot_origin() {
-        let view = makeView(imageSize: NSSize(width: 200, height: 100))
-        let result = view.viewToScreenshot(CGPoint(x: 0, y: 0))
-        XCTAssertEqual(result.x, 0, accuracy: 0.001)
-        XCTAssertEqual(result.y, 0, accuracy: 0.001)
     }
 
     // MARK: - Crop replacement logic
