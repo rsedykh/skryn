@@ -452,6 +452,11 @@ final class AnnotationView: NSView {
                 }
             }
         }
+        if event.keyCode == 36 && event.modifierFlags.contains(.control) { // CTRL+ENTER
+            finalizeTextEditing()
+            copyToClipboardAndClose()
+            return true
+        }
         if event.keyCode == 36 && event.modifierFlags.contains(.option) { // OPT+ENTER
             finalizeTextEditing()
             alternateAndClose()
@@ -739,6 +744,17 @@ final class AnnotationView: NSView {
 
         appDelegate?.handleSave(cgImage: cgImage)
 
+        window?.close()
+    }
+
+    private func copyToClipboardAndClose() {
+        guard let cgImage = compositeAsCGImage() else {
+            window?.close()
+            return
+        }
+        let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([nsImage])
         window?.close()
     }
 
