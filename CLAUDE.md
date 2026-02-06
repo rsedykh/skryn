@@ -37,7 +37,7 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Activation policy toggle:** The app is `LSUIElement=true` (no Dock icon). When the annotation window opens, it switches to `.regular` (appears in Cmd+Tab) and installs a main menu. On window close, it reverts to `.accessory`.
 
-**Keyboard shortcuts** are handled via the installed `NSApp.mainMenu` (Cmd+W, Cmd+Z, Cmd+Shift+Z, Cmd+Q) for proper cross-layout support. ESC uses `keyDown` (layout-independent keyCode). Cmd+Enter uses `performKeyEquivalent` — the menu system intercepts Cmd+ combos before they reach `keyDown`.
+**Keyboard shortcuts** are handled via the installed `NSApp.mainMenu` (Cmd+W, Cmd+Z, Cmd+Shift+Z, Cmd+Q) for proper cross-layout support. ESC uses `keyDown` (layout-independent keyCode). Cmd+Enter and Option+Enter use `performKeyEquivalent` — the menu system intercepts modifier combos before they reach `keyDown`. Option+Enter triggers alternate save (opposite of configured default: local↔cloud).
 
 **Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Option = rectangle, Command = crop. Only one crop allowed at a time.
 

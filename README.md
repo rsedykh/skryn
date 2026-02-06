@@ -31,6 +31,7 @@ Click the camera icon in the menu bar or press **Cmd+Shift+5** (configurable in 
 **Shortcuts:**
 
 - **Cmd+Enter** — Save
+- **Option+Enter** — Alternate save (local↔cloud)
 - **Cmd+Z / Cmd+Shift+Z** — Undo / Redo
 - **Esc** — Remove crop
 - **Cmd+W** — Cancel

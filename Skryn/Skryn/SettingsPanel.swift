@@ -9,6 +9,7 @@ final class SettingsPanel: NSPanel {
     private let chooseButton = NSButton(title: "Choose…", target: nil, action: nil)
     private let keyField = NSTextField(frame: .zero)
     private let keyLabel = NSTextField(labelWithString: "Public key:")
+    private let hintLabel = NSTextField(labelWithString: "")
     private let hotkeyLabel = NSTextField(labelWithString: "Screenshot shortcut:")
     private let hotkeyRecorder = HotkeyRecorderButton(frame: .zero)
 
@@ -58,6 +59,10 @@ final class SettingsPanel: NSPanel {
         chooseButton.target = self
         chooseButton.action = #selector(chooseFolderClicked)
         chooseButton.bezelStyle = .rounded
+
+        hintLabel.font = NSFont.systemFont(ofSize: 11)
+        hintLabel.textColor = .secondaryLabelColor
+        hintLabel.alignment = .left
 
         keyField.placeholderString = "Your public key"
         keyField.lineBreakMode = .byTruncatingTail
@@ -119,7 +124,7 @@ final class SettingsPanel: NSPanel {
         spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         let mainStack = NSStackView(
-            views: [localSection, cloudSection, separator, hotkeyRow, spacer, buttonRow]
+            views: [localSection, cloudSection, hintLabel, separator, hotkeyRow, spacer, buttonRow]
         )
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
@@ -195,6 +200,12 @@ final class SettingsPanel: NSPanel {
         chooseButton.isEnabled = isLocal
         keyLabel.textColor = isLocal ? .tertiaryLabelColor : .labelColor
         keyField.isEnabled = !isLocal
+
+        if isLocal {
+            hintLabel.stringValue = "\u{2318}\u{21A9} will save locally. \u{2325}\u{21A9} will upload to the cloud."
+        } else {
+            hintLabel.stringValue = "\u{2318}\u{21A9} will upload to the cloud. \u{2325}\u{21A9} will save locally."
+        }
     }
 
     @objc private func chooseFolderClicked() {

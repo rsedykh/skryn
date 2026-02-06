@@ -179,6 +179,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func handleAlternateSave(cgImage: CGImage) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMddHHmmss"
+        let filename = "skryn-\(formatter.string(from: Date())).png"
+
+        guard let pngData = pngData(from: cgImage) else {
+            print("AppDelegate: failed to create PNG data")
+            return
+        }
+
+        if uploadcarePublicKey != nil {
+            // Cloud is default → alternate saves locally
+            saveLocally(pngData: pngData, filename: filename)
+        } else {
+            // Local is default → alternate uploads to cloud (if key exists)
+            let key = UserDefaults.standard.string(forKey: "uploadcarePublicKey") ?? ""
+            if key.isEmpty {
+                NSSound.beep()
+                return
+            }
+            uploadToCloud(pngData: pngData, filename: filename, publicKey: key)
+        }
+    }
+
     private func saveLocally(pngData: Data, filename: String) {
         let saveFolder: URL
         if let customPath = UserDefaults.standard.string(forKey: "saveFolderPath") {

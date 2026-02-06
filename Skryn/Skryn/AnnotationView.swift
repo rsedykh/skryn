@@ -194,6 +194,10 @@ final class AnnotationView: NSView {
     // MARK: - Key Events
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.keyCode == 36 && event.modifierFlags.contains(.option) { // OPT+ENTER
+            alternateAndClose()
+            return true
+        }
         if event.keyCode == 36 && event.modifierFlags.contains(.command) { // CMD+ENTER
             saveAndClose()
             return true
@@ -252,6 +256,17 @@ final class AnnotationView: NSView {
         }
 
         appDelegate?.handleSave(cgImage: cgImage)
+
+        window?.close()
+    }
+
+    private func alternateAndClose() {
+        guard let cgImage = compositeAsCGImage() else {
+            window?.close()
+            return
+        }
+
+        appDelegate?.handleAlternateSave(cgImage: cgImage)
 
         window?.close()
     }
