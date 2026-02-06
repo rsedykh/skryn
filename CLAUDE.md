@@ -8,7 +8,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 xcodebuild -project Skryn/Skryn.xcodeproj -scheme Skryn -configuration Debug build
 ```
 
-No tests, no linter. Verify changes by building.
+## Lint
+
+```bash
+swiftlint --config .swiftlint.yml
+```
+
+## Test
+
+```bash
+xcodebuild test -project Skryn/Skryn.xcodeproj -scheme Skryn -destination 'platform=macOS'
+```
+
+Verify changes by building. Run lint and tests before committing.
 
 To run the built app (avoids Xcode re-signing permission issues with ScreenCaptureKit):
 ```bash

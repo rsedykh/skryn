@@ -36,7 +36,7 @@ final class AnnotationView: NSView {
     }
 
     /// Converts a view-space point to screenshot coordinates
-    private func viewToScreenshot(_ point: CGPoint) -> CGPoint {
+    func viewToScreenshot(_ point: CGPoint) -> CGPoint {
         let ir = imageRect
         let scale = screenshot.size.width / ir.width
         let x = (point.x - ir.origin.x) * scale
@@ -315,7 +315,7 @@ final class AnnotationView: NSView {
 
     // MARK: - Helpers
 
-    private func rectFromDrag(origin: CGPoint, current: CGPoint) -> CGRect {
+    func rectFromDrag(origin: CGPoint, current: CGPoint) -> CGRect {
         CGRect(
             x: min(origin.x, current.x),
             y: min(origin.y, current.y),

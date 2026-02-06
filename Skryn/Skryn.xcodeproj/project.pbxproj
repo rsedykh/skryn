@@ -14,7 +14,18 @@
 		AA000005 /* AnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000005 /* AnnotationView.swift */; };
 		AA000006 /* Annotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000006 /* Annotation.swift */; };
 		AA000007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000007 /* Assets.xcassets */; };
+		AA100001 /* AnnotationViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100001 /* AnnotationViewTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		AE100005 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AE000004 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AE000001;
+			remoteInfo = Skryn;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		AB000001 /* SkrynApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkrynApp.swift; sourceTree = "<group>"; };
@@ -27,10 +38,19 @@
 		AB000008 /* Skryn.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Skryn.entitlements; sourceTree = "<group>"; };
 		AB000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AB000010 /* Skryn.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Skryn.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AB100001 /* AnnotationViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationViewTests.swift; sourceTree = "<group>"; };
+		AB100002 /* SkrynTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SkrynTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		AC000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AC100001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -44,6 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				AD000002 /* Skryn */,
+				AD100001 /* SkrynTests */,
 				AD000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -68,8 +89,17 @@
 			isa = PBXGroup;
 			children = (
 				AB000010 /* Skryn.app */,
+				AB100002 /* SkrynTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		AD100001 /* SkrynTests */ = {
+			isa = PBXGroup;
+			children = (
+				AB100001 /* AnnotationViewTests.swift */,
+			);
+			path = SkrynTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -92,6 +122,24 @@
 			productReference = AB000010 /* Skryn.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AE100001 /* SkrynTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AF100001 /* Build configuration list for PBXNativeTarget "SkrynTests" */;
+			buildPhases = (
+				AE100002 /* Sources */,
+				AC100001 /* Frameworks */,
+				AE100003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AE100004 /* PBXTargetDependency */,
+			);
+			name = SkrynTests;
+			productName = SkrynTests;
+			productReference = AB100002 /* SkrynTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -104,6 +152,10 @@
 				TargetAttributes = {
 					AE000001 = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					AE100001 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = AE000001;
 					};
 				};
 			};
@@ -121,6 +173,7 @@
 			projectRoot = "";
 			targets = (
 				AE000001 /* Skryn */,
+				AE100001 /* SkrynTests */,
 			);
 		};
 /* End PBXProject section */
@@ -131,6 +184,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000007 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AE100003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -150,7 +210,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AE100002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA100001 /* AnnotationViewTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AE100004 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AE000001 /* Skryn */;
+			targetProxy = AE100005 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AF000010 /* Debug */ = {
@@ -315,6 +391,38 @@
 			};
 			name = Release;
 		};
+		AF100010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.skryn.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Skryn.app/Contents/MacOS/Skryn";
+			};
+			name = Debug;
+		};
+		AF100011 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.skryn.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Skryn.app/Contents/MacOS/Skryn";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -332,6 +440,15 @@
 			buildConfigurations = (
 				AF000012 /* Debug */,
 				AF000013 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AF100001 /* Build configuration list for PBXNativeTarget "SkrynTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AF100010 /* Debug */,
+				AF100011 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
