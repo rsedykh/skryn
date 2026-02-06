@@ -324,7 +324,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Uploadcare Key Management
 
     private var uploadcarePublicKey: String? {
-        UserDefaults.standard.string(forKey: "uploadcarePublicKey")
+        let key = UserDefaults.standard.string(forKey: "uploadcarePublicKey")
+        let mode = UserDefaults.standard.string(forKey: "saveMode")
+        // Backwards compat: if no saveMode, use cloud when key exists
+        if mode == nil { return key }
+        return mode == "cloud" ? key : nil
     }
 
     // MARK: - Save Destination Panel

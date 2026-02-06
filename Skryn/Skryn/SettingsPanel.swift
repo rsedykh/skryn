@@ -121,16 +121,19 @@ final class SettingsPanel: NSPanel {
     }
 
     private func loadSettings() {
-        let hasKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey") != nil
+        let savedKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey") ?? ""
+        let mode = UserDefaults.standard.string(forKey: "saveMode")
+        // Backwards compat: if no saveMode, infer from key presence
+        let isCloud = mode == "cloud" || (mode == nil && !savedKey.isEmpty)
 
-        if hasKey {
+        if isCloud {
             cloudRadio.state = .on
             localRadio.state = .off
-            keyField.stringValue = UserDefaults.standard.string(forKey: "uploadcarePublicKey") ?? ""
         } else {
             localRadio.state = .on
             cloudRadio.state = .off
         }
+        keyField.stringValue = savedKey
 
         let folderPath = UserDefaults.standard.string(forKey: "saveFolderPath")
             ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.path
@@ -185,18 +188,27 @@ final class SettingsPanel: NSPanel {
     }
 
     @objc private func saveClicked() {
+        // Always persist the key (even when switching to local)
+        let key = keyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+
         if cloudRadio.state == .on {
-            let key = keyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             if key.isEmpty {
                 keyField.window?.makeFirstResponder(keyField)
                 NSSound.beep()
                 return
             }
+            UserDefaults.standard.set("cloud", forKey: "saveMode")
             UserDefaults.standard.set(key, forKey: "uploadcarePublicKey")
             UserDefaults.standard.removeObject(forKey: "saveFolderPath")
         } else {
-            let previousKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey")
-            UserDefaults.standard.removeObject(forKey: "uploadcarePublicKey")
+            let wasCloud = UserDefaults.standard.string(forKey: "saveMode") == "cloud"
+                || (UserDefaults.standard.string(forKey: "saveMode") == nil
+                    && UserDefaults.standard.string(forKey: "uploadcarePublicKey") != nil)
+
+            UserDefaults.standard.set("local", forKey: "saveMode")
+            if !key.isEmpty {
+                UserDefaults.standard.set(key, forKey: "uploadcarePublicKey")
+            }
 
             // Save folder path from the label's tooltip (full path)
             if let fullPath = folderLabel.toolTip {
@@ -208,7 +220,7 @@ final class SettingsPanel: NSPanel {
                 }
             }
 
-            if previousKey != nil {
+            if wasCloud {
                 onSettingsChanged?()
             }
         }

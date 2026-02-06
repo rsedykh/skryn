@@ -30,7 +30,7 @@ Click the camera icon in the menu bar to capture your screen. An annotation wind
 
 **Shortcuts:**
 
-- **Cmd+Enter** — Save to Desktop
+- **Cmd+Enter** — Save
 - **Cmd+Z / Cmd+Shift+Z** — Undo / Redo
 - **Esc** — Remove crop
 - **Cmd+W** — Cancel
