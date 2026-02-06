@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skryn — Screenshot & Annotate for macOS</title>
+  <meta name="description" content="A lightweight macOS menu bar app for taking screenshots and annotating them. Arrows, lines, rectangles, text, crop — then copy, save, or upload.">
+  <link rel="icon" type="image/png" href="icon.png">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #fafafa;
+      --text: #1a1a1a;
+      --muted: #666;
+      --border: #e0e0e0;
+      --card-bg: #fff;
+      --kbd-bg: #f0f0f0;
+      --kbd-border: #d0d0d0;
+      --accent: #1a1a1a;
+      --link: #4a90d9;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111;
+        --text: #e8e8e8;
+        --muted: #999;
+        --border: #2a2a2a;
+        --card-bg: #1a1a1a;
+        --kbd-bg: #252525;
+        --kbd-border: #333;
+        --accent: #fff;
+        --link: #6ab0f3;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--link); }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 80px 0 48px;
+    }
+
+    .hero img {
+      width: 128px;
+      height: 128px;
+      border-radius: 28px;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    .hero .tagline {
+      font-size: 18px;
+      color: var(--muted);
+      margin-bottom: 32px;
+    }
+
+    .download-btn {
+      display: inline-block;
+      background: var(--accent);
+      color: var(--bg);
+      text-decoration: none;
+      padding: 12px 32px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      transition: opacity 0.15s;
+    }
+
+    .download-btn:hover { opacity: 0.8; }
+
+    .download-note {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+
+    /* Features */
+    .features {
+      padding: 48px 0;
+    }
+
+    .features h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .feature {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .feature .title {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .feature .desc {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    /* Shortcuts */
+    .shortcuts {
+      padding: 48px 0;
+    }
+
+    .shortcuts h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .shortcut-list {
+      list-style: none;
+      columns: 2;
+      column-gap: 24px;
+    }
+
+    .shortcut-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    .shortcut-list .keys {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    kbd {
+      background: var(--kbd-bg);
+      border: 1px solid var(--kbd-border);
+      border-radius: 5px;
+      padding: 2px 8px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    /* Install */
+    .install {
+      padding: 48px 0;
+    }
+
+    .install h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .install ol {
+      padding-left: 20px;
+    }
+
+    .install li {
+      font-size: 15px;
+      margin-bottom: 8px;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 48px 0;
+      font-size: 13px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+
+    footer a {
+      color: var(--muted);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    footer a:hover { color: var(--text); }
+
+    @media (max-width: 480px) {
+      .hero { padding: 48px 0 32px; }
+      .hero h1 { font-size: 28px; }
+      .hero .tagline { font-size: 16px; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .shortcut-list { columns: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <img src="icon.png" alt="Skryn app icon" width="128" height="128">
+      <h1>Skryn</h1>
+      <p class="tagline">Screenshot & Annotate menu bar app</p>
+      <a class="download-btn" href="https://github.com/rsedykh/skryn/releases/latest">Download for macOS</a>
+      <p class="download-note">Requires macOS 14+.</p>
+    </section>
+
+    <section class="features">
+      <h2>Features</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <div class="title">Menu bar app</div>
+          <div class="desc">Lives in your menu bar. Click or press a hotkey to capture.</div>
+        </div>
+        <div class="feature">
+          <div class="title">Annotate</div>
+          <div class="desc">Arrows, lines, rectangles, text, and crop before saving.</div>
+        </div>
+        <div class="feature">
+          <div class="title">Flexible output</div>
+          <div class="desc">Copy to clipboard, save to a folder, or upload to cloud.</div>
+        </div>
+        <div class="feature">
+          <div class="title">Edit annotations</div>
+          <div class="desc">Resize handles, drag to reposition, undo and redo.</div>
+        </div>
+        <div class="feature">
+          <div class="title">Cloud upload</div>
+          <div class="desc">Upload existing screenshots to cloud and get a shareable link instantly.</div>
+        </div>
+        <div class="feature">
+          <div class="title">Lightweight</div>
+          <div class="desc">Native AppKit. No Electron, no bloat, no account required.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="shortcuts">
+      <h2>Keyboard shortcuts</h2>
+      <ul class="shortcut-list">
+        <li><span>Arrow</span> <kbd>Drag</kbd></li>
+        <li><span>Line</span> <kbd>&#x21E7;Drag</kbd></li>
+        <li><span>Rectangle</span> <kbd>&#x2325;Drag</kbd></li>
+        <li><span>Crop</span> <kbd>&#x2318;Drag</kbd></li>
+        <li><span>Text mode</span> <kbd>T</kbd></li>
+        <li><span>Increase or decrease text size</span> <span class="keys"><kbd>&#x2318;=</kbd> <kbd>&#x2318;-</kbd></span></li>
+        <li><span>New line in text</span> <kbd>&#x21E7;&#x23CE;</kbd></li>
+        <li><span>Remove crop</span> <kbd>&#x238B;</kbd></li>
+        <li><span>Undo or redo</span> <span class="keys"><kbd>&#x2318;Z</kbd> <kbd>&#x2318;&#x21E7;Z</kbd></span></li>
+        <li><span>Save to clipboard</span> <kbd>&#x2318;&#x23CE;</kbd></li>
+        <li><span>Save locally</span> <kbd>&#x2325;&#x23CE;</kbd></li>
+        <li><span>Save to cloud</span> <kbd>&#x2303;&#x23CE;</kbd></li>
+        <li><span>Cancel</span> <kbd>&#x2318;W</kbd></li>
+        <li><span>Quit</span> <kbd>&#x2318;Q</kbd></li>
+      </ul>
+    </section>
+
+    <section class="install">
+      <h2>Installation</h2>
+      <ol>
+        <li>Download <strong>Skryn.zip</strong> from the <a href="https://github.com/rsedykh/skryn/releases/latest"><strong>latest release</strong></a></li>
+        <li>Unzip and drag <strong>Skryn.app</strong> to Applications</li>
+        <li>Right-click the app and choose <strong>Open</strong> on first launch</li>
+        <li>Grant Screen Recording permission when prompted</li>
+      </ol>
+    </section>
+
+    <footer>
+      <a href="https://github.com/rsedykh/skryn">GitHub</a>
+    </footer>
+  </div>
+</body>
+</html>
