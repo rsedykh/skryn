@@ -1,8 +1,10 @@
 import AppKit
+import Carbon.HIToolbox
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var annotationWindow: AnnotationWindow?
+    private var hotKeyRef: EventHotKeyRef?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -13,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.action = #selector(statusItemClicked(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+
+        setupGlobalHotkey()
     }
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -60,6 +64,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
+    }
+
+    private func setupGlobalHotkey() {
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+
+        let handler: EventHandlerUPP = { _, _, userData in
+            guard let userData else { return OSStatus(eventNotHandledErr) }
+            let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
+            delegate.hotkeyPressed()
+            return noErr
+        }
+
+        InstallEventHandler(
+            GetApplicationEventTarget(),
+            handler,
+            1,
+            &eventType,
+            Unmanaged.passUnretained(self).toOpaque(),
+            nil
+        )
+
+        // Cmd+Shift+5 (kVK_ANSI_5 = 0x17)
+        var hotKeyID = EventHotKeyID(signature: OSType(0x534B5259), id: 1)
+        RegisterEventHotKey(
+            UInt32(kVK_ANSI_5),
+            UInt32(cmdKey | shiftKey),
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+    }
+
+    fileprivate func hotkeyPressed() {
+        guard annotationWindow == nil else { return }
+        captureScreen()
     }
 
     private func captureScreen() {
