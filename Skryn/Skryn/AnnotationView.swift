@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 
 final class AnnotationView: NSView {
     private let screenshot: NSImage
@@ -240,7 +241,11 @@ final class AnnotationView: NSView {
     // MARK: - Save
 
     private func saveAndClose() {
-        let finalImage = compositeImage()
+        guard let cgImage = compositeAsCGImage() else {
+            print("AnnotationView: failed to create image")
+            window?.close()
+            return
+        }
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMddHHmmss"
@@ -249,68 +254,89 @@ final class AnnotationView: NSView {
         let desktopURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
         let fileURL = desktopURL.appendingPathComponent(filename)
 
-        guard let tiff = finalImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let png = bitmap.representation(using: .png, properties: [:]) else {
-            print("AnnotationView: failed to create PNG data")
+        guard let dest = CGImageDestinationCreateWithURL(
+            fileURL as CFURL, "public.png" as CFString, 1, nil
+        ) else {
+            print("AnnotationView: failed to create image destination")
             window?.close()
             return
         }
 
-        do {
-            try png.write(to: fileURL)
+        CGImageDestinationAddImage(dest, cgImage, nil)
+
+        if CGImageDestinationFinalize(dest) {
             print("Saved: \(fileURL.path)")
-        } catch {
-            print("AnnotationView: save failed — \(error)")
+        } else {
+            print("AnnotationView: save failed")
         }
 
         window?.close()
     }
 
-    private func compositeImage() -> NSImage {
-        let cropAnnotation = annotations.first(where: {
-            if case .crop = $0 { return true }
-            return false
-        })
+    private func compositeAsCGImage() -> CGImage? {
+        guard let screenshotCG = screenshot.cgImage(
+            forProposedRect: nil, context: nil, hints: nil
+        ) else { return nil }
 
-        let size = screenshot.size
-        let image = NSImage(size: size)
-        image.lockFocus()
+        let pixelWidth = screenshotCG.width
+        let pixelHeight = screenshotCG.height
+        let pointSize = screenshot.size
+        let colorSpace = screenshotCG.colorSpace ?? CGColorSpaceCreateDeviceRGB()
 
-        screenshot.draw(in: NSRect(origin: .zero, size: size))
+        guard let ctx = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
+                | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { return nil }
+
+        // Draw screenshot at full pixel resolution (bottom-left origin, no transform)
+        ctx.draw(screenshotCG, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+
+        // Transform to top-left origin in point coordinates for annotations
+        ctx.saveGState()
+        ctx.translateBy(x: 0, y: CGFloat(pixelHeight))
+        ctx.scaleBy(
+            x: CGFloat(pixelWidth) / pointSize.width,
+            y: -CGFloat(pixelHeight) / pointSize.height
+        )
+
+        let nsContext = NSGraphicsContext(cgContext: ctx, flipped: true)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = nsContext
 
         for annotation in annotations {
             if case .crop = annotation { continue }
             draw(annotation)
         }
 
-        image.unlockFocus()
+        NSGraphicsContext.restoreGraphicsState()
+        ctx.restoreGState()
 
-        if case .crop(let rect) = cropAnnotation {
-            return croppedImage(image, to: rect)
+        guard var cgImage = ctx.makeImage() else { return nil }
+
+        // Apply crop if present
+        if let cropAnnotation = annotations.first(where: {
+            if case .crop = $0 { return true }; return false
+        }), case .crop(let cropRect) = cropAnnotation {
+            let scaleX = CGFloat(pixelWidth) / pointSize.width
+            let scaleY = CGFloat(pixelHeight) / pointSize.height
+            let pixelCropRect = CGRect(
+                x: cropRect.origin.x * scaleX,
+                y: cropRect.origin.y * scaleY,
+                width: cropRect.width * scaleX,
+                height: cropRect.height * scaleY
+            )
+            if let cropped = cgImage.cropping(to: pixelCropRect) {
+                cgImage = cropped
+            }
         }
 
-        return image
-    }
-
-    private func croppedImage(_ source: NSImage, to rect: CGRect) -> NSImage {
-        guard let cgRef = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return source
-        }
-
-        let scale = CGFloat(cgRef.width) / source.size.width
-        let scaledRect = CGRect(
-            x: rect.origin.x * scale,
-            y: rect.origin.y * scale,
-            width: rect.width * scale,
-            height: rect.height * scale
-        )
-
-        guard let cropped = cgRef.cropping(to: scaledRect) else {
-            return source
-        }
-
-        return NSImage(cgImage: cropped, size: rect.size)
+        return cgImage
     }
 
     // MARK: - Helpers
