@@ -18,7 +18,8 @@ enum UploadcareService {
     private static let uploadURL = URL(string: "https://upload.uploadcare.com/base/")!
 
     /// Uploads PNG data to Uploadcare and returns the CDN URL.
-    static func upload(pngData: Data, filename: String, publicKey: String) async throws -> String {
+    static func upload(pngData: Data, filename: String, publicKey: String,
+                       session: URLSession = .shared) async throws -> String {
         let boundary = UUID().uuidString
 
         var request = URLRequest(url: uploadURL)
@@ -45,7 +46,7 @@ enum UploadcareService {
 
         request.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw UploadcareError.invalidResponse
