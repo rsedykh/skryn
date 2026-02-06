@@ -31,15 +31,35 @@ open ~/Library/Developer/Xcode/DerivedData/Skryn-*/Build/Products/Debug/Skryn.ap
 
 macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`); all real work is AppKit.
 
-**Flow:** Menu bar click → `ScreenCapture.capture()` (ScreenCaptureKit, 2x resolution) → `AnnotationWindow` (90% of screen, borderless, rounded corners, shadow) → `AnnotationView` (drawing + input) → Save PNG to Desktop.
+**Flow:** Menu bar click → `ScreenCapture.capture()` (ScreenCaptureKit, 2x resolution) → `AnnotationWindow` (90% of screen, borderless, rounded corners, shadow) → `AnnotationView` (drawing + input) → `AppDelegate.handleSave(cgImage:)` → local save or Uploadcare cloud upload. AnnotationView holds a `weak var appDelegate` reference set at window creation — do NOT use `NSApp.delegate as? AppDelegate` (see SwiftUI gotcha below).
 
 **Coordinate system:** Annotations are stored in **screenshot point coordinates** (NSImage size), not view coordinates. Mouse input is converted via `viewToScreenshot()`. On-screen drawing uses `NSAffineTransform` to map screenshot space back to view space. `compositeAsCGImage()` uses a `CGBitmapContext` at full pixel resolution — it draws the CGImage first, then applies a point-to-pixel transform for annotation drawing. PNG is written directly via `CGImageDestination` (no TIFF/BitmapRep intermediates).
 
 **Activation policy toggle:** The app is `LSUIElement=true` (no Dock icon). When the annotation window opens, it switches to `.regular` (appears in Cmd+Tab) and installs a main menu. On window close, it reverts to `.accessory`.
 
-**Keyboard shortcuts** are handled via the installed `NSApp.mainMenu` (Cmd+W, Cmd+Z, Cmd+Shift+Z, Cmd+Q) for proper cross-layout support. ESC and Cmd+Enter use `keyDown` with keyCodes (layout-independent).
+**Keyboard shortcuts** are handled via the installed `NSApp.mainMenu` (Cmd+W, Cmd+Z, Cmd+Shift+Z, Cmd+Q) for proper cross-layout support. ESC uses `keyDown` (layout-independent keyCode). Cmd+Enter uses `performKeyEquivalent` — the menu system intercepts Cmd+ combos before they reach `keyDown`.
 
 **Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Option = rectangle, Command = crop. Only one crop allowed at a time.
+
+## Cloud Upload (Uploadcare)
+
+**API reference:** https://uploadcare.com/api-refs/upload-api/ — we use the `/base/` direct upload endpoint. The official Swift SDK (https://github.com/uploadcare/uploadcare-swift) is not used — too heavy for a small app — but its source is a good reference for edge cases.
+
+**Files:** `UploadcareService.swift` (HTTP multipart POST via URLSession, no dependencies), `UploadHistory.swift` (recent uploads + PNG cache).
+
+**Upload flow:** `AppDelegate.handleSave()` → if public key set: cache PNG to `~/Library/Application Support/Skryn/uploads/`, start async upload via URLSession, animate menu bar icon (spinning arrows). On success: copy CDN URL to clipboard. On failure: icon turns red, error shown in menu, screenshot saved locally as fallback.
+
+**Icon animation:** Layer transforms don't work on `NSStatusBarButton` — the menu bar compositor ignores them. Use image swapping with a `Timer` cycling through SF Symbols (`arrow.up` → `arrow.up.right` → ... 8 directional arrows at 120ms).
+
+**Cmd+V in NSAlert:** When app is in `.accessory` mode, there's no main menu so Cmd+V won't work in text fields. Fix: temporarily switch to `.regular`, install an Edit menu with Cut/Copy/Paste/Select All via `installEditOnlyMenu()`, restore after alert closes.
+
+**ObjC bridging:** Swift structs in `NSMenuItem.representedObject` (bridged from ObjC `id`) may fail `as?` casts. `RecentUploadBox` (NSObject subclass in `UploadHistory.swift`) wraps `RecentUpload` struct for reliable casting.
+
+**UserDefaults keys:** `"uploadcarePublicKey"` (String), `"recentUploads"` (JSON-encoded `[RecentUpload]`), `"saveFolderPath"` (String, custom save folder).
+
+**Right-click menu structure:**
+- No key: "Set Uploadcare Key…" / save folder options / Quit
+- Key set: "Change Uploadcare API Key…" (alert has Save/Cancel/Remove Key) / Recent Uploads submenu / last error if any / Quit
 
 ## App Icon
 
@@ -57,7 +77,11 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 ## Key Gotchas
 
-- `project.pbxproj` is hand-crafted with simple hex IDs (AA000001, AB000001). Keep this convention when adding files.
+- **`NSApp.delegate` is SwiftUI's wrapper, not our `AppDelegate`.** With `@NSApplicationDelegateAdaptor`, `NSApp.delegate as? AppDelegate` returns nil. Always pass direct references (e.g., `weak var appDelegate`) instead of casting `NSApp.delegate`.
+- **Cmd+ shortcuts need `performKeyEquivalent`, not `keyDown`.** When a main menu is installed, the menu system intercepts Cmd+ key combos via `performKeyEquivalent` before they reach `keyDown`. Use `performKeyEquivalent` for Cmd+ shortcuts in views.
+- `project.pbxproj` is hand-crafted with simple hex IDs (AA000001, AB000001). Keep this convention when adding files. IDs `AB000008`/`AB000009` are taken by Skryn.entitlements and Info.plist. Latest source file IDs: `AB000011`/`AB000012` (file refs), `AA000008`/`AA000009` (build files).
 - Borderless windows don't support `performClose(_:)` — Close routes through `AppDelegate.closeAnnotationWindow()` instead.
 - `NSEvent.modifierFlags` (static) reads current keyboard state; `event.modifierFlags` (instance) reads state at event time. Always use the instance property for tool locking.
 - When renaming variables, check ALL references in the same method — secondary uses are easy to miss.
+- SwiftLint: `String.data(using: .utf8)!` triggers `non_optional_string_data_conversion` — use `Data("string".utf8)` instead.
+- SwiftLint config limits: type_body_length 500/700, file_length 600/900 (bumped for AppDelegate with upload feature).

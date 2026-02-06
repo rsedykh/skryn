@@ -14,6 +14,8 @@
 		AA000005 /* AnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000005 /* AnnotationView.swift */; };
 		AA000006 /* Annotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000006 /* Annotation.swift */; };
 		AA000007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000007 /* Assets.xcassets */; };
+		AA000008 /* UploadcareService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000011 /* UploadcareService.swift */; };
+		AA000009 /* UploadHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012 /* UploadHistory.swift */; };
 		AA100001 /* AnnotationViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100001 /* AnnotationViewTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -38,6 +40,8 @@
 		AB000008 /* Skryn.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Skryn.entitlements; sourceTree = "<group>"; };
 		AB000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AB000010 /* Skryn.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Skryn.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AB000011 /* UploadcareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadcareService.swift; sourceTree = "<group>"; };
+		AB000012 /* UploadHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadHistory.swift; sourceTree = "<group>"; };
 		AB100001 /* AnnotationViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationViewTests.swift; sourceTree = "<group>"; };
 		AB100002 /* SkrynTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SkrynTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -78,6 +82,8 @@
 				AB000004 /* AnnotationWindow.swift */,
 				AB000005 /* AnnotationView.swift */,
 				AB000006 /* Annotation.swift */,
+				AB000011 /* UploadcareService.swift */,
+				AB000012 /* UploadHistory.swift */,
 				AB000007 /* Assets.xcassets */,
 				AB000008 /* Skryn.entitlements */,
 				AB000009 /* Info.plist */,
@@ -207,6 +213,8 @@
 				AA000004 /* AnnotationWindow.swift in Sources */,
 				AA000005 /* AnnotationView.swift in Sources */,
 				AA000006 /* Annotation.swift in Sources */,
+				AA000008 /* UploadcareService.swift in Sources */,
+				AA000009 /* UploadHistory.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

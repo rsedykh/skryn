@@ -2,6 +2,7 @@ import AppKit
 import ImageIO
 
 final class AnnotationView: NSView {
+    weak var appDelegate: AppDelegate?
     private let screenshot: NSImage
     private var annotations: [Annotation] = []
     private var currentAnnotation: Annotation?
@@ -192,15 +193,18 @@ final class AnnotationView: NSView {
 
     // MARK: - Key Events
 
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.keyCode == 36 && event.modifierFlags.contains(.command) { // CMD+ENTER
+            saveAndClose()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 { // ESC — remove crop
             annotations.removeAll { if case .crop = $0 { return true }; return false }
             needsDisplay = true
-            return
-        }
-
-        if event.keyCode == 36 && event.modifierFlags.contains(.command) { // CMD+ENTER
-            saveAndClose()
             return
         }
 
@@ -247,33 +251,7 @@ final class AnnotationView: NSView {
             return
         }
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMddHHmmss"
-        let filename = "skryn-\(formatter.string(from: Date())).png"
-
-        let saveFolder: URL
-        if let customPath = UserDefaults.standard.string(forKey: "saveFolderPath") {
-            saveFolder = URL(fileURLWithPath: customPath)
-        } else {
-            saveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
-        }
-        let fileURL = saveFolder.appendingPathComponent(filename)
-
-        guard let dest = CGImageDestinationCreateWithURL(
-            fileURL as CFURL, "public.png" as CFString, 1, nil
-        ) else {
-            print("AnnotationView: failed to create image destination")
-            window?.close()
-            return
-        }
-
-        CGImageDestinationAddImage(dest, cgImage, nil)
-
-        if CGImageDestinationFinalize(dest) {
-            print("Saved: \(fileURL.path)")
-        } else {
-            print("AnnotationView: save failed")
-        }
+        appDelegate?.handleSave(cgImage: cgImage)
 
         window?.close()
     }
