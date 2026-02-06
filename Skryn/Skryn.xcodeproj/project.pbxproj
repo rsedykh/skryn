@@ -16,6 +16,7 @@
 		AA000007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000007 /* Assets.xcassets */; };
 		AA000008 /* UploadcareService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000011 /* UploadcareService.swift */; };
 		AA000009 /* UploadHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012 /* UploadHistory.swift */; };
+		AA000010 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000013 /* SettingsPanel.swift */; };
 		AA100001 /* AnnotationViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100001 /* AnnotationViewTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -42,6 +43,7 @@
 		AB000010 /* Skryn.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Skryn.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB000011 /* UploadcareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadcareService.swift; sourceTree = "<group>"; };
 		AB000012 /* UploadHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadHistory.swift; sourceTree = "<group>"; };
+		AB000013 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		AB100001 /* AnnotationViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationViewTests.swift; sourceTree = "<group>"; };
 		AB100002 /* SkrynTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SkrynTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -84,6 +86,7 @@
 				AB000006 /* Annotation.swift */,
 				AB000011 /* UploadcareService.swift */,
 				AB000012 /* UploadHistory.swift */,
+				AB000013 /* SettingsPanel.swift */,
 				AB000007 /* Assets.xcassets */,
 				AB000008 /* Skryn.entitlements */,
 				AB000009 /* Info.plist */,
@@ -215,6 +218,7 @@
 				AA000006 /* Annotation.swift in Sources */,
 				AA000008 /* UploadcareService.swift in Sources */,
 				AA000009 /* UploadHistory.swift in Sources */,
+				AA000010 /* SettingsPanel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

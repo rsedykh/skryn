@@ -51,15 +51,14 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Icon animation:** Layer transforms don't work on `NSStatusBarButton` — the menu bar compositor ignores them. Use image swapping with a `Timer` cycling through SF Symbols (`arrow.up` → `arrow.up.right` → ... 8 directional arrows at 120ms).
 
-**Cmd+V in NSAlert:** When app is in `.accessory` mode, there's no main menu so Cmd+V won't work in text fields. Fix: temporarily switch to `.regular`, install an Edit menu with Cut/Copy/Paste/Select All via `installEditOnlyMenu()`, restore after alert closes.
+**Save Settings panel:** `SettingsPanel.swift` — NSPanel with radio buttons for local folder vs Uploadcare, opened via right-click menu "Save Settings…" (⌘,). Uses `installEditOnlyMenu()` + `.regular` activation policy so Cmd+V works in the key field. `windowWillClose` only reverts to `.accessory` when both annotation window and settings panel are nil.
 
 **ObjC bridging:** Swift structs in `NSMenuItem.representedObject` (bridged from ObjC `id`) may fail `as?` casts. `RecentUploadBox` (NSObject subclass in `UploadHistory.swift`) wraps `RecentUpload` struct for reliable casting.
 
 **UserDefaults keys:** `"uploadcarePublicKey"` (String), `"recentUploads"` (JSON-encoded `[RecentUpload]`), `"saveFolderPath"` (String, custom save folder).
 
 **Right-click menu structure:**
-- No key: "Set Uploadcare Key…" / save folder options / Quit
-- Key set: "Change Uploadcare API Key…" (alert has Save/Cancel/Remove Key) / Recent Uploads submenu / last error if any / Quit
+- Recent Uploads submenu (only if uploads exist) / error message (if any) / "Save Settings…" (⌘,, opens settings panel) / Quit
 
 ## App Icon
 
@@ -79,7 +78,7 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 - **`NSApp.delegate` is SwiftUI's wrapper, not our `AppDelegate`.** With `@NSApplicationDelegateAdaptor`, `NSApp.delegate as? AppDelegate` returns nil. Always pass direct references (e.g., `weak var appDelegate`) instead of casting `NSApp.delegate`.
 - **Cmd+ shortcuts need `performKeyEquivalent`, not `keyDown`.** When a main menu is installed, the menu system intercepts Cmd+ key combos via `performKeyEquivalent` before they reach `keyDown`. Use `performKeyEquivalent` for Cmd+ shortcuts in views.
-- `project.pbxproj` is hand-crafted with simple hex IDs (AA000001, AB000001). Keep this convention when adding files. IDs `AB000008`/`AB000009` are taken by Skryn.entitlements and Info.plist. Latest source file IDs: `AB000011`/`AB000012` (file refs), `AA000008`/`AA000009` (build files).
+- `project.pbxproj` is hand-crafted with simple hex IDs (AA000001, AB000001). Keep this convention when adding files. IDs `AB000008`/`AB000009` are taken by Skryn.entitlements and Info.plist. Latest source file IDs: `AB000013` (file ref), `AA000010` (build file).
 - Borderless windows don't support `performClose(_:)` — Close routes through `AppDelegate.closeAnnotationWindow()` instead.
 - `NSEvent.modifierFlags` (static) reads current keyboard state; `event.modifierFlags` (instance) reads state at event time. Always use the instance property for tool locking.
 - When renaming variables, check ALL references in the same method — secondary uses are easy to miss.

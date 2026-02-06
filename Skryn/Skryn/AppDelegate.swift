@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var annotationWindow: AnnotationWindow?
     private var hotKeyRef: EventHotKeyRef?
+    private var settingsPanel: SettingsPanel?
     private var uploadTask: Task<Void, Never>?
     private var iconTimer: Timer?
     private var animationFrameIndex = 0
@@ -81,40 +82,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showQuitMenu() {
         let menu = NSMenu()
-        let hasKey = uploadcarePublicKey != nil
 
-        let keyTitle = hasKey ? "Change Uploadcare API Key…" : "Set Uploadcare Key…"
-        let setKeyItem = NSMenuItem(
-            title: keyTitle, action: #selector(setUploadcareKey), keyEquivalent: ""
-        )
-        setKeyItem.target = self
-        menu.addItem(setKeyItem)
-
-        menu.addItem(.separator())
-
-        if !hasKey {
-            let chooseFolderItem = NSMenuItem(
-                title: "Choose Save Folder…", action: #selector(chooseSaveFolder), keyEquivalent: ""
-            )
-            chooseFolderItem.target = self
-            menu.addItem(chooseFolderItem)
-
-            if UserDefaults.standard.string(forKey: "saveFolderPath") != nil {
-                let resetItem = NSMenuItem(
-                    title: "Reset Save Folder to Desktop", action: #selector(resetSaveFolder), keyEquivalent: ""
-                )
-                resetItem.target = self
-                menu.addItem(resetItem)
-            }
-
+        if let recentItem = buildRecentUploadsMenuItem() {
+            menu.addItem(recentItem)
             menu.addItem(.separator())
-        }
-
-        if hasKey {
-            if let recentItem = buildRecentUploadsMenuItem() {
-                menu.addItem(recentItem)
-                menu.addItem(.separator())
-            }
         }
 
         if let error = lastUploadError {
@@ -126,6 +97,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(errorItem)
             menu.addItem(.separator())
         }
+
+        let settingsItem = NSMenuItem(
+            title: "Save Settings…", action: #selector(showSaveDestination), keyEquivalent: ","
+        )
+        settingsItem.target = self
+        settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")
+        menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem(
             title: "Quit Skryn", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"
@@ -349,50 +327,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.string(forKey: "uploadcarePublicKey")
     }
 
-    @objc private func setUploadcareKey() {
-        // Activate app and install Edit menu so Cmd+V works in the text field
+    // MARK: - Save Destination Panel
+
+    @objc private func showSaveDestination() {
+        if let existing = settingsPanel {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+
         NSApp.setActivationPolicy(.regular)
         installEditOnlyMenu()
         NSApp.activate(ignoringOtherApps: true)
 
-        let hasKey = uploadcarePublicKey != nil
-
-        let alert = NSAlert()
-        alert.messageText = hasKey ? "Change Uploadcare API Key" : "Set Uploadcare Public Key"
-        alert.informativeText = "Enter your Uploadcare public key. Screenshots will upload "
-            + "to the cloud and the CDN URL will be copied to clipboard."
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-        if hasKey {
-            alert.addButton(withTitle: "Remove Key")
+        let panel = SettingsPanel()
+        panel.delegate = self
+        panel.onSettingsChanged = { [weak self] in
+            self?.lastUploadError = nil
+            self?.resetIcon()
         }
-
-        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        textField.placeholderString = "Your public key"
-        if let existing = uploadcarePublicKey {
-            textField.stringValue = existing
-        }
-        alert.accessoryView = textField
-
-        alert.window.initialFirstResponder = textField
-
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            let key = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !key.isEmpty {
-                UserDefaults.standard.set(key, forKey: "uploadcarePublicKey")
-            }
-        } else if response == .alertThirdButtonReturn {
-            UserDefaults.standard.removeObject(forKey: "uploadcarePublicKey")
-            lastUploadError = nil
-            resetIcon()
-        }
-
-        // Restore accessory mode if annotation window isn't open
-        if annotationWindow == nil {
-            NSApp.mainMenu = nil
-            NSApp.setActivationPolicy(.accessory)
-        }
+        settingsPanel = panel
+        panel.makeKeyAndOrderFront(nil)
     }
 
     private func installEditOnlyMenu() {
@@ -421,25 +375,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(editItem)
 
         NSApp.mainMenu = mainMenu
-    }
-
-    // MARK: - Save Folder
-
-    @objc private func chooseSaveFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Select"
-        panel.message = "Choose where to save screenshots"
-
-        if panel.runModal() == .OK, let url = panel.url {
-            UserDefaults.standard.set(url.path, forKey: "saveFolderPath")
-        }
-    }
-
-    @objc private func resetSaveFolder() {
-        UserDefaults.standard.removeObject(forKey: "saveFolderPath")
     }
 
     // MARK: - Global Hotkey
@@ -522,7 +457,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension AppDelegate: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        annotationWindow = nil
-        NSApp.setActivationPolicy(.accessory)
+        let window = notification.object as AnyObject
+        if window === annotationWindow {
+            annotationWindow = nil
+        } else if window === settingsPanel {
+            settingsPanel = nil
+        }
+
+        if annotationWindow == nil && settingsPanel == nil {
+            NSApp.mainMenu = nil
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 }
