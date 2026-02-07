@@ -112,13 +112,23 @@ final class AnnotationView: NSView {
         xform.scaleX(by: s, yBy: s)
         xform.concat()
 
+        // First pass: blur annotations (between screenshot and other annotations)
         for (i, annotation) in annotations.enumerated() {
             if i == editingTextIndex { continue }
-            draw(annotation)
+            if case .blur = annotation { draw(annotation) }
+        }
+        if let current = currentAnnotation, case .blur = current {
+            draw(current)
         }
 
+        // Second pass: non-blur annotations
+        for (i, annotation) in annotations.enumerated() {
+            if i == editingTextIndex { continue }
+            if case .blur = annotation { continue }
+            draw(annotation)
+        }
         if let current = currentAnnotation {
-            draw(current)
+            if case .blur = current {} else { draw(current) }
         }
 
         // Draw handles for hovered annotation (skip when actively editing text)
@@ -875,8 +885,15 @@ final class AnnotationView: NSView {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = nsContext
 
+        // First pass: blur annotations (between screenshot and other annotations)
+        for annotation in annotations {
+            if case .blur = annotation { draw(annotation) }
+        }
+
+        // Second pass: non-blur, non-crop annotations
         for annotation in annotations {
             if case .crop = annotation { continue }
+            if case .blur = annotation { continue }
             draw(annotation)
         }
 
