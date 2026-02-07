@@ -2,6 +2,13 @@ import AppKit
 import CoreImage
 import ImageIO
 
+/// NSTextView with its own undo manager, isolated from the parent view's undo stack.
+/// Prevents stale text-editing undo operations from crashing after the text view is removed.
+private class IsolatedUndoTextView: NSTextView {
+    private let _ownUndoManager = UndoManager()
+    override var undoManager: UndoManager? { _ownUndoManager }
+}
+
 final class AnnotationView: NSView {
     weak var appDelegate: AppDelegate?
     private let screenshot: NSImage
@@ -10,22 +17,17 @@ final class AnnotationView: NSView {
     private var dragOrigin: CGPoint = .zero
     private var dragModifiers: NSEvent.ModifierFlags = []
 
-    // Handle editing state
-    private var editingIndex: Int?
-    private var editingHandle: AnnotationHandle?
-    private var editingOriginal: Annotation?
+    private enum InteractionState {
+        case idle
+        case editingHandle(index: Int, handle: AnnotationHandle, original: Annotation)
+        case movingAnnotation(index: Int, original: Annotation, lastPoint: CGPoint)
+        case editingText(textView: NSTextView, existingIndex: Int?)
+    }
+
+    private var interactionState: InteractionState = .idle
     private var hoveredAnnotationIndex: Int?
-
-    // Text annotation state
     private var isTextMode = false
-    private var activeTextView: NSTextView?
-    private var editingTextIndex: Int?
     private var textFontSize: CGFloat = 24
-
-    // Annotation move state (drag to reposition any annotation)
-    private var movingIndex: Int?
-    private var movingOriginal: Annotation?
-    private var movingStartPoint: CGPoint = .zero
 
     /// Rect where the screenshot is drawn on screen
     private var screenshotRect: NSRect { bounds }
@@ -112,9 +114,19 @@ final class AnnotationView: NSView {
         xform.scaleX(by: s, yBy: s)
         xform.concat()
 
+        let editingTextIdx: Int?
+        let activeTV: NSTextView?
+        if case .editingText(let tv, let idx) = interactionState {
+            editingTextIdx = idx
+            activeTV = tv
+        } else {
+            editingTextIdx = nil
+            activeTV = nil
+        }
+
         // First pass: blur annotations (between screenshot and other annotations)
         for (i, annotation) in annotations.enumerated() {
-            if i == editingTextIndex { continue }
+            if i == editingTextIdx { continue }
             if case .blur = annotation { draw(annotation) }
         }
         if let current = currentAnnotation, case .blur = current {
@@ -123,7 +135,7 @@ final class AnnotationView: NSView {
 
         // Second pass: non-blur annotations
         for (i, annotation) in annotations.enumerated() {
-            if i == editingTextIndex { continue }
+            if i == editingTextIdx { continue }
             if case .blur = annotation { continue }
             draw(annotation)
         }
@@ -132,13 +144,13 @@ final class AnnotationView: NSView {
         }
 
         // Draw handles for hovered annotation (skip when actively editing text)
-        if activeTextView == nil, currentAnnotation == nil, let idx = hoveredAnnotationIndex,
+        if activeTV == nil, currentAnnotation == nil, let idx = hoveredAnnotationIndex,
            idx < annotations.count {
             drawHandles(for: annotations[idx])
         }
 
         // Draw live border around active text view during editing
-        if let textView = activeTextView {
+        if let textView = activeTV {
             drawActiveTextBorder(textView: textView)
         }
 
@@ -355,9 +367,8 @@ final class AnnotationView: NSView {
 
         // If editing text: clicks inside the text view are handled by it;
         // clicks outside finalize editing and continue to handle/body hit testing
-        if activeTextView != nil {
-            let tvFrame = activeTextView!.frame
-            if tvFrame.contains(viewPoint) {
+        if case .editingText(let textView, _) = interactionState {
+            if textView.frame.contains(viewPoint) {
                 return
             }
             finalizeTextEditing()
@@ -381,44 +392,42 @@ final class AnnotationView: NSView {
         }
 
         if !hasDrawModifiers, let (index, handle) = handleAt(screenshotPoint) {
-            editingIndex = index
-            editingHandle = handle
-            editingOriginal = annotations[index]
+            interactionState = .editingHandle(
+                index: index, handle: handle, original: annotations[index]
+            )
             return
         }
 
         // Click on annotation body — prepare for move (if dragged) or re-edit text (if clicked)
         if !hasDrawModifiers, let idx = annotationBodyAt(screenshotPoint) {
-            movingIndex = idx
-            movingOriginal = annotations[idx]
-            movingStartPoint = screenshotPoint
+            interactionState = .movingAnnotation(
+                index: idx, original: annotations[idx], lastPoint: screenshotPoint
+            )
             return
         }
 
         dragOrigin = screenshotPoint
-        editingIndex = nil
-        editingHandle = nil
-        editingOriginal = nil
+        interactionState = .idle
     }
 
     override func mouseDragged(with event: NSEvent) {
-        if activeTextView != nil { return }
+        if case .editingText = interactionState { return }
 
         let viewPoint = convert(event.locationInWindow, from: nil)
         let point = viewToScreenshot(viewPoint)
 
-        if let idx = movingIndex {
-            guard idx < annotations.count else { movingIndex = nil; return }
-            let dx = point.x - movingStartPoint.x
-            let dy = point.y - movingStartPoint.y
+        if case .movingAnnotation(let idx, let original, let lastPoint) = interactionState {
+            guard idx < annotations.count else { interactionState = .idle; return }
+            let dx = point.x - lastPoint.x
+            let dy = point.y - lastPoint.y
             annotations[idx] = annotations[idx].offsetBy(dx: dx, dy: dy)
-            movingStartPoint = point
+            interactionState = .movingAnnotation(index: idx, original: original, lastPoint: point)
             needsDisplay = true
             return
         }
 
-        if let idx = editingIndex, let handle = editingHandle {
-            guard idx < annotations.count else { editingIndex = nil; return }
+        if case .editingHandle(let idx, let handle, _) = interactionState {
+            guard idx < annotations.count else { interactionState = .idle; return }
             annotations[idx] = annotations[idx].moving(handle, to: point)
             needsDisplay = true
             return
@@ -440,11 +449,10 @@ final class AnnotationView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        if activeTextView != nil { return }
+        if case .editingText = interactionState { return }
 
-        if let idx = movingIndex, let original = movingOriginal {
-            movingIndex = nil
-            movingOriginal = nil
+        if case .movingAnnotation(let idx, let original, _) = interactionState {
+            interactionState = .idle
             guard idx < annotations.count else { return }
 
             let moved = annotations[idx] != original
@@ -462,10 +470,8 @@ final class AnnotationView: NSView {
             return
         }
 
-        if let idx = editingIndex, let original = editingOriginal {
-            editingIndex = nil
-            editingHandle = nil
-            editingOriginal = nil
+        if case .editingHandle(let idx, _, let original) = interactionState {
+            interactionState = .idle
             guard idx < annotations.count else { return }
             let edited = annotations[idx]
             replaceAnnotation(at: idx, with: edited, old: original)
@@ -483,7 +489,7 @@ final class AnnotationView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
-        if activeTextView != nil { return }
+        if case .editingText = interactionState { return }
 
         if isTextMode {
             NSCursor.iBeam.set()
@@ -533,7 +539,7 @@ final class AnnotationView: NSView {
     // MARK: - Key Events
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if activeTextView != nil {
+        if case .editingText = interactionState {
             // Font size: Cmd+= / Cmd++ to increase, Cmd+- to decrease
             if event.modifierFlags.contains(.command) {
                 if event.keyCode == 24 { // = / + key
@@ -556,7 +562,7 @@ final class AnnotationView: NSView {
 
     override func keyDown(with event: NSEvent) {
         // When text view is active, let it handle all keys
-        if activeTextView != nil { return }
+        if case .editingText = interactionState { return }
 
         // T key (no modifiers) — toggle text mode
         if event.keyCode == 17 && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [] {
@@ -632,8 +638,7 @@ final class AnnotationView: NSView {
         let frame = CGRect(x: viewOrigin.x, y: viewOrigin.y, width: viewWidth, height: viewFontSize * 1.5)
         let textView = createTextView(frame: frame, fontSize: viewFontSize)
         addSubview(textView)
-        activeTextView = textView
-        editingTextIndex = nil
+        interactionState = .editingText(textView: textView, existingIndex: nil)
         window?.makeFirstResponder(textView)
     }
 
@@ -653,15 +658,14 @@ final class AnnotationView: NSView {
         let textView = createTextView(frame: frame, fontSize: viewFontSize)
         textView.string = content
         addSubview(textView)
-        activeTextView = textView
-        editingTextIndex = index
+        interactionState = .editingText(textView: textView, existingIndex: index)
         textFontSize = fontSize
         window?.makeFirstResponder(textView)
         needsDisplay = true
     }
 
     private func createTextView(frame: CGRect, fontSize: CGFloat) -> NSTextView {
-        let textView = NSTextView(frame: frame)
+        let textView = IsolatedUndoTextView(frame: frame)
         textView.isRichText = false
         textView.allowsUndo = true
         textView.backgroundColor = .clear
@@ -687,12 +691,12 @@ final class AnnotationView: NSView {
     }
 
     func finalizeTextEditing() {
-        guard let textView = activeTextView else { return }
+        guard case .editingText(let textView, let existingIndex) = interactionState else { return }
         let content = textView.string
         let viewFrame = textView.frame
 
         textView.removeFromSuperview()
-        activeTextView = nil
+        interactionState = .idle
         window?.makeFirstResponder(self)
 
         // Convert view frame back to screenshot coords
@@ -700,8 +704,7 @@ final class AnnotationView: NSView {
         let screenshotOrigin = viewToScreenshot(CGPoint(x: viewFrame.minX, y: viewFrame.minY))
         let screenshotWidth = viewFrame.width / scale
 
-        if let idx = editingTextIndex {
-            editingTextIndex = nil
+        if let idx = existingIndex {
             if content.isEmpty {
                 removeAnnotation(at: idx)
             } else {
@@ -730,7 +733,7 @@ final class AnnotationView: NSView {
     private func adjustFontSize(delta: CGFloat) {
         let newSize = max(textFontSize + delta, 8)
         textFontSize = newSize
-        guard let textView = activeTextView else { return }
+        guard case .editingText(let textView, _) = interactionState else { return }
         let scale = screenshotToViewScale()
         let viewFontSize = newSize * scale
         let font = NSFont.boldSystemFont(ofSize: viewFontSize)

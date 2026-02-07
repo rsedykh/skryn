@@ -20,50 +20,10 @@ enum UploadcareService {
     /// Uploads PNG data to Uploadcare and returns the CDN URL.
     static func upload(pngData: Data, filename: String, publicKey: String,
                        session: URLSession = .shared) async throws -> String {
-        let boundary = UUID().uuidString
-
-        var request = URLRequest(url: uploadURL)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        var body = Data()
-
-        // UPLOADCARE_PUB_KEY
-        body.appendMultipart(boundary: boundary, name: "UPLOADCARE_PUB_KEY", value: publicKey)
-
-        // UPLOADCARE_STORE
-        body.appendMultipart(boundary: boundary, name: "UPLOADCARE_STORE", value: "1")
-
-        // File data
-        body.append(Data("--\(boundary)\r\n".utf8))
-        let safeFilename = filename.replacingOccurrences(of: "\"", with: "\\\"")
-        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(safeFilename)\"\r\n".utf8))
-        body.append(Data("Content-Type: image/png\r\n\r\n".utf8))
-        body.append(pngData)
-        body.append(Data("\r\n".utf8))
-
-        // Closing boundary
-        body.append(Data("--\(boundary)--\r\n".utf8))
-
-        request.httpBody = body
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw UploadcareError.invalidResponse
-        }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            let message = String(data: data, encoding: .utf8) ?? "HTTP \(httpResponse.statusCode)"
-            throw UploadcareError.serverError(message)
-        }
-
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let fileID = json["file"] as? String else {
-            throw UploadcareError.missingFileID
-        }
-
-        return "https://ucarecdn.com/\(fileID)/"
+        try await upload(
+            fileData: pngData, filename: filename, contentType: "image/png",
+            publicKey: publicKey, session: session
+        )
     }
 
     /// Uploads arbitrary file data to Uploadcare with a specified content type.

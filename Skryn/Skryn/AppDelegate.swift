@@ -264,32 +264,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let upload = RecentUpload(filename: filename, cdnURL: nil, date: Date(), cacheFilePath: cachePath)
         UploadHistory.add(upload)
 
-        lastUploadError = nil
-        startIconAnimation()
-
-        uploadTask?.cancel()
-        uploadTask = Task {
-            do {
-                let cdnURL = try await UploadcareService.upload(
-                    pngData: pngData, filename: filename, publicKey: publicKey
-                )
-                await MainActor.run {
-                    UploadHistory.updateCDNURL(for: filename, url: cdnURL)
-                    copyToClipboard(cdnURL)
-                    stopIconAnimation(failed: false)
-                    self.lastUploadError = nil
-                    print("Uploaded: \(cdnURL)")
-                }
-            } catch {
-                await MainActor.run {
-                    stopIconAnimation(failed: true)
-                    self.lastUploadError = "Upload failed: \(error.localizedDescription)"
-                    // Fallback: save to desktop so the screenshot isn't lost
-                    self.saveLocally(pngData: pngData, filename: filename)
-                    print("Upload failed: \(error.localizedDescription)")
-                }
-            }
-        }
+        performUpload(
+            fileData: pngData, filename: filename, contentType: "image/png",
+            publicKey: publicKey, fallbackSave: pngData
+        )
     }
 
     func uploadDroppedFile(_ url: URL) {
@@ -310,6 +288,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let upload = RecentUpload(filename: filename, cdnURL: nil, date: Date(), cacheFilePath: cachePath)
         UploadHistory.add(upload)
 
+        performUpload(
+            fileData: fileData, filename: filename, contentType: contentType,
+            publicKey: publicKey, fallbackSave: nil
+        )
+    }
+
+    func showRejectedFileIcon() {
+        statusItem.button?.image = NSImage(
+            systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Invalid file"
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.resetIcon()
+        }
+    }
+
+    @objc private func retryUpload(_ sender: NSMenuItem) {
+        guard let box = sender.representedObject as? RecentUploadBox,
+              let publicKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey"),
+              !publicKey.isEmpty,
+              let pngData = UploadHistory.cachedData(at: box.value.cacheFilePath) else { return }
+
+        performUpload(
+            fileData: pngData, filename: box.value.filename, contentType: "image/png",
+            publicKey: publicKey, fallbackSave: nil
+        )
+    }
+
+    /// Shared upload logic: animates icon, runs async upload, updates history, handles errors.
+    /// If `fallbackSave` is provided, saves locally on upload failure.
+    private func performUpload(fileData: Data, filename: String, contentType: String,
+                               publicKey: String, fallbackSave: Data?) {
         lastUploadError = nil
         startIconAnimation()
 
@@ -331,50 +340,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await MainActor.run {
                     stopIconAnimation(failed: true)
                     self.lastUploadError = "Upload failed: \(error.localizedDescription)"
+                    if let pngData = fallbackSave {
+                        self.saveLocally(pngData: pngData, filename: filename)
+                    }
                     print("Upload failed: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-
-    func showRejectedFileIcon() {
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Invalid file"
-        )
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.resetIcon()
-        }
-    }
-
-    @objc private func retryUpload(_ sender: NSMenuItem) {
-        guard let box = sender.representedObject as? RecentUploadBox,
-              let publicKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey"),
-              !publicKey.isEmpty,
-              let pngData = UploadHistory.cachedData(at: box.value.cacheFilePath) else { return }
-        let upload = box.value
-
-        lastUploadError = nil
-        startIconAnimation()
-
-        let filename = upload.filename
-        uploadTask?.cancel()
-        uploadTask = Task {
-            do {
-                let cdnURL = try await UploadcareService.upload(
-                    pngData: pngData, filename: filename, publicKey: publicKey
-                )
-                await MainActor.run {
-                    UploadHistory.updateCDNURL(for: filename, url: cdnURL)
-                    copyToClipboard(cdnURL)
-                    stopIconAnimation(failed: false)
-                    self.lastUploadError = nil
-                    print("Retry uploaded: \(cdnURL)")
-                }
-            } catch {
-                await MainActor.run {
-                    stopIconAnimation(failed: true)
-                    self.lastUploadError = "Retry failed: \(error.localizedDescription)"
-                    print("Retry failed: \(error.localizedDescription)")
                 }
             }
         }
@@ -393,8 +362,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser
         let fileURL = desktop.appendingPathComponent(upload.filename)
-        try? data.write(to: fileURL)
-        print("Saved to desktop: \(fileURL.path)")
+        do {
+            try data.write(to: fileURL)
+            print("Saved to desktop: \(fileURL.path)")
+        } catch {
+            NSSound.beep()
+            print("AppDelegate: save to desktop failed — \(error.localizedDescription)")
+        }
     }
 
     private func copyToClipboard(_ string: String) {
