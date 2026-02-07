@@ -343,13 +343,14 @@ final class AnnotationView: NSView {
         let screenshotPoint = viewToScreenshot(viewPoint)
         dragModifiers = event.modifierFlags
 
-        // If editing text and click is outside the text view, finalize
+        // If editing text: clicks inside the text view are handled by it;
+        // clicks outside finalize editing and continue to handle/body hit testing
         if activeTextView != nil {
             let tvFrame = activeTextView!.frame
-            if !tvFrame.contains(viewPoint) {
-                finalizeTextEditing()
+            if tvFrame.contains(viewPoint) {
+                return
             }
-            return
+            finalizeTextEditing()
         }
 
         let hasDrawModifiers = dragModifiers.contains(.shift)
@@ -397,6 +398,7 @@ final class AnnotationView: NSView {
         let point = viewToScreenshot(viewPoint)
 
         if let idx = movingIndex {
+            guard idx < annotations.count else { movingIndex = nil; return }
             let dx = point.x - movingStartPoint.x
             let dy = point.y - movingStartPoint.y
             annotations[idx] = annotations[idx].offsetBy(dx: dx, dy: dy)
@@ -406,6 +408,7 @@ final class AnnotationView: NSView {
         }
 
         if let idx = editingIndex, let handle = editingHandle {
+            guard idx < annotations.count else { editingIndex = nil; return }
             annotations[idx] = annotations[idx].moving(handle, to: point)
             needsDisplay = true
             return
@@ -432,12 +435,8 @@ final class AnnotationView: NSView {
         if let idx = movingIndex, let original = movingOriginal {
             movingIndex = nil
             movingOriginal = nil
+            guard idx < annotations.count else { return }
 
-            // Check if it was a click (no significant movement)
-            let viewPoint = convert(event.locationInWindow, from: nil)
-            let point = viewToScreenshot(viewPoint)
-            let dx = abs(point.x - dragOrigin.x)
-            let dy = abs(point.y - dragOrigin.y)
             let moved = annotations[idx] != original
             if !moved {
                 // Click on text → re-edit; click on other types → no-op
@@ -454,11 +453,12 @@ final class AnnotationView: NSView {
         }
 
         if let idx = editingIndex, let original = editingOriginal {
-            let edited = annotations[idx]
-            replaceAnnotation(at: idx, with: edited, old: original)
             editingIndex = nil
             editingHandle = nil
             editingOriginal = nil
+            guard idx < annotations.count else { return }
+            let edited = annotations[idx]
+            replaceAnnotation(at: idx, with: edited, old: original)
             return
         }
 
@@ -466,11 +466,8 @@ final class AnnotationView: NSView {
         currentAnnotation = nil
 
         // Ignore negligible drags
-        let viewPoint = convert(event.locationInWindow, from: nil)
-        let point = viewToScreenshot(viewPoint)
-        let dx = abs(point.x - dragOrigin.x)
-        let dy = abs(point.y - dragOrigin.y)
-        if dx < 2 && dy < 2 { return }
+        let point = viewToScreenshot(convert(event.locationInWindow, from: nil))
+        if abs(point.x - dragOrigin.x) < 2, abs(point.y - dragOrigin.y) < 2 { return }
 
         addAnnotation(annotation)
     }
@@ -568,8 +565,9 @@ final class AnnotationView: NSView {
                 NSCursor.arrow.set()
                 return
             }
-            annotations.removeAll { if case .crop = $0 { return true }; return false }
-            needsDisplay = true
+            for i in stride(from: annotations.count - 1, through: 0, by: -1) {
+                if case .crop = annotations[i] { removeAnnotation(at: i) }
+            }
             return
         }
 
@@ -653,6 +651,7 @@ final class AnnotationView: NSView {
         textView.isHorizontallyResizable = false
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.lineFragmentPadding = 0
+        textView.maxSize = NSSize(width: frame.width, height: CGFloat.greatestFiniteMagnitude)
 
         let font = NSFont.boldSystemFont(ofSize: fontSize)
         textView.font = font
@@ -775,6 +774,7 @@ final class AnnotationView: NSView {
     // MARK: - Annotations + Undo
 
     private func replaceAnnotation(at index: Int, with new: Annotation, old: Annotation) {
+        guard index < annotations.count else { return }
         annotations[index] = new
         undoManager?.registerUndo(withTarget: self) { target in
             target.replaceAnnotation(at: index, with: old, old: new)
@@ -784,16 +784,23 @@ final class AnnotationView: NSView {
 
     private func addAnnotation(_ annotation: Annotation) {
         if case .crop = annotation {
-            annotations.removeAll { if case .crop = $0 { return true }; return false }
+            undoManager?.beginUndoGrouping()
+            for i in stride(from: annotations.count - 1, through: 0, by: -1) {
+                if case .crop = annotations[i] { removeAnnotation(at: i) }
+            }
         }
         annotations.append(annotation)
         undoManager?.registerUndo(withTarget: self) { target in
             target.removeLastAnnotation()
         }
+        if case .crop = annotation {
+            undoManager?.endUndoGrouping()
+        }
         needsDisplay = true
     }
 
     private func removeAnnotation(at index: Int) {
+        guard index < annotations.count else { return }
         let removed = annotations.remove(at: index)
         undoManager?.registerUndo(withTarget: self) { target in
             target.insertAnnotation(removed, at: index)
@@ -802,6 +809,7 @@ final class AnnotationView: NSView {
     }
 
     private func insertAnnotation(_ annotation: Annotation, at index: Int) {
+        guard index <= annotations.count else { return }
         annotations.insert(annotation, at: index)
         undoManager?.registerUndo(withTarget: self) { target in
             target.removeAnnotation(at: index)

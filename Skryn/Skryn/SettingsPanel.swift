@@ -286,7 +286,9 @@ final class SettingsPanel: NSPanel {
     }
 
     private func modifierFor(popup: NSPopUpButton) -> SaveModifier {
-        SaveModifier.allCases[popup.indexOfSelectedItem]
+        let index = popup.indexOfSelectedItem
+        guard index >= 0, index < SaveModifier.allCases.count else { return .opt }
+        return SaveModifier.allCases[index]
     }
 
     @objc private func modifierPopupChanged(_ sender: NSPopUpButton) {

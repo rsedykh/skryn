@@ -239,7 +239,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let customPath = UserDefaults.standard.string(forKey: "saveFolderPath") {
             saveFolder = URL(fileURLWithPath: customPath)
         } else {
-            saveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
+            saveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+                ?? FileManager.default.homeDirectoryForCurrentUser
         }
         let fileURL = saveFolder.appendingPathComponent(filename)
 
@@ -389,7 +390,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let data = UploadHistory.cachedData(at: box.value.cacheFilePath) else { return }
         let upload = box.value
 
-        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
+        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
         let fileURL = desktop.appendingPathComponent(upload.filename)
         try? data.write(to: fileURL)
         print("Saved to desktop: \(fileURL.path)")
