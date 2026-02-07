@@ -2,8 +2,10 @@ import AppKit
 
 final class AnnotationWindow: NSWindow {
     init(screen: NSScreen, screenshot: NSImage) {
-        let inset = screen.frame.width * 0.05
-        let windowRect = screen.frame.insetBy(dx: inset, dy: inset)
+        let windowRect = screen.frame.insetBy(
+            dx: screen.frame.width * 0.05,
+            dy: screen.frame.height * 0.05
+        )
 
         super.init(
             contentRect: windowRect,
