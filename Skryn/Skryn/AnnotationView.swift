@@ -581,6 +581,15 @@ final class AnnotationView: NSView {
             return
         }
 
+        // Delete / Forward Delete — remove hovered annotation
+        if event.keyCode == 51 || event.keyCode == 117 {
+            if let idx = hoveredAnnotationIndex {
+                removeAnnotation(at: idx)
+                hoveredAnnotationIndex = nil
+            }
+            return
+        }
+
         super.keyDown(with: event)
     }
 

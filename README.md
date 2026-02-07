@@ -29,6 +29,7 @@ Click the camera icon in the menu bar or press **Cmd+Shift+5** (configurable in 
 - **Option + Drag** — Blur
 - **Control + Drag** — Crop
 - **Esc** — Remove crop
+- **Delete** — Remove hovered annotation
 - **Cmd+Z / Cmd+Shift+Z** — Undo / Redo
 - **T** — Toggle text mode
 - **Cmd + + / Cmd + -** — Increase / Decrease text size
