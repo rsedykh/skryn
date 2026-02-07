@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if event.type == .rightMouseUp {
             showQuitMenu()
         } else {
+            guard annotationWindow == nil else { return }
             captureScreen()
         }
     }
