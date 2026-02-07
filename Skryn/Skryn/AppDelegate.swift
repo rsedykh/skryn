@@ -44,24 +44,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func migrateModifierDefaults() {
         let defaults = UserDefaults.standard
-        // Already migrated
         if defaults.string(forKey: "modifierLocal") != nil { return }
 
-        let oldMode = defaults.string(forKey: "saveMode")
-        let hasKey = defaults.string(forKey: "uploadcarePublicKey") != nil
-
-        if oldMode == "cloud" || (oldMode == nil && hasKey) {
-            // Old user had cloud as default (Cmd) — preserve that mapping
-            defaults.set("opt", forKey: "modifierLocal")
-            defaults.set("ctrl", forKey: "modifierClipboard")
-            defaults.set("cmd", forKey: "modifierCloud")
-        } else {
-            defaults.set("opt", forKey: "modifierLocal")
-            defaults.set("cmd", forKey: "modifierClipboard")
-            defaults.set("ctrl", forKey: "modifierCloud")
-        }
-
-        defaults.removeObject(forKey: "saveMode")
+        defaults.set("opt", forKey: "modifierLocal")
+        defaults.set("cmd", forKey: "modifierClipboard")
+        defaults.set("ctrl", forKey: "modifierCloud")
     }
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
