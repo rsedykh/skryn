@@ -606,6 +606,7 @@ extension AppDelegate: NSWindowDelegate {
 
         if annotationWindow == nil && settingsPanel == nil {
             NSApp.mainMenu = nil
+            NSApp.hide(nil)
             NSApp.setActivationPolicy(.accessory)
         }
     }
