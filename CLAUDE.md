@@ -55,6 +55,8 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Files:** `UploadcareService.swift` (HTTP multipart POST via URLSession, no dependencies), `UploadHistory.swift` (recent uploads + PNG cache).
 
+**CDN base URL:** Auto-computed from the public key. The `/base/` upload API returns only a UUID — the CDN URL is constructed client-side as `{cdnBase}/{uuid}/`. `UploadcareService.cnamePrefix(forPublicKey:)` derives a 10-char subdomain via SHA-256 → base-36, producing URLs like `https://2ijp1do3td.ucarecd.net`. The Settings panel shows the computed subdomain in a read-only field. `normalizeCdnBase()` is kept as a utility for manual overrides via UserDefaults.
+
 **Upload flow:** `AppDelegate.handleAction(.cloud, cgImage:)` → if public key set: cache PNG to `~/Library/Application Support/Skryn/uploads/`, start async upload via URLSession, animate menu bar icon (spinning arrows). On success: copy CDN URL to clipboard. On failure: icon turns red, error shown in menu, screenshot saved locally as fallback. If no key configured, beeps and returns `false` (window stays open).
 
 **Icon animation:** Layer transforms don't work on `NSStatusBarButton` — the menu bar compositor ignores them. Use image swapping with a `Timer` cycling through SF Symbols (`arrow.up` → `arrow.up.right` → ... 8 directional arrows at 120ms).

@@ -103,6 +103,132 @@ final class UploadcareServiceTests: XCTestCase {
         }
     }
 
+    func testUpload_withCustomCdnBase_returnsCDNURL() async throws {
+        let fileID = "custom-uuid"
+        MockURLProtocol.requestHandler = { request in
+            let json = Data("{\"file\":\"\(fileID)\"}".utf8)
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: 200,
+                httpVersion: nil, headerFields: nil
+            )!
+            return (response, json)
+        }
+
+        let url = try await UploadcareService.upload(
+            pngData: Data("fake-png".utf8),
+            filename: "test.png",
+            publicKey: "test-key",
+            cdnBase: "https://mycdn.ucarecd.net",
+            session: session
+        )
+
+        XCTAssertEqual(url, "https://mycdn.ucarecd.net/custom-uuid/")
+    }
+
+    // MARK: - CDN Base Normalization
+
+    func testNormalizeCdnBase_empty_returnsDefault() {
+        XCTAssertEqual(
+            UploadcareService.normalizeCdnBase(""),
+            "https://ucarecdn.com"
+        )
+    }
+
+    func testNormalizeCdnBase_whitespace_returnsDefault() {
+        XCTAssertEqual(
+            UploadcareService.normalizeCdnBase("  \n "),
+            "https://ucarecdn.com"
+        )
+    }
+
+    func testNormalizeCdnBase_bareSubdomain_addsUcarecdNet() {
+        XCTAssertEqual(
+            UploadcareService.normalizeCdnBase("2ijp1do3td"),
+            "https://2ijp1do3td.ucarecd.net"
+        )
+    }
+
+    func testNormalizeCdnBase_domainWithDot_addsHttps() {
+        XCTAssertEqual(
+            UploadcareService.normalizeCdnBase("2ijp1do3td.ucarecd.net"),
+            "https://2ijp1do3td.ucarecd.net"
+        )
+    }
+
+    func testNormalizeCdnBase_fullHttpsURL_returnsAsIs() {
+        XCTAssertEqual(
+            UploadcareService.normalizeCdnBase("https://cdn.example.com"),
+            "https://cdn.example.com"
+        )
+    }
+
+    func testNormalizeCdnBase_trailingSlash_stripped() {
+        XCTAssertEqual(
+            UploadcareService.normalizeCdnBase("https://cdn.example.com/"),
+            "https://cdn.example.com"
+        )
+    }
+
+    func testNormalizeCdnBase_customDomain_addsHttps() {
+        XCTAssertEqual(
+            UploadcareService.normalizeCdnBase("cdn.mysite.com"),
+            "https://cdn.mysite.com"
+        )
+    }
+
+    func testNormalizeCdnBase_httpUpgradedToHttps() {
+        XCTAssertEqual(
+            UploadcareService.normalizeCdnBase("http://cdn.example.com"),
+            "https://cdn.example.com"
+        )
+    }
+
+    // MARK: - CNAME Prefix
+
+    func testCnamePrefix_userKey() {
+        XCTAssertEqual(
+            UploadcareService.cnamePrefix(forPublicKey: "b527517dd9b0b6b2ba3c"),
+            "2ijp1do3td"
+        )
+    }
+
+    func testCnamePrefix_demoPublicKey() {
+        XCTAssertEqual(
+            UploadcareService.cnamePrefix(forPublicKey: "demopublickey"),
+            "1s4oyld5dc"
+        )
+    }
+
+    func testCnamePrefix_knownVector1() {
+        XCTAssertEqual(
+            UploadcareService.cnamePrefix(forPublicKey: "c8c237984266090ff9b8"),
+            "127mbvwq3b"
+        )
+    }
+
+    func testCnamePrefix_knownVector2() {
+        XCTAssertEqual(
+            UploadcareService.cnamePrefix(forPublicKey: "3e6ba70c0670de3bef7a"),
+            "u51bthcx6t"
+        )
+    }
+
+    func testCnamePrefix_knownVector3() {
+        XCTAssertEqual(
+            UploadcareService.cnamePrefix(forPublicKey: "823a5ae6eb3afa5b353f"),
+            "ggiwfssv31"
+        )
+    }
+
+    func testCdnBase_forPublicKey() {
+        XCTAssertEqual(
+            UploadcareService.cdnBase(forPublicKey: "b527517dd9b0b6b2ba3c"),
+            "https://2ijp1do3td.ucarecd.net"
+        )
+    }
+
+    // MARK: - Error cases
+
     func testUpload_missingFileID_throws() async {
         MockURLProtocol.requestHandler = { request in
             let json = Data("{\"status\":\"ok\"}".utf8)

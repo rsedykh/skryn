@@ -170,9 +170,13 @@ final class SettingsPanel: NSPanel {
         folderRow.leadingAnchor.constraint(equalTo: localSection.leadingAnchor).isActive = true
 
         let cloudRow = makeActionRow(label: "", popup: cloudPopup, linkText: "Uploadcare")
-        keyField.widthAnchor.constraint(equalToConstant: 180).isActive = true
-
-        let cloudSection = NSStackView(views: [cloudRow, keyField])
+        let keyLink = makeSmallLinkButton(
+            title: "Get API key \u{2197}", url: "https://app.uploadcare.com/projects/-/api-keys/"
+        )
+        let keyRow = NSStackView(views: [keyField, keyLink])
+        keyRow.orientation = .horizontal
+        keyRow.spacing = 6
+        let cloudSection = NSStackView(views: [cloudRow, keyRow])
         cloudSection.orientation = .vertical
         cloudSection.alignment = .leading
         cloudSection.spacing = 6
@@ -205,7 +209,7 @@ final class SettingsPanel: NSPanel {
         }
 
         pinTrailingToStack(
-            views: [buttonRow, folderRow, localRow, clipboardRow, cloudRow],
+            views: [buttonRow, folderRow, localRow, clipboardRow, cloudRow, keyRow],
             stack: mainStack
         )
         separator.leadingAnchor.constraint(
@@ -214,6 +218,24 @@ final class SettingsPanel: NSPanel {
         separator.trailingAnchor.constraint(
             equalTo: mainStack.trailingAnchor, constant: -20
         ).isActive = true
+    }
+
+    private func makeSmallLinkButton(title: String, url: String) -> NSTextField {
+        let field = NSTextField(labelWithString: "")
+        let linkString = NSMutableAttributedString(
+            string: title,
+            attributes: [
+                .link: url,
+                .font: NSFont.boldSystemFont(ofSize: NSFont.smallSystemFontSize),
+                .underlineStyle: NSUnderlineStyle.single.rawValue,
+                .underlineColor: NSColor.linkColor
+            ]
+        )
+        field.attributedStringValue = linkString
+        field.allowsEditingTextAttributes = true
+        field.isSelectable = true
+        field.setContentHuggingPriority(.required, for: .horizontal)
+        return field
     }
 
     private func makeHotkeyRow() -> NSStackView {
@@ -360,6 +382,9 @@ final class SettingsPanel: NSPanel {
         } else {
             defaults.set(key, forKey: "uploadcarePublicKey")
         }
+
+        // Clean up legacy CDN base key (now auto-computed from public key)
+        defaults.removeObject(forKey: "uploadcareCdnBase")
 
         // Persist folder path
         if let fullPath = folderLabel.toolTip {

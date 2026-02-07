@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 enum UploadcareError: LocalizedError {
@@ -16,19 +17,70 @@ enum UploadcareError: LocalizedError {
 
 enum UploadcareService {
     private static let uploadURL = URL(string: "https://upload.uploadcare.com/base/")!
+    static let defaultCdnBase = "https://ucarecdn.com"
+
+    /// Normalizes user CDN base input into a full https URL.
+    static func normalizeCdnBase(_ input: String) -> String {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return defaultCdnBase }
+
+        // Full URL — strip trailing slashes, upgrade http to https
+        if trimmed.lowercased().hasPrefix("http://") {
+            let stripped = trimmed.dropFirst(7)
+            return "https://\(stripped)".trimmingSlashes()
+        }
+        if trimmed.lowercased().hasPrefix("https://") {
+            return trimmed.trimmingSlashes()
+        }
+
+        // Has dots → treat as domain
+        if trimmed.contains(".") {
+            return "https://\(trimmed)".trimmingSlashes()
+        }
+
+        // Bare subdomain → project-specific ucarecd.net
+        return "https://\(trimmed).ucarecd.net"
+    }
+
+    /// Computes the 10-char CNAME prefix from a public key.
+    /// Algorithm: SHA-256 → big-endian integer → base-36 → first 10 chars.
+    static func cnamePrefix(forPublicKey key: String) -> String {
+        let digest = SHA256.hash(data: Data(key.utf8))
+        var bytes = Array(digest)
+        let alphabet = Array("0123456789abcdefghijklmnopqrstuvwxyz")
+        var result = ""
+        while !bytes.allSatisfy({ $0 == 0 }) {
+            var remainder: UInt16 = 0
+            for i in 0..<bytes.count {
+                let dividend = remainder &* 256 &+ UInt16(bytes[i])
+                bytes[i] = UInt8(dividend / 36)
+                remainder = dividend % 36
+            }
+            result = String(alphabet[Int(remainder)]) + result
+        }
+        return String(result.prefix(10))
+    }
+
+    /// Returns the CDN base URL for a given public key (e.g. "https://2ijp1do3td.ucarecd.net").
+    static func cdnBase(forPublicKey key: String) -> String {
+        let prefix = cnamePrefix(forPublicKey: key)
+        return "https://\(prefix).ucarecd.net"
+    }
 
     /// Uploads PNG data to Uploadcare and returns the CDN URL.
     static func upload(pngData: Data, filename: String, publicKey: String,
+                       cdnBase: String = defaultCdnBase,
                        session: URLSession = .shared) async throws -> String {
         try await upload(
             fileData: pngData, filename: filename, contentType: "image/png",
-            publicKey: publicKey, session: session
+            publicKey: publicKey, cdnBase: cdnBase, session: session
         )
     }
 
     /// Uploads arbitrary file data to Uploadcare with a specified content type.
     static func upload(fileData: Data, filename: String, contentType: String,
-                       publicKey: String, session: URLSession = .shared) async throws -> String {
+                       publicKey: String, cdnBase: String = defaultCdnBase,
+                       session: URLSession = .shared) async throws -> String {
         let boundary = UUID().uuidString
 
         var request = URLRequest(url: uploadURL)
@@ -67,7 +119,15 @@ enum UploadcareService {
             throw UploadcareError.missingFileID
         }
 
-        return "https://ucarecdn.com/\(fileID)/"
+        return "\(cdnBase)/\(fileID)/"
+    }
+}
+
+private extension String {
+    func trimmingSlashes() -> String {
+        var result = self
+        while result.hasSuffix("/") { result.removeLast() }
+        return result
     }
 }
 

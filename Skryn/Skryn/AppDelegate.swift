@@ -320,6 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// If `fallbackSave` is provided, saves locally on upload failure.
     private func performUpload(fileData: Data, filename: String, contentType: String,
                                publicKey: String, fallbackSave: Data?) {
+        let cdnBase = UploadcareService.cdnBase(forPublicKey: publicKey)
         lastUploadError = nil
         startIconAnimation()
 
@@ -328,7 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 let cdnURL = try await UploadcareService.upload(
                     fileData: fileData, filename: filename, contentType: contentType,
-                    publicKey: publicKey
+                    publicKey: publicKey, cdnBase: cdnBase
                 )
                 await MainActor.run {
                     UploadHistory.updateCDNURL(for: filename, url: cdnURL)
