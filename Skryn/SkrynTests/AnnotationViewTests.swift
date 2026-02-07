@@ -385,6 +385,57 @@ final class AnnotationViewTests: XCTestCase {
         XCTAssertEqual(result, 1)
     }
 
+    // MARK: - Blur annotation
+
+    func testMoving_blurTopLeft() {
+        let annotation = Annotation.blur(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        let moved = annotation.moving(.topLeft, to: CGPoint(x: 5, y: 10))
+        if case .blur(let rect) = moved {
+            XCTAssertEqual(rect.origin.x, 5, accuracy: 0.001)
+            XCTAssertEqual(rect.origin.y, 10, accuracy: 0.001)
+            XCTAssertEqual(rect.width, 85, accuracy: 0.001)
+            XCTAssertEqual(rect.height, 70, accuracy: 0.001)
+        } else {
+            XCTFail("Expected blur annotation")
+        }
+    }
+
+    func testOffsetBy_blur() {
+        let annotation = Annotation.blur(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        let moved = annotation.offsetBy(dx: 5, dy: -10)
+        if case .blur(let rect) = moved {
+            XCTAssertEqual(rect.origin.x, 15, accuracy: 0.001)
+            XCTAssertEqual(rect.origin.y, 10, accuracy: 0.001)
+            XCTAssertEqual(rect.width, 80, accuracy: 0.001)
+            XCTAssertEqual(rect.height, 60, accuracy: 0.001)
+        } else {
+            XCTFail("Expected blur annotation")
+        }
+    }
+
+    func testHandleAt_blur() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .blur(rect: CGRect(x: 20, y: 20, width: 60, height: 40))
+        ])
+        // Click near bottomRight (80, 60)
+        let result = view.handleAt(CGPoint(x: 79, y: 59))
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.index, 0)
+        if case .bottomRight = result?.handle {} else {
+            XCTFail("Expected .bottomRight handle")
+        }
+    }
+
+    func testAnnotationBodyAt_blur() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .blur(rect: CGRect(x: 20, y: 20, width: 60, height: 40))
+        ])
+        let result = view.annotationBodyAt(CGPoint(x: 50, y: 40))
+        XCTAssertEqual(result, 0)
+    }
+
     // MARK: - SaveAction modifier mapping
 
     func testSaveActionMapping_defaultModifiers() {

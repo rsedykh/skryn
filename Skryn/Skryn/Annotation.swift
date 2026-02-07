@@ -12,6 +12,7 @@ enum Annotation: Equatable {
     case rectangle(rect: CGRect)
     case crop(rect: CGRect)
     case text(origin: CGPoint, width: CGFloat, content: String, fontSize: CGFloat)
+    case blur(rect: CGRect)
 }
 
 enum AnnotationHandle {
@@ -25,7 +26,7 @@ extension Annotation {
         switch self {
         case .arrow(let from, let to), .line(let from, let to):
             return [(.from, from), (.to, to)]
-        case .rectangle(let rect), .crop(let rect):
+        case .rectangle(let rect), .crop(let rect), .blur(let rect):
             return [
                 (.topLeft, CGPoint(x: rect.minX, y: rect.minY)),
                 (.topRight, CGPoint(x: rect.maxX, y: rect.minY)),
@@ -59,6 +60,9 @@ extension Annotation {
         case .crop(let rect):
             let anchor = oppositeCorner(of: handle, in: rect)
             return .crop(rect: rectFromCorners(anchor, point))
+        case .blur(let rect):
+            let anchor = oppositeCorner(of: handle, in: rect)
+            return .blur(rect: rectFromCorners(anchor, point))
         case .text(let origin, let width, let content, let fontSize):
             if handle == .left {
                 let rightEdge = origin.x + width
@@ -91,6 +95,8 @@ extension Annotation {
             return .rectangle(rect: rect.offsetBy(dx: dx, dy: dy))
         case .crop(let rect):
             return .crop(rect: rect.offsetBy(dx: dx, dy: dy))
+        case .blur(let rect):
+            return .blur(rect: rect.offsetBy(dx: dx, dy: dy))
         case .text(let origin, let width, let content, let fontSize):
             return .text(
                 origin: CGPoint(x: origin.x + dx, y: origin.y + dy),
@@ -104,7 +110,7 @@ extension Annotation {
         switch self {
         case .arrow(let from, let to), .line(let from, let to):
             return distanceToSegment(point: point, a: from, b: to) <= hitRadius
-        case .rectangle(let rect), .crop(let rect):
+        case .rectangle(let rect), .crop(let rect), .blur(let rect):
             return rect.contains(point)
         case .text(let origin, let width, let content, let fontSize):
             let rect = Annotation.textBoundingRect(

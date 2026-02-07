@@ -39,7 +39,7 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Keyboard shortcuts** are handled via the installed `NSApp.mainMenu` (Cmd+W, Cmd+Z, Cmd+Shift+Z, Cmd+Q) for proper cross-layout support. ESC uses `keyDown` (layout-independent keyCode). Modifier+Enter uses `performKeyEquivalent` — the menu system intercepts modifier combos before they reach `keyDown`. Each of the three save actions (local, clipboard, cloud) has a configurable modifier key (Cmd/Opt/Ctrl) stored in UserDefaults. `SaveAction.action(for:)` maps the pressed modifier to the correct action.
 
-**Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Option = rectangle, Command = crop. T key enters text mode (I-beam cursor, click to place). Only one crop allowed at a time.
+**Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Command = rectangle, Option = blur, Control = crop. T key enters text mode (I-beam cursor, click to place). Only one crop allowed at a time.
 
 **Text annotations:** T key toggles text mode. Click to place an NSTextView (red bold text, transparent background). Enter finalizes, Shift+Enter inserts newline, ESC finalizes. Cmd+=/Cmd+- adjusts font size. Click on finalized text to re-edit. Text width is resizable via left/right edge handles. Text state: `isTextMode`, `activeTextView`, `editingTextIndex`, `textFontSize`. When `activeTextView` is active, `mouseDragged`/`mouseUp`/`mouseMoved` return early to avoid interfering with text editing. `finalizeTextEditing()` converts the NSTextView back to a `.text` annotation. The Edit menu (Cut/Copy/Paste/Select All) in `AppDelegate.installMainMenu()` enables clipboard support in the text view via responder chain.
 
@@ -105,4 +105,4 @@ gh release create v1.x.x /tmp/Skryn.zip --title "Skryn v1.x.x" --generate-notes
 - `NSEvent.modifierFlags` (static) reads current keyboard state; `event.modifierFlags` (instance) reads state at event time. Always use the instance property for tool locking.
 - When renaming variables, check ALL references in the same method — secondary uses are easy to miss.
 - SwiftLint: `String.data(using: .utf8)!` triggers `non_optional_string_data_conversion` — use `Data("string".utf8)` instead.
-- SwiftLint config limits: type_body_length 700/900, file_length 900/1100 (bumped for AnnotationView with text annotations and drag-to-move).
+- SwiftLint config limits: type_body_length 750/950, file_length 950/1150 (bumped for AnnotationView with text annotations, drag-to-move, and blur).

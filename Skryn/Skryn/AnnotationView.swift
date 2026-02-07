@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 import ImageIO
 
 final class AnnotationView: NSView {
@@ -33,6 +34,8 @@ final class AnnotationView: NSView {
     private var screenshotBounds: NSRect {
         NSRect(origin: .zero, size: screenshot.size)
     }
+
+    private static let blurCIContext = CIContext()
 
     private lazy var _undoManager = UndoManager()
     override var undoManager: UndoManager? { _undoManager }
@@ -217,6 +220,8 @@ final class AnnotationView: NSView {
             drawCrop(rect)
         case .text(let origin, let width, let content, let fontSize):
             drawText(origin: origin, width: width, content: content, fontSize: fontSize)
+        case .blur(let rect):
+            drawBlur(rect)
         }
     }
 
@@ -284,6 +289,40 @@ final class AnnotationView: NSView {
         border.stroke()
     }
 
+    private func drawBlur(_ rect: CGRect) {
+        guard let screenshotCG = screenshot.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else { return }
+
+        let pointSize = screenshot.size
+        let scaleX = CGFloat(screenshotCG.width) / pointSize.width
+        let scaleY = CGFloat(screenshotCG.height) / pointSize.height
+
+        // Convert screenshot-point rect to pixel rect (CGImage uses bottom-left origin)
+        let pixelRect = CGRect(
+            x: rect.origin.x * scaleX,
+            y: (pointSize.height - rect.origin.y - rect.height) * scaleY,
+            width: rect.width * scaleX,
+            height: rect.height * scaleY
+        ).integral
+
+        guard pixelRect.width > 0, pixelRect.height > 0,
+              let cropped = screenshotCG.cropping(to: pixelRect)
+        else { return }
+
+        let ciImage = CIImage(cgImage: cropped)
+        let pixelSize = max(pixelRect.width, pixelRect.height) / 40
+        let blurred = ciImage
+            .applyingFilter("CIPhotoEffectMono")
+            .applyingFilter("CIPixellate", parameters: [kCIInputScaleKey: pixelSize])
+            .cropped(to: ciImage.extent)
+
+        guard let blurredCG = Self.blurCIContext.createCGImage(blurred, from: blurred.extent)
+        else { return }
+
+        let blurredNSImage = NSImage(cgImage: blurredCG, size: rect.size)
+        blurredNSImage.draw(in: rect)
+    }
+
     private func drawText(origin: CGPoint, width: CGFloat, content: String, fontSize: CGFloat) {
         let font = NSFont.boldSystemFont(ofSize: fontSize)
         let attrs: [NSAttributedString.Key: Any] = [
@@ -316,6 +355,7 @@ final class AnnotationView: NSView {
         let hasDrawModifiers = dragModifiers.contains(.shift)
             || dragModifiers.contains(.option)
             || dragModifiers.contains(.command)
+            || dragModifiers.contains(.control)
 
         // Text mode: place new text annotation
         if isTextMode && !hasDrawModifiers {
@@ -371,10 +411,12 @@ final class AnnotationView: NSView {
             return
         }
 
-        if dragModifiers.contains(.command) {
+        if dragModifiers.contains(.control) {
             currentAnnotation = .crop(rect: rectFromDrag(origin: dragOrigin, current: point))
-        } else if dragModifiers.contains(.option) {
+        } else if dragModifiers.contains(.command) {
             currentAnnotation = .rectangle(rect: rectFromDrag(origin: dragOrigin, current: point))
+        } else if dragModifiers.contains(.option) {
+            currentAnnotation = .blur(rect: rectFromDrag(origin: dragOrigin, current: point))
         } else if dragModifiers.contains(.shift) {
             currentAnnotation = .line(from: dragOrigin, to: point)
         } else {

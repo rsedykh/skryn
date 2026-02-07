@@ -21,25 +21,22 @@ Since the app is unsigned, macOS may revoke Screen Recording permission after up
 
 Click the camera icon in the menu bar or press **Cmd+Shift+5** (configurable in Settings) to capture your screen. An annotation window opens where you can draw before saving.
 
-**Annotations**
+**Shortcuts**
 
 - **Drag** — Arrow
 - **Shift + Drag** — Line
-- **Option + Drag** — Rectangle
+- **Cmd + Drag** — Rectangle
+- **Option + Drag** — Blur
+- **Control + Drag** — Crop
+- **Esc** — Remove crop
+- **Cmd+Z / Cmd+Shift+Z** — Undo / Redo
 - **T** — Toggle text mode
 - **Cmd + + / Cmd + -** — Increase / Decrease text size
 - **Shift + Enter** — new text line (Enter will exit text mode)
-- **Cmd + Drag** — Crop
+- **Cmd+Enter** and **Option+Enter** and **Control+Enter** — Save to different locations (configurable in Settings)
+- **Cmd+W** — Cancel screenshot
 
 You can also hover over the annotation and change its size or drag it.
-
-**Shortcuts**
-
-- **Cmd+Enter** and **Option+Enter** and **Control+Enter** — Save to different locations (configurable in Settings)
-- **Cmd+Z / Cmd+Shift+Z** — Undo / Redo
-- **Esc** — Remove crop
-- **Cmd+W** — Cancel screenshot
-- **Cmd+Q** or **right-click** menu bar icon — Quit
 
 ## Build
 
