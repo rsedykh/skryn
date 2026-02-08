@@ -7,7 +7,8 @@ struct RecentUpload: Codable {
     let cacheFilePath: String
 }
 
-/// Wraps RecentUpload for use as NSMenuItem.representedObject (ObjC bridging).
+/// Wraps RecentUpload for use as NSMenuItem.representedObject.
+/// Swift structs bridged to ObjC `id` may fail `as?` casts — NSObject wrapper ensures reliable casting.
 final class RecentUploadBox: NSObject {
     let value: RecentUpload
     init(_ value: RecentUpload) { self.value = value }

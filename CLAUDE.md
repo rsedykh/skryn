@@ -55,28 +55,17 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Files:** `UploadcareService.swift` (HTTP multipart POST via URLSession, no dependencies), `UploadHistory.swift` (recent uploads + PNG cache).
 
-**CDN base URL:** Auto-computed from the public key. The `/base/` upload API returns only a UUID — the CDN URL is constructed client-side as `{cdnBase}/{uuid}/`. `UploadcareService.cnamePrefix(forPublicKey:)` derives a 10-char subdomain via SHA-256 → base-36, producing URLs like `https://2ijp1do3td.ucarecd.net`. The Settings panel shows the computed subdomain in a read-only field. `normalizeCdnBase()` is kept as a utility for manual overrides via UserDefaults.
-
 **Upload flow:** `AppDelegate.handleAction(.cloud, cgImage:)` → if public key set: cache PNG to `~/Library/Application Support/Skryn/uploads/`, start async upload via URLSession, animate menu bar icon (spinning arrows). On success: copy CDN URL to clipboard. On failure: icon turns red, error shown in menu, screenshot saved locally as fallback. If no key configured, beeps and returns `false` (window stays open).
 
 **Icon animation:** Layer transforms don't work on `NSStatusBarButton` — the menu bar compositor ignores them. Use image swapping with a `Timer` cycling through SF Symbols (`arrow.up` → `arrow.up.right` → ... 8 directional arrows at 120ms).
 
 **Settings panel:** `SettingsPanel.swift` — NSPanel with three save action rows (local folder, clipboard, cloud upload), each with an `NSPopUpButton` to choose the modifier key (Cmd/Opt/Ctrl). Auto-swap prevents duplicate modifiers. Also has a hotkey recorder (`HotkeyRecorderButton.swift`) and launch-at-login checkbox. Opened via right-click menu "Settings…" (⌘,). Uses `installEditOnlyMenu()` + `.regular` activation policy so Cmd+V works in the key field. `windowWillClose` only reverts to `.accessory` when both annotation window and settings panel are nil.
 
-**ObjC bridging:** Swift structs in `NSMenuItem.representedObject` (bridged from ObjC `id`) may fail `as?` casts. `RecentUploadBox` (NSObject subclass in `UploadHistory.swift`) wraps `RecentUpload` struct for reliable casting.
-
 **UserDefaults keys:** `"modifierLocal"` / `"modifierClipboard"` / `"modifierCloud"` (String: `"cmd"`, `"opt"`, or `"ctrl"`, defaults opt/cmd/ctrl), `"uploadcarePublicKey"` (String), `"recentUploads"` (JSON-encoded `[RecentUpload]`), `"saveFolderPath"` (String, custom save folder), `"hotkeyKeyCode"` (UInt32, Carbon key code, default `kVK_ANSI_5`), `"hotkeyModifiers"` (UInt32, Carbon modifier bitmask, default `cmdKey | shiftKey`), `"hasLaunchedBefore"` (Bool, triggers first-launch About panel when false/missing).
 **Drag-and-drop upload:** Dropping image files onto the menu bar icon uploads them to Uploadcare (regardless of save mode setting — drag-and-drop is always a cloud action). Requires a public key configured in settings. Non-image files are rejected with a "!" icon for 2 seconds. `StatusItemDropView` (NSView subclass at bottom of AppDelegate.swift) sits on top of `statusItem.button`, returns nil from `hitTest` so clicks pass through, but receives drag events via frame containment.
 
 **Right-click menu structure:**
 - Recent Uploads submenu (only if uploads exist) / error message (if any) / "Settings…" (⌘,, opens settings panel) / Quit
-
-## App Icon
-
-- Located in `Assets.xcassets/AppIcon.appiconset/` — 10 PNGs (16px–1024px)
-- Current design: black "y" letter on white rounded rect (Helvetica font)
-- Generated via Python/Pillow script — no source vector file
-- Menu bar uses SF Symbol `"camera"` (set in AppDelegate.swift)
 
 ## Distribution
 
