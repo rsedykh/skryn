@@ -41,6 +41,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         migrateModifierDefaults()
         installHotkeyHandler()
         registerHotkey()
+
+        if !UserDefaults.standard.bool(forKey: "hasLaunchedBefore") {
+            UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+            // Delay lets the activation policy change propagate to the window server
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.showAbout()
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
     }
 
     private func migrateModifierDefaults() {
