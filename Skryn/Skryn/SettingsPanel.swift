@@ -125,7 +125,7 @@ final class SettingsPanel: NSPanel {
             let linkString = NSMutableAttributedString(
                 string: linkText,
                 attributes: [
-                    .link: "https://app.uploadcare.com",
+                    .link: "https://uploadcare.com",
                     .font: boldFont,
                     .underlineStyle: NSUnderlineStyle.single.rawValue,
                     .underlineColor: NSColor.linkColor
@@ -188,9 +188,10 @@ final class SettingsPanel: NSPanel {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
 
+        let separator2 = makeSeparator()
         let mainStack = NSStackView(
-            views: [clipboardRow, localSection, cloudSection, separator, hotkeyRow,
-                    launchAtLoginCheckbox, spacer, buttonRow]
+            views: [hotkeyRow, separator, clipboardRow, localSection, cloudSection,
+                    separator2, launchAtLoginCheckbox, spacer, buttonRow]
         )
         mainStack.orientation = .vertical
         mainStack.alignment = .leading
@@ -212,12 +213,14 @@ final class SettingsPanel: NSPanel {
             views: [buttonRow, folderRow, localRow, clipboardRow, cloudRow, keyRow],
             stack: mainStack
         )
-        separator.leadingAnchor.constraint(
-            equalTo: mainStack.leadingAnchor, constant: 20
-        ).isActive = true
-        separator.trailingAnchor.constraint(
-            equalTo: mainStack.trailingAnchor, constant: -20
-        ).isActive = true
+        for sep in [separator, separator2] {
+            sep.leadingAnchor.constraint(
+                equalTo: mainStack.leadingAnchor, constant: 20
+            ).isActive = true
+            sep.trailingAnchor.constraint(
+                equalTo: mainStack.trailingAnchor, constant: -20
+            ).isActive = true
+        }
     }
 
     private func makeSmallLinkButton(title: String, url: String) -> NSTextField {

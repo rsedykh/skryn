@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var annotationWindow: AnnotationWindow?
     private var hotKeyRef: EventHotKeyRef?
     private var settingsPanel: SettingsPanel?
+    private var aboutPanel: AboutPanel?
     private var uploadTask: Task<Void, Never>?
     private var iconTimer: Timer?
     private var animationFrameIndex = 0
@@ -133,14 +134,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let settingsItem = NSMenuItem(
-            title: "Settings…", action: #selector(showSaveDestination), keyEquivalent: ","
+            title: "Settings", action: #selector(showSaveDestination), keyEquivalent: ","
         )
         settingsItem.target = self
         settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")
         menu.addItem(settingsItem)
 
+        let aboutItem = NSMenuItem(
+            title: "About", action: #selector(showAbout), keyEquivalent: ""
+        )
+        aboutItem.target = self
+        aboutItem.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: "About")
+        menu.addItem(aboutItem)
+
         menu.addItem(NSMenuItem(
-            title: "Quit Skryn", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"
+            title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"
         ))
 
         statusItem.menu = menu
@@ -413,6 +421,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    // MARK: - About Panel
+
+    @objc private func showAbout() {
+        if let existing = aboutPanel {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        NSApp.setActivationPolicy(.regular)
+        installEditOnlyMenu()
+        NSApp.activate(ignoringOtherApps: true)
+
+        let panel = AboutPanel()
+        panel.delegate = self
+        aboutPanel = panel
+        panel.makeKeyAndOrderFront(nil)
+    }
+
     // MARK: - Settings Panel
 
     @objc private func showSaveDestination() {
@@ -567,9 +593,11 @@ extension AppDelegate: NSWindowDelegate {
             annotationWindow = nil
         } else if window === settingsPanel {
             settingsPanel = nil
+        } else if window === aboutPanel {
+            aboutPanel = nil
         }
 
-        if annotationWindow == nil && settingsPanel == nil {
+        if annotationWindow == nil && settingsPanel == nil && aboutPanel == nil {
             NSApp.mainMenu = nil
             NSApp.hide(nil)
             NSApp.setActivationPolicy(.accessory)
