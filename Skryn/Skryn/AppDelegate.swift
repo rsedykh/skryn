@@ -288,28 +288,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    func uploadDroppedFile(_ url: URL) {
-        guard let publicKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey"),
-              !publicKey.isEmpty else {
-            showRejectedFileIcon()
-            return
-        }
-
-        guard let fileData = try? Data(contentsOf: url) else { return }
-
-        let filename = url.lastPathComponent
-        let utType = UTType(filenameExtension: url.pathExtension) ?? .data
-        let contentType = utType.preferredMIMEType ?? "application/octet-stream"
-
-        guard let cachePath = UploadHistory.cachePNGData(fileData, filename: filename) else { return }
-
-        let upload = RecentUpload(filename: filename, cdnURL: nil, date: Date(), cacheFilePath: cachePath)
-        UploadHistory.add(upload)
-
-        performUpload(
-            fileData: fileData, filename: filename, contentType: contentType,
-            publicKey: publicKey, fallbackSave: nil
-        )
+    func openDroppedImage(_ url: URL) {
+        guard annotationWindow == nil else { return }
+        guard let image = NSImage(contentsOf: url) else { return }
+        showAnnotationWindow(with: image)
     }
 
     func showRejectedFileIcon() {
@@ -638,10 +620,8 @@ final class StatusItemDropView: NSView {
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        guard let urls = fileURLs(from: sender), !urls.isEmpty else { return false }
-        for url in urls {
-            appDelegate?.uploadDroppedFile(url)
-        }
+        guard let urls = fileURLs(from: sender), let url = urls.first else { return false }
+        appDelegate?.openDroppedImage(url)
         return true
     }
 

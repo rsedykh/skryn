@@ -95,7 +95,7 @@ final class AboutPanel: NSPanel {
         para.paragraphSpacing = 20
         result.append(NSAttributedString(
             string: "Click the menu bar camera icon or press the hotkey to take a screenshot. " +
-            "Drag images onto the menu bar icon to upload to the cloud without annotating. " +
+            "Drag an image onto the menu bar icon to annotate it. " +
             "Right-click the menu bar icon for recent uploads and settings.\n",
             attributes: [.font: s.body, .foregroundColor: s.text, .paragraphStyle: para]
         ))
