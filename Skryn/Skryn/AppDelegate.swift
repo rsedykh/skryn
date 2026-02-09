@@ -215,10 +215,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Performs the given save action. Returns false if the action cannot proceed
     /// (e.g. cloud upload without a key configured), so the caller can keep the window open.
     @discardableResult
-    func handleAction(_ action: SaveAction, cgImage: CGImage) -> Bool {
+    func handleAction(_ action: SaveAction, cgImage: CGImage, captureDate: Date) -> Bool {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMddHHmmss"
-        let filename = "skryn-\(formatter.string(from: Date())).png"
+        let filename = "skryn-\(formatter.string(from: captureDate)).png"
 
         switch action {
         case .clipboard:

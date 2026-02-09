@@ -32,7 +32,7 @@ Click the camera icon in the menu bar or press **Cmd+Shift+5** (configurable in 
 - **Delete** — Remove hovered annotation
 - **Cmd+Z / Cmd+Shift+Z** — Undo / Redo
 - **T** — Toggle text mode
-- **U** — Insert UTC timestamp at cursor
+- **U** — Insert capture time (UTC) at cursor
 - **Cmd + + / Cmd + -** — Increase / Decrease text size
 - **Shift + Enter** — new text line (Enter will exit text mode)
 - **Cmd+Enter** and **Option+Enter** and **Control+Enter** — Save to different locations (configurable in Settings)

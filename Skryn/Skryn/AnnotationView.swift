@@ -12,6 +12,7 @@ private class IsolatedUndoTextView: NSTextView {
 final class AnnotationView: NSView {
     weak var appDelegate: AppDelegate?
     private let screenshot: NSImage
+    let captureDate = Date()
     private var annotations: [Annotation] = []
     private var currentAnnotation: Annotation?
     private var dragOrigin: CGPoint = .zero
@@ -745,7 +746,7 @@ final class AnnotationView: NSView {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss 'UTC'"
         formatter.timeZone = TimeZone(identifier: "UTC")
-        let timestamp = formatter.string(from: Date())
+        let timestamp = formatter.string(from: captureDate)
 
         let font = NSFont.boldSystemFont(ofSize: textFontSize)
         let textWidth = (timestamp as NSString).size(withAttributes: [.font: font]).width + 4
@@ -883,7 +884,7 @@ final class AnnotationView: NSView {
             return
         }
 
-        let succeeded = appDelegate?.handleAction(action, cgImage: cgImage) ?? true
+        let succeeded = appDelegate?.handleAction(action, cgImage: cgImage, captureDate: captureDate) ?? true
         if succeeded {
             window?.close()
         }
