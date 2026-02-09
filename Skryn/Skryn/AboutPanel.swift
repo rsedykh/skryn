@@ -124,7 +124,8 @@ final class AboutPanel: NSPanel {
             ("\u{2303} Drag", "Crop screenshot"), ("\u{238B}", "Cancel crop")
         ])
         appendSection(to: result, title: "Text", styles: s, items: [
-            ("T, then click", "Text"), ("\u{23CE} / \u{238B}", "Finalize text"),
+            ("T, then click", "Text"), ("U", "UTC timestamp"),
+            ("\u{23CE} / \u{238B}", "Finalize text"),
             ("\u{21E7}\u{23CE}", "New line"), ("\u{2318}+ / \u{2318}-", "Adjust font size"),
             ("Click text", "Edit")
         ])

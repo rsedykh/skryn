@@ -564,6 +564,12 @@ final class AnnotationView: NSView {
         // When text view is active, let it handle all keys
         if case .editingText = interactionState { return }
 
+        // U key (no modifiers) — insert UTC timestamp at cursor
+        if event.keyCode == 32 && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [] {
+            insertTimestamp()
+            return
+        }
+
         // T key (no modifiers) — toggle text mode
         if event.keyCode == 17 && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [] {
             isTextMode.toggle()
@@ -727,6 +733,28 @@ final class AnnotationView: NSView {
 
         isTextMode = false
         NSCursor.arrow.set()
+        needsDisplay = true
+    }
+
+    private func insertTimestamp() {
+        guard let window = window else { return }
+        let windowPoint = window.mouseLocationOutsideOfEventStream
+        let viewPoint = convert(windowPoint, from: nil)
+        let screenshotPoint = viewToScreenshot(viewPoint)
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss 'UTC'"
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        let timestamp = formatter.string(from: Date())
+
+        let font = NSFont.boldSystemFont(ofSize: textFontSize)
+        let textWidth = (timestamp as NSString).size(withAttributes: [.font: font]).width + 4
+
+        let annotation = Annotation.text(
+            origin: screenshotPoint, width: textWidth,
+            content: timestamp, fontSize: textFontSize
+        )
+        addAnnotation(annotation)
         needsDisplay = true
     }
 
