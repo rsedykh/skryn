@@ -120,8 +120,8 @@ final class AboutPanel: NSPanel {
         ])
         appendSection(to: result, title: "Drawing", styles: s, items: [
             ("Drag", "Arrow"), ("\u{21E7} Drag", "Line"),
-            ("\u{2318} Drag", "Rectangle"), ("\u{2325} Drag", "Blur"),
-            ("\u{2303} Drag", "Crop screenshot"), ("\u{238B}", "Cancel crop")
+            ("\u{2318} Drag", "Rectangle"), ("\u{2303} Drag", "Blur"),
+            ("\u{2325} Drag", "Crop screenshot"), ("\u{238B}", "Cancel crop")
         ])
         appendSection(to: result, title: "Text", styles: s, items: [
             ("T, then click", "Text"), ("U", "Capture time (UTC)"),

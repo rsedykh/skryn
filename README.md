@@ -26,8 +26,8 @@ Click the camera icon in the menu bar or press **Cmd+Shift+5** (configurable in 
 - **Drag** — Arrow
 - **Shift + Drag** — Line
 - **Cmd + Drag** — Rectangle
-- **Option + Drag** — Blur
-- **Control + Drag** — Crop
+- **Option + Drag** — Crop
+- **Control + Drag** — Blur
 - **Esc** — Remove crop
 - **Delete** — Remove hovered annotation
 - **Cmd+Z / Cmd+Shift+Z** — Undo / Redo

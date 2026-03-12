@@ -434,11 +434,11 @@ final class AnnotationView: NSView {
             return
         }
 
-        if dragModifiers.contains(.control) {
+        if dragModifiers.contains(.option) {
             currentAnnotation = .crop(rect: rectFromDrag(origin: dragOrigin, current: point))
         } else if dragModifiers.contains(.command) {
             currentAnnotation = .rectangle(rect: rectFromDrag(origin: dragOrigin, current: point))
-        } else if dragModifiers.contains(.option) {
+        } else if dragModifiers.contains(.control) {
             currentAnnotation = .blur(rect: rectFromDrag(origin: dragOrigin, current: point))
         } else if dragModifiers.contains(.shift) {
             currentAnnotation = .line(from: dragOrigin, to: point)
