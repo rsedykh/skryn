@@ -49,6 +49,7 @@ enum SaveAction: Equatable {
 
 final class SettingsPanel: NSPanel {
     private let folderLabel = NSTextField(labelWithString: "")
+    private var selectedFolderPath: String = ""
     private let chooseButton = NSButton(title: "Change", target: nil, action: nil)
     private let keyField = NSTextField(frame: .zero)
     private let hotkeyLabel = NSTextField(labelWithString: "App shortcut:")
@@ -286,6 +287,7 @@ final class SettingsPanel: NSPanel {
         let folderPath = defaults.string(forKey: "saveFolderPath")
             ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.path
             ?? "~/Desktop"
+        selectedFolderPath = folderPath
         folderLabel.stringValue = abbreviatePath(folderPath)
         folderLabel.toolTip = folderPath
 
@@ -362,6 +364,7 @@ final class SettingsPanel: NSPanel {
 
         panel.beginSheetModal(for: self) { [weak self] response in
             guard let self, response == .OK, let url = panel.url else { return }
+            self.selectedFolderPath = url.path
             self.folderLabel.stringValue = self.abbreviatePath(url.path)
             self.folderLabel.toolTip = url.path
         }
@@ -390,15 +393,13 @@ final class SettingsPanel: NSPanel {
         defaults.removeObject(forKey: "uploadcareCdnBase")
 
         // Persist folder path
-        if let fullPath = folderLabel.toolTip {
-            let desktopPath = FileManager.default.urls(
-                for: .desktopDirectory, in: .userDomainMask
-            ).first?.path
-            if fullPath == desktopPath {
-                defaults.removeObject(forKey: "saveFolderPath")
-            } else {
-                defaults.set(fullPath, forKey: "saveFolderPath")
-            }
+        let desktopPath = FileManager.default.urls(
+            for: .desktopDirectory, in: .userDomainMask
+        ).first?.path
+        if selectedFolderPath == desktopPath {
+            defaults.removeObject(forKey: "saveFolderPath")
+        } else {
+            defaults.set(selectedFolderPath, forKey: "saveFolderPath")
         }
 
         // Persist modifier assignments
