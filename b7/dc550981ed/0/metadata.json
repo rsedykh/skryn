@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "b7dc550981ed",
+  "session_id": "fc01fe78-ce92-43bb-ac85-eb58d74f562b",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-12T15:14:05.310714Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "Skryn/Skryn.xcodeproj/project.pbxproj"
+  ],
+  "agent": "Claude Code",
+  "transcript_identifier_at_start": "5a4b5dd4-d233-4a8c-bce7-feb7137be323",
+  "checkpoint_transcript_start": 329,
+  "transcript_lines_at_start": 329,
+  "token_usage": {
+    "input_tokens": 17,
+    "cache_creation_tokens": 2402,
+    "cache_read_tokens": 936531,
+    "output_tokens": 1493,
+    "api_call_count": 13
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-12T15:14:05.073493Z",
+    "agent_lines": 0,
+    "human_added": 136,
+    "human_modified": 5068,
+    "human_removed": 0,
+    "total_committed": 136,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-rsedykh-GitHub-skryn/fc01fe78-ce92-43bb-ac85-eb58d74f562b.jsonl"
+}

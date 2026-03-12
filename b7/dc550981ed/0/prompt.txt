@@ -1,0 +1,29 @@
+Review the projects code, is it good?
+
+---
+
+Can you change ctrl+drag with opt+drag keybinds (for crop and reduction featuers)? Just make sure that you've updated about section, website, markdown files where it is mentioned.
+
+---
+
+Can you also fix folderTable.toolTip issue and suggest sulution for drawBlur?
+
+---
+
+/btw how do you check?
+
+---
+
+I've already accepted the license while you were working
+
+---
+
+Create three separate commits for these three separate issues
+
+---
+
+Update skryn.app in /Applications and restart it
+
+---
+
+Update Github release with a minor version bump (v0.1.2)

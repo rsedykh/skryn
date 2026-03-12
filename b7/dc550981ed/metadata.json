@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "b7dc550981ed",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "Skryn/Skryn.xcodeproj/project.pbxproj"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b7/dc550981ed/0/metadata.json",
+      "transcript": "/b7/dc550981ed/0/full.jsonl",
+      "context": "/b7/dc550981ed/0/context.md",
+      "content_hash": "/b7/dc550981ed/0/content_hash.txt",
+      "prompt": "/b7/dc550981ed/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 17,
+    "cache_creation_tokens": 2402,
+    "cache_read_tokens": 936531,
+    "output_tokens": 1493,
+    "api_call_count": 13
+  }
+}
