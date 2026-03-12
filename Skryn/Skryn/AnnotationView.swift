@@ -39,6 +39,7 @@ final class AnnotationView: NSView {
     }
 
     private static let blurCIContext = CIContext()
+    private var blurCache: [CGRect: NSImage] = [:]
 
     private lazy var _undoManager = UndoManager()
     override var undoManager: UndoManager? { _undoManager }
@@ -130,8 +131,8 @@ final class AnnotationView: NSView {
             if i == editingTextIdx { continue }
             if case .blur = annotation { draw(annotation) }
         }
-        if let current = currentAnnotation, case .blur = current {
-            draw(current)
+        if let current = currentAnnotation, case .blur(let rect) = current {
+            drawBlur(rect, cache: false)
         }
 
         // Second pass: non-blur annotations
@@ -312,7 +313,12 @@ final class AnnotationView: NSView {
         border.stroke()
     }
 
-    private func drawBlur(_ rect: CGRect) {
+    private func drawBlur(_ rect: CGRect, cache: Bool = true) {
+        if cache, let cached = blurCache[rect] {
+            cached.draw(in: rect)
+            return
+        }
+
         guard let screenshotCG = screenshot.cgImage(forProposedRect: nil, context: nil, hints: nil)
         else { return }
 
@@ -343,6 +349,7 @@ final class AnnotationView: NSView {
         else { return }
 
         let blurredNSImage = NSImage(cgImage: blurredCG, size: rect.size)
+        if cache { blurCache[rect] = blurredNSImage }
         blurredNSImage.draw(in: rect)
     }
 
@@ -824,9 +831,14 @@ final class AnnotationView: NSView {
 
     // MARK: - Annotations + Undo
 
+    private func invalidateBlurCache() {
+        blurCache.removeAll()
+    }
+
     private func replaceAnnotation(at index: Int, with new: Annotation, old: Annotation) {
         guard index < annotations.count else { return }
         annotations[index] = new
+        invalidateBlurCache()
         undoManager?.registerUndo(withTarget: self) { target in
             target.replaceAnnotation(at: index, with: old, old: new)
         }
@@ -841,6 +853,7 @@ final class AnnotationView: NSView {
             }
         }
         annotations.append(annotation)
+        invalidateBlurCache()
         undoManager?.registerUndo(withTarget: self) { target in
             target.removeLastAnnotation()
         }
@@ -853,6 +866,7 @@ final class AnnotationView: NSView {
     private func removeAnnotation(at index: Int) {
         guard index < annotations.count else { return }
         let removed = annotations.remove(at: index)
+        invalidateBlurCache()
         undoManager?.registerUndo(withTarget: self) { target in
             target.insertAnnotation(removed, at: index)
         }
@@ -862,6 +876,7 @@ final class AnnotationView: NSView {
     private func insertAnnotation(_ annotation: Annotation, at index: Int) {
         guard index <= annotations.count else { return }
         annotations.insert(annotation, at: index)
+        invalidateBlurCache()
         undoManager?.registerUndo(withTarget: self) { target in
             target.removeAnnotation(at: index)
         }
@@ -870,6 +885,7 @@ final class AnnotationView: NSView {
 
     private func removeLastAnnotation() {
         guard let removed = annotations.popLast() else { return }
+        invalidateBlurCache()
         undoManager?.registerUndo(withTarget: self) { target in
             target.addAnnotation(removed)
         }
