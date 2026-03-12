@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "7dc612c82384",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "CLAUDE.md",
+    "README.md",
+    "Skryn/Skryn/AboutPanel.swift",
+    "Skryn/Skryn/AnnotationView.swift",
+    "Skryn/Skryn/SettingsPanel.swift",
+    "docs/index.html"
+  ],
+  "sessions": [
+    {
+      "metadata": "/7d/c612c82384/0/metadata.json",
+      "transcript": "/7d/c612c82384/0/full.jsonl",
+      "context": "/7d/c612c82384/0/context.md",
+      "content_hash": "/7d/c612c82384/0/content_hash.txt",
+      "prompt": "/7d/c612c82384/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 72,
+    "cache_creation_tokens": 72592,
+    "cache_read_tokens": 2815068,
+    "output_tokens": 14528,
+    "api_call_count": 58
+  }
+}
