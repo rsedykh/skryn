@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "6d85a6945452",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "Skryn/Skryn.xcodeproj/project.pbxproj",
+    "Skryn/Skryn/AnnotationWindow.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6d/85a6945452/0/metadata.json",
+      "transcript": "/6d/85a6945452/0/full.jsonl",
+      "context": "/6d/85a6945452/0/context.md",
+      "content_hash": "/6d/85a6945452/0/content_hash.txt",
+      "prompt": "/6d/85a6945452/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 42,
+    "cache_creation_tokens": 34221,
+    "cache_read_tokens": 1227562,
+    "output_tokens": 6595,
+    "api_call_count": 28
+  }
+}

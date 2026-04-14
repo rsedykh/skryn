@@ -1,0 +1,31 @@
+If image file is small and dragndropped on the menu bar icon, don’t make it bigger to fit the "box". See original image file and screenshot how it appeared in the app. [Image #1] [Image #2]
+
+---
+
+[Image source: /Users/rsedykh/Desktop/original.png]
+
+[Image source: /Users/rsedykh/Desktop/inapp.png]
+
+---
+
+Are you sure you've rebuilt it?
+
+---
+
+I think it restarts old app
+
+---
+
+After I give permissions it restarts from the /Applications
+
+---
+
+Just open the folder with built app for me
+
+---
+
+Yes, I had to remove old app and place new one at the same place instead
+
+---
+
+Commit, push, make new release
