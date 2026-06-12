@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "577efa256465",
+  "session_id": "4ce38165-7683-4456-b90c-14c71ca7bdfa",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-12T22:28:22.655355Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".swiftlint.yml",
+    "CLAUDE.md",
+    "Skryn/Skryn/AboutPanel.swift",
+    "Skryn/Skryn/Annotation.swift",
+    "Skryn/Skryn/AnnotationView.swift",
+    "Skryn/Skryn/AppDelegate.swift",
+    "Skryn/Skryn/ScreenCapture.swift",
+    "Skryn/Skryn/SettingsPanel.swift",
+    "Skryn/SkrynTests/AnnotationViewTests.swift"
+  ],
+  "agent": "Claude Code",
+  "transcript_identifier_at_start": "a1aeda36-ec0d-4e35-afcc-8154e28ade68",
+  "token_usage": {
+    "input_tokens": 22029,
+    "cache_creation_tokens": 325255,
+    "cache_read_tokens": 6381101,
+    "output_tokens": 60136,
+    "api_call_count": 48
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-12T22:28:22.471374Z",
+    "agent_lines": 0,
+    "human_added": 191,
+    "human_modified": 1248,
+    "human_removed": 0,
+    "total_committed": 504,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-rsedykh-GitHub-skryn/4ce38165-7683-4456-b90c-14c71ca7bdfa.jsonl"
+}

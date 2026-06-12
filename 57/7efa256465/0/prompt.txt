@@ -1,0 +1,5 @@
+Look into the codebase, check if it's good. It's a screenshot app that I use everyday. It works good for me and I haven't reached to update it with anything because it ok, but maybe you can see some improvements both in code and in features (that's a hard ask, but lets see what you suggest).
+
+---
+
+You can commit existing changes. You can apply code findings (filenames for 1 second is not needed). Step badges is ok, just hovering and pressing 1-0 and having them in the circle will be a nice feature. Maybe even reading quick 1-2 as 12 for example. Ellipse with shift+cmd is good idea. Switching colors with C key is good idea too, red and blue please. Don't need to annotate clipboard. As well as no need for drag-out export. No need for recent captures for now.
