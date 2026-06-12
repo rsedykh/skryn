@@ -10,6 +10,32 @@ final class AnnotationViewTests: XCTestCase {
         return AnnotationView(frame: NSRect(origin: .zero, size: imageSize), screenshot: image)
     }
 
+    private func withModifierDefaults(_ values: [String: String], _ body: () -> Void) {
+        let defaults = UserDefaults.standard
+        let keys = ["modifierLocal", "modifierClipboard", "modifierCloud"]
+        let savedValues = keys.map { ($0, defaults.object(forKey: $0)) }
+
+        for key in keys {
+            if let value = values[key] {
+                defaults.set(value, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        defer {
+            for (key, value) in savedValues {
+                if let value {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+        }
+
+        body()
+    }
+
     func testRectFromDrag_topLeftToBottomRight() {
         let view = makeView()
         let rect = view.rectFromDrag(
@@ -439,39 +465,29 @@ final class AnnotationViewTests: XCTestCase {
     // MARK: - SaveAction modifier mapping
 
     func testSaveActionMapping_defaultModifiers() {
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: "modifierLocal")
-        defaults.removeObject(forKey: "modifierClipboard")
-        defaults.removeObject(forKey: "modifierCloud")
-
-        XCTAssertEqual(SaveAction.action(for: .command), .clipboard)
-        XCTAssertEqual(SaveAction.action(for: .option), .local)
-        XCTAssertEqual(SaveAction.action(for: .control), .cloud)
+        withModifierDefaults([:]) {
+            XCTAssertEqual(SaveAction.action(for: .command), .clipboard)
+            XCTAssertEqual(SaveAction.action(for: .option), .local)
+            XCTAssertEqual(SaveAction.action(for: .control), .cloud)
+        }
     }
 
     func testSaveActionMapping_customModifiers() {
-        let defaults = UserDefaults.standard
-        defaults.set("opt", forKey: "modifierLocal")
-        defaults.set("ctrl", forKey: "modifierClipboard")
-        defaults.set("cmd", forKey: "modifierCloud")
-
-        XCTAssertEqual(SaveAction.action(for: .option), .local)
-        XCTAssertEqual(SaveAction.action(for: .control), .clipboard)
-        XCTAssertEqual(SaveAction.action(for: .command), .cloud)
-
-        // Clean up
-        defaults.removeObject(forKey: "modifierLocal")
-        defaults.removeObject(forKey: "modifierClipboard")
-        defaults.removeObject(forKey: "modifierCloud")
+        withModifierDefaults([
+            "modifierLocal": "opt",
+            "modifierClipboard": "ctrl",
+            "modifierCloud": "cmd"
+        ]) {
+            XCTAssertEqual(SaveAction.action(for: .option), .local)
+            XCTAssertEqual(SaveAction.action(for: .control), .clipboard)
+            XCTAssertEqual(SaveAction.action(for: .command), .cloud)
+        }
     }
 
     func testSaveActionMapping_multipleModifiers_returnsNil() {
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: "modifierLocal")
-        defaults.removeObject(forKey: "modifierClipboard")
-        defaults.removeObject(forKey: "modifierCloud")
-
-        let combined: NSEvent.ModifierFlags = [.command, .option]
-        XCTAssertNil(SaveAction.action(for: combined))
+        withModifierDefaults([:]) {
+            let combined: NSEvent.ModifierFlags = [.command, .option]
+            XCTAssertNil(SaveAction.action(for: combined))
+        }
     }
 }

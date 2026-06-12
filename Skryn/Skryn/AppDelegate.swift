@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKeyRef: EventHotKeyRef?
     private var settingsPanel: SettingsPanel?
     private var aboutPanel: AboutPanel?
-    private var uploadTask: Task<Void, Never>?
+    private var uploadTasks: [UUID: Task<Void, Never>] = [:]
     private var iconTimer: Timer?
     private var animationFrameIndex = 0
     private var uploadFailed = false
@@ -231,11 +231,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         case .local:
             guard let pngData = pngData(from: cgImage) else {
-                print("AppDelegate: failed to create PNG data")
-                return true
+                reportSaveFailure("Save failed: could not create PNG data")
+                return false
             }
-            saveLocally(pngData: pngData, filename: filename)
-            return true
+            return saveLocally(pngData: pngData, filename: filename)
 
         case .cloud:
             guard let publicKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey"),
@@ -244,15 +243,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return false
             }
             guard let pngData = pngData(from: cgImage) else {
-                print("AppDelegate: failed to create PNG data")
-                return true
+                reportSaveFailure("Upload failed: could not create PNG data")
+                return false
             }
-            uploadToCloud(pngData: pngData, filename: filename, publicKey: publicKey)
-            return true
+            return uploadToCloud(pngData: pngData, filename: filename, publicKey: publicKey)
         }
     }
 
-    private func saveLocally(pngData: Data, filename: String) {
+    @discardableResult
+    private func saveLocally(pngData: Data, filename: String) -> Bool {
         let saveFolder: URL
         if let customPath = UserDefaults.standard.string(forKey: "saveFolderPath") {
             saveFolder = URL(fileURLWithPath: customPath)
@@ -262,21 +261,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let fileURL = saveFolder.appendingPathComponent(filename)
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                try pngData.write(to: fileURL)
-                print("Saved: \(fileURL.path)")
-            } catch {
-                print("AppDelegate: save failed — \(error.localizedDescription)")
-            }
+        do {
+            try FileManager.default.createDirectory(at: saveFolder, withIntermediateDirectories: true)
+            try pngData.write(to: fileURL)
+            print("Saved: \(fileURL.path)")
+            return true
+        } catch {
+            reportSaveFailure("Save failed: \(error.localizedDescription)")
+            return false
         }
     }
 
-    private func uploadToCloud(pngData: Data, filename: String, publicKey: String) {
+    private func reportSaveFailure(_ message: String) {
+        lastUploadError = message
+        NSSound.beep()
+        print("AppDelegate: \(message)")
+    }
+
+    private func uploadToCloud(pngData: Data, filename: String, publicKey: String) -> Bool {
         guard let cachePath = UploadHistory.cachePNGData(pngData, filename: filename) else {
             print("AppDelegate: failed to cache PNG, falling back to local save")
-            saveLocally(pngData: pngData, filename: filename)
-            return
+            return saveLocally(pngData: pngData, filename: filename)
         }
 
         let upload = RecentUpload(filename: filename, cdnURL: nil, date: Date(), cacheFilePath: cachePath)
@@ -286,6 +291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fileData: pngData, filename: filename, contentType: "image/png",
             publicKey: publicKey, fallbackSave: pngData
         )
+        return true
     }
 
     func openDroppedImage(_ url: URL) {
@@ -319,12 +325,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// If `fallbackSave` is provided, saves locally on upload failure.
     private func performUpload(fileData: Data, filename: String, contentType: String,
                                publicKey: String, fallbackSave: Data?) {
+        let uploadID = UUID()
         let cdnBase = UploadcareService.cdnBase(forPublicKey: publicKey)
-        lastUploadError = nil
+        if uploadTasks.isEmpty {
+            uploadFailed = false
+            lastUploadError = nil
+        }
         startIconAnimation()
 
-        uploadTask?.cancel()
-        uploadTask = Task {
+        let task = Task {
             do {
                 let cdnURL = try await UploadcareService.upload(
                     fileData: fileData, filename: filename, contentType: contentType,
@@ -333,21 +342,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await MainActor.run {
                     UploadHistory.updateCDNURL(for: filename, url: cdnURL)
                     copyToClipboard(cdnURL)
-                    stopIconAnimation(failed: false)
-                    self.lastUploadError = nil
+                    if !self.uploadFailed {
+                        self.lastUploadError = nil
+                    }
+                    self.finishUpload(id: uploadID, failed: false)
                     print("Uploaded: \(cdnURL)")
                 }
             } catch {
                 await MainActor.run {
-                    stopIconAnimation(failed: true)
                     self.lastUploadError = "Upload failed: \(error.localizedDescription)"
                     if let pngData = fallbackSave {
                         self.saveLocally(pngData: pngData, filename: filename)
                     }
+                    self.finishUpload(id: uploadID, failed: true)
                     print("Upload failed: \(error.localizedDescription)")
                 }
             }
         }
+        uploadTasks[uploadID] = task
     }
 
     @objc private func copyUploadURL(_ sender: NSMenuItem) {
@@ -380,7 +392,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Icon Animation
 
     private func startIconAnimation() {
-        uploadFailed = false
+        guard iconTimer == nil else { return }
         animationFrameIndex = 0
 
         iconTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
@@ -389,6 +401,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.animationFrameIndex % self.spinnerImages.count
             ]
             self.animationFrameIndex += 1
+        }
+    }
+
+    private func finishUpload(id: UUID, failed: Bool) {
+        uploadTasks[id] = nil
+        if failed {
+            uploadFailed = true
+        }
+        if uploadTasks.isEmpty {
+            stopIconAnimation(failed: uploadFailed)
         }
     }
 
@@ -520,7 +542,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let keyCode = defaults.object(forKey: "hotkeyKeyCode") as? UInt32 ?? UInt32(kVK_ANSI_5)
         let mods = defaults.object(forKey: "hotkeyModifiers") as? UInt32 ?? UInt32(cmdKey | shiftKey)
 
-        var hotKeyID = EventHotKeyID(signature: OSType(0x534B5259), id: 1)
+        let hotKeyID = EventHotKeyID(signature: OSType(0x534B5259), id: 1)
         RegisterEventHotKey(
             keyCode,
             mods,

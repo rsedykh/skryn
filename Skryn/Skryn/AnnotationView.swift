@@ -9,6 +9,20 @@ private class IsolatedUndoTextView: NSTextView {
     override var undoManager: UndoManager? { _ownUndoManager }
 }
 
+private struct BlurCacheKey: Hashable {
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+
+    init(_ rect: CGRect) {
+        x = Double(rect.origin.x)
+        y = Double(rect.origin.y)
+        width = Double(rect.width)
+        height = Double(rect.height)
+    }
+}
+
 final class AnnotationView: NSView {
     weak var appDelegate: AppDelegate?
     private let screenshot: NSImage
@@ -39,7 +53,7 @@ final class AnnotationView: NSView {
     }
 
     private static let blurCIContext = CIContext()
-    private var blurCache: [CGRect: NSImage] = [:]
+    private var blurCache: [BlurCacheKey: NSImage] = [:]
 
     private lazy var _undoManager = UndoManager()
     override var undoManager: UndoManager? { _undoManager }
@@ -314,7 +328,8 @@ final class AnnotationView: NSView {
     }
 
     private func drawBlur(_ rect: CGRect, cache: Bool = true) {
-        if cache, let cached = blurCache[rect] {
+        let cacheKey = BlurCacheKey(rect)
+        if cache, let cached = blurCache[cacheKey] {
             cached.draw(in: rect)
             return
         }
@@ -326,10 +341,10 @@ final class AnnotationView: NSView {
         let scaleX = CGFloat(screenshotCG.width) / pointSize.width
         let scaleY = CGFloat(screenshotCG.height) / pointSize.height
 
-        // Convert screenshot-point rect to pixel rect (CGImage uses bottom-left origin)
+        // CGImage.cropping(to:) uses the same top-left image coordinates as the captured screenshot.
         let pixelRect = CGRect(
             x: rect.origin.x * scaleX,
-            y: (pointSize.height - rect.origin.y - rect.height) * scaleY,
+            y: rect.origin.y * scaleY,
             width: rect.width * scaleX,
             height: rect.height * scaleY
         ).integral
@@ -349,7 +364,7 @@ final class AnnotationView: NSView {
         else { return }
 
         let blurredNSImage = NSImage(cgImage: blurredCG, size: rect.size)
-        if cache { blurCache[rect] = blurredNSImage }
+        if cache { blurCache[cacheKey] = blurredNSImage }
         blurredNSImage.draw(in: rect)
     }
 
