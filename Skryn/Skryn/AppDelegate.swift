@@ -543,7 +543,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let mods = defaults.object(forKey: "hotkeyModifiers") as? UInt32 ?? UInt32(cmdKey | shiftKey)
 
         let hotKeyID = EventHotKeyID(signature: OSType(0x534B5259), id: 1)
-        RegisterEventHotKey(
+        let status = RegisterEventHotKey(
             keyCode,
             mods,
             hotKeyID,
@@ -551,6 +551,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             0,
             &hotKeyRef
         )
+        if status != noErr || hotKeyRef == nil {
+            let shortcut = hotkeyDisplayString(keyCode: keyCode, carbonModifiers: mods)
+            lastUploadError = "Hotkey \(shortcut) unavailable — it may be taken by another app"
+        }
     }
 
     fileprivate func hotkeyPressed() {
@@ -564,18 +568,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Capture
 
+    /// The screen the mouse cursor is on, falling back to the main screen.
+    private func screenWithMouse() -> NSScreen? {
+        let mouseLocation = NSEvent.mouseLocation
+        return NSScreen.screens.first { $0.frame.contains(mouseLocation) } ?? NSScreen.main
+    }
+
     private func captureScreen() {
+        guard let screen = screenWithMouse() else { return }
+        let displayID = ScreenCapture.displayID(for: screen)
+        let scale = max(screen.backingScaleFactor, 1)
         Task {
-            guard let screenshot = await ScreenCapture.capture() else { return }
+            guard let screenshot = await ScreenCapture.capture(displayID: displayID, scale: scale)
+            else { return }
 
             await MainActor.run {
-                showAnnotationWindow(with: screenshot)
+                let target = NSScreen.screens.first { ScreenCapture.displayID(for: $0) == displayID }
+                showAnnotationWindow(with: screenshot, on: target)
             }
         }
     }
 
-    private func showAnnotationWindow(with screenshot: NSImage) {
-        guard let screen = NSScreen.main else { return }
+    private func showAnnotationWindow(with screenshot: NSImage, on screen: NSScreen? = nil) {
+        guard let screen = screen ?? screenWithMouse() else { return }
 
         let window = AnnotationWindow(screen: screen, screenshot: screenshot)
         (window.contentView as? AnnotationView)?.appDelegate = self

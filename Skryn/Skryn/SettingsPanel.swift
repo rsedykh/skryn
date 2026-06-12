@@ -22,6 +22,12 @@ enum SaveModifier: String, CaseIterable {
         case .ctrl: return .control
         }
     }
+
+    /// Reads a configured modifier from UserDefaults, falling back to the given default.
+    static func configured(forKey key: String, default fallback: SaveModifier) -> SaveModifier {
+        guard let raw = UserDefaults.standard.string(forKey: key) else { return fallback }
+        return SaveModifier(rawValue: raw) ?? fallback
+    }
 }
 
 enum SaveAction: Equatable {
@@ -29,16 +35,9 @@ enum SaveAction: Equatable {
 
     static func action(for flags: NSEvent.ModifierFlags) -> SaveAction? {
         let relevant = flags.intersection([.command, .option, .control])
-        let defaults = UserDefaults.standard
-        let localMod = SaveModifier(
-            rawValue: defaults.string(forKey: "modifierLocal") ?? "opt"
-        ) ?? .opt
-        let clipboardMod = SaveModifier(
-            rawValue: defaults.string(forKey: "modifierClipboard") ?? "cmd"
-        ) ?? .cmd
-        let cloudMod = SaveModifier(
-            rawValue: defaults.string(forKey: "modifierCloud") ?? "ctrl"
-        ) ?? .ctrl
+        let localMod = SaveModifier.configured(forKey: "modifierLocal", default: .opt)
+        let clipboardMod = SaveModifier.configured(forKey: "modifierClipboard", default: .cmd)
+        let cloudMod = SaveModifier.configured(forKey: "modifierCloud", default: .ctrl)
 
         if relevant == localMod.flags { return .local }
         if relevant == clipboardMod.flags { return .clipboard }

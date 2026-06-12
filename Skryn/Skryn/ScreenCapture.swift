@@ -2,7 +2,13 @@ import AppKit
 import ScreenCaptureKit
 
 struct ScreenCapture {
-    static func capture() async -> NSImage? {
+    /// Returns the display ID of the given screen, falling back to the main display.
+    static func displayID(for screen: NSScreen) -> CGDirectDisplayID {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        return screen.deviceDescription[key] as? CGDirectDisplayID ?? CGMainDisplayID()
+    }
+
+    static func capture(displayID targetDisplayID: CGDirectDisplayID, scale: CGFloat) async -> NSImage? {
         let content: SCShareableContent
         do {
             content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
@@ -11,9 +17,8 @@ struct ScreenCapture {
             return nil
         }
 
-        let mainDisplayID = CGMainDisplayID()
-        guard let display = content.displays.first(where: { $0.displayID == mainDisplayID }) else {
-            print("ScreenCapture: main display not found")
+        guard let display = content.displays.first(where: { $0.displayID == targetDisplayID }) else {
+            print("ScreenCapture: display not found")
             return nil
         }
 
@@ -23,8 +28,8 @@ struct ScreenCapture {
         let filter = SCContentFilter(display: display, excludingApplications: excludedApps, exceptingWindows: [])
 
         let config = SCStreamConfiguration()
-        config.width = display.width * 2
-        config.height = display.height * 2
+        config.width = Int(CGFloat(display.width) * scale)
+        config.height = Int(CGFloat(display.height) * scale)
         config.scalesToFit = false
         config.showsCursor = false
 
