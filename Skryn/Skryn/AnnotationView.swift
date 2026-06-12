@@ -43,6 +43,11 @@ final class AnnotationView: NSView {
     private var hoveredAnnotationIndex: Int?
     private var isTextMode = false
     private var textFontSize: CGFloat = 24
+    private var currentColor: AnnotationColor = .red
+
+    /// Last badge placed via a digit key, for combining quick presses into one number (1, 2 → 12)
+    private var lastBadge: (index: Int, time: Date)?
+    private static let badgeCombineInterval: TimeInterval = 0.5
 
     /// Rect where the screenshot is drawn on screen
     private var screenshotRect: NSRect { bounds }
@@ -175,7 +180,7 @@ final class AnnotationView: NSView {
 
     private func drawHandles(for annotation: Annotation) {
         // Draw dotted border for text annotations
-        if case .text(let origin, let width, let content, let fontSize) = annotation {
+        if case .text(let origin, let width, let content, let fontSize, _) = annotation {
             let padding: CGFloat = 4.0 / screenshotToViewScale()
             let baseRect = Annotation.textBoundingRect(
                 origin: origin, width: width, content: content, fontSize: fontSize
@@ -248,23 +253,27 @@ final class AnnotationView: NSView {
 
     private func draw(_ annotation: Annotation) {
         switch annotation {
-        case .arrow(let from, let to):
-            drawArrow(from: from, to: to)
-        case .line(let from, let to):
-            drawLine(from: from, to: to)
-        case .rectangle(let rect):
-            drawRectangle(rect)
+        case .arrow(let from, let to, let color):
+            drawArrow(from: from, to: to, color: color.nsColor)
+        case .line(let from, let to, let color):
+            drawLine(from: from, to: to, color: color.nsColor)
+        case .rectangle(let rect, let color):
+            drawRectangle(rect, color: color.nsColor)
+        case .ellipse(let rect, let color):
+            drawEllipse(rect, color: color.nsColor)
         case .crop(let rect):
             drawCrop(rect)
-        case .text(let origin, let width, let content, let fontSize):
-            drawText(origin: origin, width: width, content: content, fontSize: fontSize)
+        case .text(let origin, let width, let content, let fontSize, let color):
+            drawText(origin: origin, width: width, content: content,
+                     fontSize: fontSize, color: color.nsColor)
         case .blur(let rect):
             drawBlur(rect)
+        case .badge(let center, let number, let color):
+            drawBadge(center: center, number: number, color: color.nsColor)
         }
     }
 
-    private func drawArrow(from: CGPoint, to: CGPoint) {
-        let color = NSColor.red
+    private func drawArrow(from: CGPoint, to: CGPoint, color: NSColor) {
         color.setStroke()
         color.setFill()
 
@@ -296,8 +305,8 @@ final class AnnotationView: NSView {
         head.fill()
     }
 
-    private func drawLine(from: CGPoint, to: CGPoint) {
-        NSColor.red.setStroke()
+    private func drawLine(from: CGPoint, to: CGPoint, color: NSColor) {
+        color.setStroke()
         let path = NSBezierPath()
         path.lineWidth = 3.0
         path.move(to: from)
@@ -305,11 +314,36 @@ final class AnnotationView: NSView {
         path.stroke()
     }
 
-    private func drawRectangle(_ rect: CGRect) {
-        NSColor.red.setStroke()
+    private func drawRectangle(_ rect: CGRect, color: NSColor) {
+        color.setStroke()
         let path = NSBezierPath(rect: rect)
         path.lineWidth = 3.0
         path.stroke()
+    }
+
+    private func drawEllipse(_ rect: CGRect, color: NSColor) {
+        color.setStroke()
+        let path = NSBezierPath(ovalIn: rect)
+        path.lineWidth = 3.0
+        path.stroke()
+    }
+
+    private func drawBadge(center: CGPoint, number: Int, color: NSColor) {
+        let radius = Annotation.badgeRadius
+        let circleRect = CGRect(
+            x: center.x - radius, y: center.y - radius,
+            width: radius * 2, height: radius * 2
+        )
+        color.setFill()
+        NSBezierPath(ovalIn: circleRect).fill()
+
+        let label = String(number)
+        let fontSize: CGFloat = label.count > 2 ? 14 : 18
+        let font = NSFont.boldSystemFont(ofSize: fontSize)
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.white]
+        let size = (label as NSString).size(withAttributes: attrs)
+        let origin = CGPoint(x: center.x - size.width / 2, y: center.y - size.height / 2)
+        (label as NSString).draw(at: origin, withAttributes: attrs)
     }
 
     private func drawCrop(_ rect: CGRect) {
@@ -368,11 +402,12 @@ final class AnnotationView: NSView {
         blurredNSImage.draw(in: rect)
     }
 
-    private func drawText(origin: CGPoint, width: CGFloat, content: String, fontSize: CGFloat) {
+    private func drawText(origin: CGPoint, width: CGFloat, content: String,
+                          fontSize: CGFloat, color: NSColor) {
         let font = NSFont.boldSystemFont(ofSize: fontSize)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: NSColor.red
+            .foregroundColor: color
         ]
         let rect = Annotation.textBoundingRect(
             origin: origin, width: width, content: content, fontSize: fontSize
@@ -387,6 +422,7 @@ final class AnnotationView: NSView {
         let viewPoint = convert(event.locationInWindow, from: nil)
         let screenshotPoint = viewToScreenshot(viewPoint)
         dragModifiers = event.modifierFlags
+        lastBadge = nil
 
         // If editing text: clicks inside the text view are handled by it;
         // clicks outside finalize editing and continue to handle/body hit testing
@@ -456,16 +492,19 @@ final class AnnotationView: NSView {
             return
         }
 
-        if dragModifiers.contains(.option) {
-            currentAnnotation = .crop(rect: rectFromDrag(origin: dragOrigin, current: point))
+        let dragRect = rectFromDrag(origin: dragOrigin, current: point)
+        if dragModifiers.contains(.command) && dragModifiers.contains(.shift) {
+            currentAnnotation = .ellipse(rect: dragRect, color: currentColor)
+        } else if dragModifiers.contains(.option) {
+            currentAnnotation = .crop(rect: dragRect)
         } else if dragModifiers.contains(.command) {
-            currentAnnotation = .rectangle(rect: rectFromDrag(origin: dragOrigin, current: point))
+            currentAnnotation = .rectangle(rect: dragRect, color: currentColor)
         } else if dragModifiers.contains(.control) {
-            currentAnnotation = .blur(rect: rectFromDrag(origin: dragOrigin, current: point))
+            currentAnnotation = .blur(rect: dragRect)
         } else if dragModifiers.contains(.shift) {
-            currentAnnotation = .line(from: dragOrigin, to: point)
+            currentAnnotation = .line(from: dragOrigin, to: point, color: currentColor)
         } else {
-            currentAnnotation = .arrow(from: dragOrigin, to: point)
+            currentAnnotation = .arrow(from: dragOrigin, to: point, color: currentColor)
         }
 
         needsDisplay = true
@@ -587,32 +626,8 @@ final class AnnotationView: NSView {
         // When text view is active, let it handle all keys
         if case .editingText = interactionState { return }
 
-        // U key (no modifiers) — insert UTC timestamp at cursor
-        if event.keyCode == 32 && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [] {
-            insertTimestamp()
-            return
-        }
-
-        // T key (no modifiers) — toggle text mode
-        if event.keyCode == 17 && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [] {
-            isTextMode.toggle()
-            if isTextMode {
-                NSCursor.iBeam.set()
-            } else {
-                NSCursor.arrow.set()
-            }
-            return
-        }
-
         if event.keyCode == 53 { // ESC
-            if isTextMode {
-                isTextMode = false
-                NSCursor.arrow.set()
-                return
-            }
-            for i in stride(from: annotations.count - 1, through: 0, by: -1) {
-                if case .crop = annotations[i] { removeAnnotation(at: i) }
-            }
+            handleEscape()
             return
         }
 
@@ -625,7 +640,83 @@ final class AnnotationView: NSView {
             return
         }
 
+        let noModifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == []
+        if noModifiers, handleUnmodifiedKey(event.keyCode) { return }
+
         super.keyDown(with: event)
+    }
+
+    private func handleEscape() {
+        if isTextMode {
+            isTextMode = false
+            NSCursor.arrow.set()
+            return
+        }
+        for i in stride(from: annotations.count - 1, through: 0, by: -1) {
+            if case .crop = annotations[i] { removeAnnotation(at: i) }
+        }
+    }
+
+    /// Handles single-key shortcuts (no modifiers). Returns true if the key was consumed.
+    private func handleUnmodifiedKey(_ keyCode: UInt16) -> Bool {
+        switch keyCode {
+        case 32: // U — insert UTC timestamp at cursor
+            insertTimestamp()
+            return true
+        case 17: // T — toggle text mode
+            isTextMode.toggle()
+            (isTextMode ? NSCursor.iBeam : NSCursor.arrow).set()
+            return true
+        case 8: // C — toggle color (red/blue)
+            toggleColor()
+            return true
+        default:
+            // Digit keys — place numbered badge at cursor
+            if let digit = Self.digitKeyCodes[keyCode] {
+                placeBadge(digit: digit)
+                return true
+            }
+            return false
+        }
+    }
+
+    /// Layout-independent key codes for the digit row, 1 through 0
+    private static let digitKeyCodes: [UInt16: Int] = [
+        18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9, 29: 0
+    ]
+
+    /// Places a numbered badge at the cursor. A digit pressed shortly after the
+    /// previous one extends that badge's number instead (1, 2 → 12).
+    private func placeBadge(digit: Int) {
+        let now = Date()
+        if let last = lastBadge,
+           now.timeIntervalSince(last.time) < Self.badgeCombineInterval,
+           last.index < annotations.count,
+           case .badge(let center, let number, let color) = annotations[last.index],
+           number < 10 {
+            let combined = Annotation.badge(center: center, number: number * 10 + digit, color: color)
+            replaceAnnotation(at: last.index, with: combined, old: annotations[last.index])
+            lastBadge = (last.index, now)
+            return
+        }
+
+        guard let window = window else { return }
+        let viewPoint = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let screenshotPoint = viewToScreenshot(viewPoint)
+        addAnnotation(.badge(center: screenshotPoint, number: digit, color: currentColor))
+        lastBadge = (annotations.count - 1, now)
+    }
+
+    /// Toggles the hovered annotation's color, or the drawing color when nothing is hovered
+    private func toggleColor() {
+        if let idx = hoveredAnnotationIndex, idx < annotations.count,
+           let color = annotations[idx].color {
+            currentColor = color.toggled
+            replaceAnnotation(at: idx, with: annotations[idx].withColor(currentColor),
+                              old: annotations[idx])
+            return
+        }
+        currentColor = currentColor.toggled
     }
 
     @objc func undo(_ sender: Any?) {
@@ -672,7 +763,9 @@ final class AnnotationView: NSView {
     }
 
     private func startEditingTextAnnotation(at index: Int) {
-        guard case .text(let origin, let width, let content, let fontSize) = annotations[index] else { return }
+        guard case .text(let origin, let width, let content, let fontSize, let color) = annotations[index]
+        else { return }
+        currentColor = color
         let scale = screenshotToViewScale()
         let viewOrigin = screenshotToView(origin)
         let viewWidth = width * scale
@@ -706,10 +799,11 @@ final class AnnotationView: NSView {
         textView.maxSize = NSSize(width: frame.width, height: CGFloat.greatestFiniteMagnitude)
 
         let font = NSFont.boldSystemFont(ofSize: fontSize)
+        let textColor = currentColor.nsColor
         textView.font = font
-        textView.textColor = .red
-        textView.insertionPointColor = .red
-        textView.typingAttributes = [.font: font, .foregroundColor: NSColor.red]
+        textView.textColor = textColor
+        textView.insertionPointColor = textColor
+        textView.typingAttributes = [.font: font, .foregroundColor: textColor]
 
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
@@ -739,7 +833,7 @@ final class AnnotationView: NSView {
             } else {
                 let newAnnotation = Annotation.text(
                     origin: screenshotOrigin, width: screenshotWidth,
-                    content: content, fontSize: textFontSize
+                    content: content, fontSize: textFontSize, color: currentColor
                 )
                 let old = annotations[idx]
                 replaceAnnotation(at: idx, with: newAnnotation, old: old)
@@ -748,7 +842,7 @@ final class AnnotationView: NSView {
             if !content.isEmpty {
                 let annotation = Annotation.text(
                     origin: screenshotOrigin, width: screenshotWidth,
-                    content: content, fontSize: textFontSize
+                    content: content, fontSize: textFontSize, color: currentColor
                 )
                 addAnnotation(annotation)
             }
@@ -775,7 +869,7 @@ final class AnnotationView: NSView {
 
         let annotation = Annotation.text(
             origin: screenshotPoint, width: textWidth,
-            content: timestamp, fontSize: textFontSize
+            content: timestamp, fontSize: textFontSize, color: currentColor
         )
         addAnnotation(annotation)
         needsDisplay = true
@@ -789,7 +883,7 @@ final class AnnotationView: NSView {
         let viewFontSize = newSize * scale
         let font = NSFont.boldSystemFont(ofSize: viewFontSize)
         textView.font = font
-        textView.typingAttributes = [.font: font, .foregroundColor: NSColor.red]
+        textView.typingAttributes = [.font: font, .foregroundColor: currentColor.nsColor]
         // Re-apply font to all existing text
         if !textView.string.isEmpty {
             let range = NSRange(location: 0, length: (textView.string as NSString).length)

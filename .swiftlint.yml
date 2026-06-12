@@ -22,12 +22,12 @@ line_length:
   error: 200
 
 type_body_length:
-  warning: 750
-  error: 950
+  warning: 900
+  error: 1100
 
 file_length:
-  warning: 950
-  error: 1150
+  warning: 1150
+  error: 1350
 
 function_body_length:
   warning: 60

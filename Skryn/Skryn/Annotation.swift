@@ -6,13 +6,31 @@ enum AnnotationHitTestResult {
     case none
 }
 
+enum AnnotationColor: String, Equatable {
+    case red
+    case blue
+
+    var nsColor: NSColor {
+        switch self {
+        case .red: return .red
+        case .blue: return .systemBlue
+        }
+    }
+
+    var toggled: AnnotationColor { self == .red ? .blue : .red }
+}
+
 enum Annotation: Equatable {
-    case arrow(from: CGPoint, to: CGPoint)
-    case line(from: CGPoint, to: CGPoint)
-    case rectangle(rect: CGRect)
+    case arrow(from: CGPoint, to: CGPoint, color: AnnotationColor)
+    case line(from: CGPoint, to: CGPoint, color: AnnotationColor)
+    case rectangle(rect: CGRect, color: AnnotationColor)
+    case ellipse(rect: CGRect, color: AnnotationColor)
     case crop(rect: CGRect)
-    case text(origin: CGPoint, width: CGFloat, content: String, fontSize: CGFloat)
+    case text(origin: CGPoint, width: CGFloat, content: String, fontSize: CGFloat, color: AnnotationColor)
     case blur(rect: CGRect)
+    case badge(center: CGPoint, number: Int, color: AnnotationColor)
+
+    static let badgeRadius: CGFloat = 16
 }
 
 enum AnnotationHandle {
@@ -22,18 +40,51 @@ enum AnnotationHandle {
 }
 
 extension Annotation {
+    /// The annotation's color, or nil for colorless types (crop, blur)
+    var color: AnnotationColor? {
+        switch self {
+        case .arrow(_, _, let color), .line(_, _, let color),
+             .rectangle(_, let color), .ellipse(_, let color),
+             .text(_, _, _, _, let color), .badge(_, _, let color):
+            return color
+        case .crop, .blur:
+            return nil
+        }
+    }
+
+    /// Returns a copy with the given color; unchanged for colorless types
+    func withColor(_ newColor: AnnotationColor) -> Annotation {
+        switch self {
+        case .arrow(let from, let to, _):
+            return .arrow(from: from, to: to, color: newColor)
+        case .line(let from, let to, _):
+            return .line(from: from, to: to, color: newColor)
+        case .rectangle(let rect, _):
+            return .rectangle(rect: rect, color: newColor)
+        case .ellipse(let rect, _):
+            return .ellipse(rect: rect, color: newColor)
+        case .text(let origin, let width, let content, let fontSize, _):
+            return .text(origin: origin, width: width, content: content,
+                         fontSize: fontSize, color: newColor)
+        case .badge(let center, let number, _):
+            return .badge(center: center, number: number, color: newColor)
+        case .crop, .blur:
+            return self
+        }
+    }
+
     var handles: [(handle: AnnotationHandle, point: CGPoint)] {
         switch self {
-        case .arrow(let from, let to), .line(let from, let to):
+        case .arrow(let from, let to, _), .line(let from, let to, _):
             return [(.from, from), (.to, to)]
-        case .rectangle(let rect), .crop(let rect), .blur(let rect):
+        case .rectangle(let rect, _), .ellipse(let rect, _), .crop(let rect), .blur(let rect):
             return [
                 (.topLeft, CGPoint(x: rect.minX, y: rect.minY)),
                 (.topRight, CGPoint(x: rect.maxX, y: rect.minY)),
                 (.bottomLeft, CGPoint(x: rect.minX, y: rect.maxY)),
                 (.bottomRight, CGPoint(x: rect.maxX, y: rect.maxY))
             ]
-        case .text(let origin, let width, let content, let fontSize):
+        case .text(let origin, let width, let content, let fontSize, _):
             let rect = Annotation.textBoundingRect(
                 origin: origin, width: width, content: content, fontSize: fontSize
             )
@@ -41,66 +92,83 @@ extension Annotation {
                 (.left, CGPoint(x: rect.minX, y: rect.midY)),
                 (.right, CGPoint(x: rect.maxX, y: rect.midY))
             ]
+        case .badge:
+            return []
         }
     }
 
     func moving(_ handle: AnnotationHandle, to point: CGPoint) -> Annotation {
         switch self {
-        case .arrow(let from, let to):
+        case .arrow(let from, let to, let color):
             return handle == .from
-                ? .arrow(from: point, to: to)
-                : .arrow(from: from, to: point)
-        case .line(let from, let to):
+                ? .arrow(from: point, to: to, color: color)
+                : .arrow(from: from, to: point, color: color)
+        case .line(let from, let to, let color):
             return handle == .from
-                ? .line(from: point, to: to)
-                : .line(from: from, to: point)
-        case .rectangle(let rect):
+                ? .line(from: point, to: to, color: color)
+                : .line(from: from, to: point, color: color)
+        case .rectangle(let rect, let color):
             let anchor = oppositeCorner(of: handle, in: rect)
-            return .rectangle(rect: rectFromCorners(anchor, point))
+            return .rectangle(rect: rectFromCorners(anchor, point), color: color)
+        case .ellipse(let rect, let color):
+            let anchor = oppositeCorner(of: handle, in: rect)
+            return .ellipse(rect: rectFromCorners(anchor, point), color: color)
         case .crop(let rect):
             let anchor = oppositeCorner(of: handle, in: rect)
             return .crop(rect: rectFromCorners(anchor, point))
         case .blur(let rect):
             let anchor = oppositeCorner(of: handle, in: rect)
             return .blur(rect: rectFromCorners(anchor, point))
-        case .text(let origin, let width, let content, let fontSize):
+        case .text(let origin, let width, let content, let fontSize, let color):
             if handle == .left {
                 let rightEdge = origin.x + width
                 let newOriginX = min(point.x, rightEdge - 20)
                 let newWidth = max(rightEdge - newOriginX, 20)
                 return .text(
                     origin: CGPoint(x: newOriginX, y: origin.y),
-                    width: newWidth, content: content, fontSize: fontSize
+                    width: newWidth, content: content, fontSize: fontSize, color: color
                 )
             } else {
                 let newWidth = max(point.x - origin.x, 20)
-                return .text(origin: origin, width: newWidth, content: content, fontSize: fontSize)
+                return .text(origin: origin, width: newWidth, content: content,
+                             fontSize: fontSize, color: color)
             }
+        case .badge:
+            return self
         }
     }
 
     func offsetBy(dx: CGFloat, dy: CGFloat) -> Annotation {
         switch self {
-        case .arrow(let from, let to):
+        case .arrow(let from, let to, let color):
             return .arrow(
                 from: CGPoint(x: from.x + dx, y: from.y + dy),
-                to: CGPoint(x: to.x + dx, y: to.y + dy)
+                to: CGPoint(x: to.x + dx, y: to.y + dy),
+                color: color
             )
-        case .line(let from, let to):
+        case .line(let from, let to, let color):
             return .line(
                 from: CGPoint(x: from.x + dx, y: from.y + dy),
-                to: CGPoint(x: to.x + dx, y: to.y + dy)
+                to: CGPoint(x: to.x + dx, y: to.y + dy),
+                color: color
             )
-        case .rectangle(let rect):
-            return .rectangle(rect: rect.offsetBy(dx: dx, dy: dy))
+        case .rectangle(let rect, let color):
+            return .rectangle(rect: rect.offsetBy(dx: dx, dy: dy), color: color)
+        case .ellipse(let rect, let color):
+            return .ellipse(rect: rect.offsetBy(dx: dx, dy: dy), color: color)
         case .crop(let rect):
             return .crop(rect: rect.offsetBy(dx: dx, dy: dy))
         case .blur(let rect):
             return .blur(rect: rect.offsetBy(dx: dx, dy: dy))
-        case .text(let origin, let width, let content, let fontSize):
+        case .text(let origin, let width, let content, let fontSize, let color):
             return .text(
                 origin: CGPoint(x: origin.x + dx, y: origin.y + dy),
-                width: width, content: content, fontSize: fontSize
+                width: width, content: content, fontSize: fontSize, color: color
+            )
+        case .badge(let center, let number, let color):
+            return .badge(
+                center: CGPoint(x: center.x + dx, y: center.y + dy),
+                number: number, color: color
             )
         }
     }
@@ -108,15 +176,24 @@ extension Annotation {
     /// Returns true if the given screenshot-space point hits this annotation's body
     func bodyContains(_ point: CGPoint, hitRadius: CGFloat) -> Bool {
         switch self {
-        case .arrow(let from, let to), .line(let from, let to):
+        case .arrow(let from, let to, _), .line(let from, let to, _):
             return distanceToSegment(point: point, a: from, b: to) <= hitRadius
-        case .rectangle(let rect), .crop(let rect), .blur(let rect):
+        case .rectangle(let rect, _), .crop(let rect), .blur(let rect):
             return rect.contains(point)
-        case .text(let origin, let width, let content, let fontSize):
+        case .ellipse(let rect, _):
+            let halfWidth = rect.width / 2 + hitRadius
+            let halfHeight = rect.height / 2 + hitRadius
+            guard halfWidth > 0, halfHeight > 0 else { return false }
+            let nx = (point.x - rect.midX) / halfWidth
+            let ny = (point.y - rect.midY) / halfHeight
+            return nx * nx + ny * ny <= 1
+        case .text(let origin, let width, let content, let fontSize, _):
             let rect = Annotation.textBoundingRect(
                 origin: origin, width: width, content: content, fontSize: fontSize
             )
             return rect.contains(point)
+        case .badge(let center, _, _):
+            return hypot(point.x - center.x, point.y - center.y) <= Annotation.badgeRadius + hitRadius
         }
     }
 

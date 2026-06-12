@@ -31,7 +31,7 @@ open ~/Library/Developer/Xcode/DerivedData/Skryn-*/Build/Products/Debug/Skryn.ap
 
 macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`); all real work is AppKit.
 
-**Flow:** Menu bar click → `ScreenCapture.capture()` (ScreenCaptureKit, 2x resolution) → `AnnotationWindow` (90% of screen, borderless, rounded corners, shadow) → `AnnotationView` (drawing + input) → `AppDelegate.handleAction(_:cgImage:)` → local save, clipboard copy, or Uploadcare cloud upload. AnnotationView holds a `weak var appDelegate` reference set at window creation — do NOT use `NSApp.delegate as? AppDelegate` (see SwiftUI gotcha below).
+**Flow:** Menu bar click → `ScreenCapture.capture(displayID:scale:)` (ScreenCaptureKit, captures the display under the cursor at its native backing scale) → `AnnotationWindow` (90% of screen, borderless, rounded corners, shadow) → `AnnotationView` (drawing + input) → `AppDelegate.handleAction(_:cgImage:)` → local save, clipboard copy, or Uploadcare cloud upload. AnnotationView holds a `weak var appDelegate` reference set at window creation — do NOT use `NSApp.delegate as? AppDelegate` (see SwiftUI gotcha below).
 
 **Coordinate system:** Annotations are stored in **screenshot point coordinates** (NSImage size), not view coordinates. Mouse input is converted via `viewToScreenshot()`. On-screen drawing uses `NSAffineTransform` to map screenshot space back to view space. `compositeAsCGImage()` uses a `CGBitmapContext` at full pixel resolution — it draws the CGImage first, then applies a point-to-pixel transform for annotation drawing. PNG is written directly via `CGImageDestination` (no TIFF/BitmapRep intermediates). Drawing uses two passes: blur annotations first (layered between the screenshot and other annotations), then all non-blur annotations on top.
 
@@ -39,7 +39,11 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 **Keyboard shortcuts** are handled via the installed `NSApp.mainMenu` (Cmd+W, Cmd+Z, Cmd+Shift+Z, Cmd+Q) for proper cross-layout support. ESC uses `keyDown` (layout-independent keyCode). Modifier+Enter uses `performKeyEquivalent` — the menu system intercepts modifier combos before they reach `keyDown`. Each of the three save actions (local, clipboard, cloud) has a configurable modifier key (Cmd/Opt/Ctrl) stored in UserDefaults. `SaveAction.action(for:)` maps the pressed modifier to the correct action.
 
-**Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Command = rectangle, Option = crop, Control = blur. T key enters text mode (I-beam cursor, click to place). Only one crop allowed at a time.
+**Tool selection:** Modifier keys at `mouseDown` time determine the tool — plain drag = arrow, Shift = line, Command = rectangle, Shift+Command = ellipse, Option = crop, Control = blur. T key enters text mode (I-beam cursor, click to place). Only one crop allowed at a time.
+
+**Color:** Annotations carry an `AnnotationColor` (red/blue) associated value; crop and blur are colorless. C key toggles the color of the hovered annotation, or the drawing color (`currentColor`) when nothing is hovered. The text editor inherits `currentColor`.
+
+**Numbered badges:** Digit keys 1–0 (no modifiers) place a `.badge` (filled circle + white number) at the cursor. A digit pressed within 1s of the previous one combines into a multi-digit number (1, 2 → 12; capped at two digits via the `number < 10` guard). Badges have no handles; they move via body drag.
 
 **Text annotations:** T key toggles text mode. Click to place an `IsolatedUndoTextView` (red bold text, transparent background). Enter finalizes, Shift+Enter inserts newline, ESC finalizes. Cmd+=/Cmd+- adjusts font size. Click on finalized text to re-edit. Text width is resizable via left/right edge handles. `IsolatedUndoTextView` is a private NSTextView subclass with its own undo manager — this prevents text-editing undo operations from leaking into AnnotationView's undo stack (which would crash on Cmd+Z after the text view is removed). `finalizeTextEditing()` converts the NSTextView back to a `.text` annotation. The Edit menu (Cut/Copy/Paste/Select All) in `AppDelegate.installMainMenu()` enables clipboard support in the text view via responder chain.
 
@@ -98,4 +102,4 @@ gh release create v1.x.x /tmp/Skryn.zip --title "Skryn v1.x.x" --generate-notes
 - `NSEvent.modifierFlags` (static) reads current keyboard state; `event.modifierFlags` (instance) reads state at event time. Always use the instance property for tool locking.
 - When renaming variables, check ALL references in the same method — secondary uses are easy to miss.
 - SwiftLint: `String.data(using: .utf8)!` triggers `non_optional_string_data_conversion` — use `Data("string".utf8)` instead.
-- SwiftLint config limits: type_body_length 750/950, file_length 950/1150 (bumped for AnnotationView with text annotations, drag-to-move, and blur).
+- SwiftLint config limits: type_body_length 900/1100, file_length 1150/1350 (bumped for AnnotationView with text annotations, drag-to-move, blur, badges, ellipse, and colors).

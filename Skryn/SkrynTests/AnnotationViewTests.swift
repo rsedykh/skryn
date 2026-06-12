@@ -99,9 +99,9 @@ final class AnnotationViewTests: XCTestCase {
     // MARK: - Annotation.moving
 
     func testMoving_rectangleTopLeft() {
-        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         let moved = annotation.moving(.topLeft, to: CGPoint(x: 5, y: 10))
-        if case .rectangle(let rect) = moved {
+        if case .rectangle(let rect, _) = moved {
             XCTAssertEqual(rect.origin.x, 5, accuracy: 0.001)
             XCTAssertEqual(rect.origin.y, 10, accuracy: 0.001)
             XCTAssertEqual(rect.width, 85, accuracy: 0.001)
@@ -112,10 +112,10 @@ final class AnnotationViewTests: XCTestCase {
     }
 
     func testMoving_rectangleTopRight() {
-        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         // Anchor is bottomLeft (10, 80)
         let moved = annotation.moving(.topRight, to: CGPoint(x: 100, y: 15))
-        if case .rectangle(let rect) = moved {
+        if case .rectangle(let rect, _) = moved {
             XCTAssertEqual(rect.origin.x, 10, accuracy: 0.001)
             XCTAssertEqual(rect.origin.y, 15, accuracy: 0.001)
             XCTAssertEqual(rect.width, 90, accuracy: 0.001)
@@ -126,10 +126,10 @@ final class AnnotationViewTests: XCTestCase {
     }
 
     func testMoving_rectangleBottomLeft() {
-        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         // Anchor is topRight (90, 20)
         let moved = annotation.moving(.bottomLeft, to: CGPoint(x: 0, y: 90))
-        if case .rectangle(let rect) = moved {
+        if case .rectangle(let rect, _) = moved {
             XCTAssertEqual(rect.origin.x, 0, accuracy: 0.001)
             XCTAssertEqual(rect.origin.y, 20, accuracy: 0.001)
             XCTAssertEqual(rect.width, 90, accuracy: 0.001)
@@ -140,10 +140,10 @@ final class AnnotationViewTests: XCTestCase {
     }
 
     func testMoving_rectangleBottomRight() {
-        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         // Anchor is topLeft (10, 20)
         let moved = annotation.moving(.bottomRight, to: CGPoint(x: 95, y: 85))
-        if case .rectangle(let rect) = moved {
+        if case .rectangle(let rect, _) = moved {
             XCTAssertEqual(rect.origin.x, 10, accuracy: 0.001)
             XCTAssertEqual(rect.origin.y, 20, accuracy: 0.001)
             XCTAssertEqual(rect.width, 85, accuracy: 0.001)
@@ -154,10 +154,10 @@ final class AnnotationViewTests: XCTestCase {
     }
 
     func testMoving_rectangleFlipsPastOppositeCorner() {
-        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60))
+        let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         // Drag topLeft past bottomRight — rect should flip correctly
         let moved = annotation.moving(.topLeft, to: CGPoint(x: 100, y: 90))
-        if case .rectangle(let rect) = moved {
+        if case .rectangle(let rect, _) = moved {
             XCTAssertEqual(rect.origin.x, 90, accuracy: 0.001)
             XCTAssertEqual(rect.origin.y, 80, accuracy: 0.001)
             XCTAssertEqual(rect.width, 10, accuracy: 0.001)
@@ -191,7 +191,7 @@ final class AnnotationViewTests: XCTestCase {
     func testHandleAt_hitsArrowToEndpoint() {
         let view = makeView()
         view.setAnnotations(forTesting: [
-            .arrow(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 80, y: 60))
+            .arrow(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 80, y: 60), color: .red)
         ])
         // Click near the "to" endpoint (within 10pt radius at 1:1 scale)
         let result = view.handleAt(CGPoint(x: 78, y: 58))
@@ -203,7 +203,7 @@ final class AnnotationViewTests: XCTestCase {
     func testHandleAt_hitsArrowFromEndpoint() {
         let view = makeView()
         view.setAnnotations(forTesting: [
-            .arrow(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 80, y: 60))
+            .arrow(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 80, y: 60), color: .red)
         ])
         let result = view.handleAt(CGPoint(x: 12, y: 22))
         XCTAssertNotNil(result)
@@ -214,7 +214,7 @@ final class AnnotationViewTests: XCTestCase {
     func testHandleAt_missesWhenFarFromHandle() {
         let view = makeView()
         view.setAnnotations(forTesting: [
-            .arrow(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 80, y: 60))
+            .arrow(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 80, y: 60), color: .red)
         ])
         // Click far from both endpoints
         let result = view.handleAt(CGPoint(x: 50, y: 50))
@@ -224,7 +224,7 @@ final class AnnotationViewTests: XCTestCase {
     func testHandleAt_hitsRectangleCorner() {
         let view = makeView()
         view.setAnnotations(forTesting: [
-            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40))
+            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red)
         ])
         // Click near bottomRight (80, 60)
         let result = view.handleAt(CGPoint(x: 79, y: 59))
@@ -238,8 +238,8 @@ final class AnnotationViewTests: XCTestCase {
     func testHandleAt_prefersTopmostAnnotation() {
         let view = makeView()
         view.setAnnotations(forTesting: [
-            .arrow(from: CGPoint(x: 50, y: 50), to: CGPoint(x: 90, y: 90)),
-            .arrow(from: CGPoint(x: 50, y: 50), to: CGPoint(x: 10, y: 10))
+            .arrow(from: CGPoint(x: 50, y: 50), to: CGPoint(x: 90, y: 90), color: .red),
+            .arrow(from: CGPoint(x: 50, y: 50), to: CGPoint(x: 10, y: 10), color: .red)
         ])
         // Both annotations share the "from" point (50,50)
         // Topmost (index 1) should win
@@ -251,7 +251,7 @@ final class AnnotationViewTests: XCTestCase {
     func testHandleAt_picksNearestHandleOnSameAnnotation() {
         let view = makeView()
         view.setAnnotations(forTesting: [
-            .arrow(from: CGPoint(x: 10, y: 50), to: CGPoint(x: 30, y: 50))
+            .arrow(from: CGPoint(x: 10, y: 50), to: CGPoint(x: 30, y: 50), color: .red)
         ])
         // Closer to "to" (30,50) than "from" (10,50)
         let result = view.handleAt(CGPoint(x: 27, y: 50))
@@ -263,7 +263,7 @@ final class AnnotationViewTests: XCTestCase {
 
     func testHandles_textReturnsTwoMidpoints() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
         )
         let handles = annotation.handles
         XCTAssertEqual(handles.count, 2)
@@ -282,10 +282,10 @@ final class AnnotationViewTests: XCTestCase {
 
     func testMoving_textRightHandle() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
         )
         let moved = annotation.moving(.right, to: CGPoint(x: 400, y: 120))
-        if case .text(let origin, let width, _, _) = moved {
+        if case .text(let origin, let width, _, _, _) = moved {
             XCTAssertEqual(origin.x, 50, accuracy: 0.001)
             XCTAssertEqual(width, 350, accuracy: 0.001) // 400 - 50
         } else {
@@ -295,11 +295,11 @@ final class AnnotationViewTests: XCTestCase {
 
     func testMoving_textLeftHandle() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
         )
         // Right edge is at 350. Move left handle to x=100
         let moved = annotation.moving(.left, to: CGPoint(x: 100, y: 120))
-        if case .text(let origin, let width, _, _) = moved {
+        if case .text(let origin, let width, _, _, _) = moved {
             XCTAssertEqual(origin.x, 100, accuracy: 0.001)
             XCTAssertEqual(width, 250, accuracy: 0.001) // 350 - 100
         } else {
@@ -309,11 +309,11 @@ final class AnnotationViewTests: XCTestCase {
 
     func testMoving_textMinimumWidth() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
         )
         // Move right handle very close to origin
         let moved = annotation.moving(.right, to: CGPoint(x: 55, y: 120))
-        if case .text(_, let width, _, _) = moved {
+        if case .text(_, let width, _, _, _) = moved {
             XCTAssertEqual(width, 20, accuracy: 0.001) // clamped to minimum
         } else {
             XCTFail("Expected text annotation")
@@ -325,7 +325,7 @@ final class AnnotationViewTests: XCTestCase {
     func testTextAnnotationAt_hitsTextBounds() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24)
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red)
         ])
         let result = view.textAnnotationAt(CGPoint(x: 150, y: 110))
         XCTAssertEqual(result, 0)
@@ -334,7 +334,7 @@ final class AnnotationViewTests: XCTestCase {
     func testTextAnnotationAt_missesOutsideBounds() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24)
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red)
         ])
         let result = view.textAnnotationAt(CGPoint(x: 50, y: 50))
         XCTAssertNil(result)
@@ -343,8 +343,8 @@ final class AnnotationViewTests: XCTestCase {
     func testTextAnnotationAt_prefersTopmostText() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "First", fontSize: 24),
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Second", fontSize: 24)
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "First", fontSize: 24, color: .red),
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Second", fontSize: 24, color: .red)
         ])
         // Both overlap at (150, 110) — topmost (index 1) should win
         let result = view.textAnnotationAt(CGPoint(x: 150, y: 110))
@@ -376,7 +376,7 @@ final class AnnotationViewTests: XCTestCase {
     func testAnnotationBodyAt_hitsArrowLine() {
         let view = makeView()
         view.setAnnotations(forTesting: [
-            .arrow(from: CGPoint(x: 10, y: 50), to: CGPoint(x: 100, y: 50))
+            .arrow(from: CGPoint(x: 10, y: 50), to: CGPoint(x: 100, y: 50), color: .red)
         ])
         // Point on the line
         let result = view.annotationBodyAt(CGPoint(x: 50, y: 50))
@@ -386,7 +386,7 @@ final class AnnotationViewTests: XCTestCase {
     func testAnnotationBodyAt_missesArrowFarAway() {
         let view = makeView()
         view.setAnnotations(forTesting: [
-            .arrow(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 100, y: 10))
+            .arrow(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 100, y: 10), color: .red)
         ])
         let result = view.annotationBodyAt(CGPoint(x: 50, y: 80))
         XCTAssertNil(result)
@@ -395,7 +395,7 @@ final class AnnotationViewTests: XCTestCase {
     func testAnnotationBodyAt_hitsRectangleInterior() {
         let view = makeView()
         view.setAnnotations(forTesting: [
-            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40))
+            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red)
         ])
         let result = view.annotationBodyAt(CGPoint(x: 50, y: 40))
         XCTAssertEqual(result, 0)
@@ -404,8 +404,8 @@ final class AnnotationViewTests: XCTestCase {
     func testAnnotationBodyAt_prefersTopmostAnnotation() {
         let view = makeView()
         view.setAnnotations(forTesting: [
-            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40)),
-            .rectangle(rect: CGRect(x: 30, y: 30, width: 40, height: 20))
+            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red),
+            .rectangle(rect: CGRect(x: 30, y: 30, width: 40, height: 20), color: .red)
         ])
         let result = view.annotationBodyAt(CGPoint(x: 50, y: 40))
         XCTAssertEqual(result, 1)
@@ -460,6 +460,100 @@ final class AnnotationViewTests: XCTestCase {
         ])
         let result = view.annotationBodyAt(CGPoint(x: 50, y: 40))
         XCTAssertEqual(result, 0)
+    }
+
+    // MARK: - Ellipse annotation
+
+    func testMoving_ellipseBottomRight() {
+        let annotation = Annotation.ellipse(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
+        let moved = annotation.moving(.bottomRight, to: CGPoint(x: 100, y: 90))
+        if case .ellipse(let rect, let color) = moved {
+            XCTAssertEqual(rect, CGRect(x: 10, y: 20, width: 90, height: 70))
+            XCTAssertEqual(color, .red)
+        } else {
+            XCTFail("Expected ellipse annotation")
+        }
+    }
+
+    func testEllipse_handlesAreFourCorners() {
+        let annotation = Annotation.ellipse(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
+        XCTAssertEqual(annotation.handles.count, 4)
+    }
+
+    func testBodyContains_ellipseCenterHits() {
+        let annotation = Annotation.ellipse(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red)
+        XCTAssertTrue(annotation.bodyContains(CGPoint(x: 50, y: 40), hitRadius: 5))
+    }
+
+    func testBodyContains_ellipseCornerMisses() {
+        // Rect corner is outside the inscribed ellipse
+        let annotation = Annotation.ellipse(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red)
+        XCTAssertFalse(annotation.bodyContains(CGPoint(x: 21, y: 21), hitRadius: 0))
+    }
+
+    func testOffsetBy_ellipse() {
+        let annotation = Annotation.ellipse(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .blue)
+        let moved = annotation.offsetBy(dx: 5, dy: -10)
+        if case .ellipse(let rect, let color) = moved {
+            XCTAssertEqual(rect, CGRect(x: 15, y: 10, width: 80, height: 60))
+            XCTAssertEqual(color, .blue)
+        } else {
+            XCTFail("Expected ellipse annotation")
+        }
+    }
+
+    // MARK: - Badge annotation
+
+    func testBadge_hasNoHandles() {
+        let annotation = Annotation.badge(center: CGPoint(x: 50, y: 50), number: 3, color: .red)
+        XCTAssertTrue(annotation.handles.isEmpty)
+    }
+
+    func testBadge_movingHandleIsNoOp() {
+        let annotation = Annotation.badge(center: CGPoint(x: 50, y: 50), number: 3, color: .red)
+        XCTAssertEqual(annotation.moving(.topLeft, to: CGPoint(x: 0, y: 0)), annotation)
+    }
+
+    func testBodyContains_badgeInsideRadius() {
+        let annotation = Annotation.badge(center: CGPoint(x: 50, y: 50), number: 3, color: .red)
+        XCTAssertTrue(annotation.bodyContains(CGPoint(x: 50 + Annotation.badgeRadius, y: 50), hitRadius: 0))
+        XCTAssertFalse(annotation.bodyContains(
+            CGPoint(x: 50 + Annotation.badgeRadius + 1, y: 50), hitRadius: 0
+        ))
+    }
+
+    func testOffsetBy_badge() {
+        let annotation = Annotation.badge(center: CGPoint(x: 50, y: 50), number: 12, color: .blue)
+        let moved = annotation.offsetBy(dx: 10, dy: -5)
+        XCTAssertEqual(moved, .badge(center: CGPoint(x: 60, y: 45), number: 12, color: .blue))
+    }
+
+    // MARK: - Color
+
+    func testAnnotationColor_toggled() {
+        XCTAssertEqual(AnnotationColor.red.toggled, .blue)
+        XCTAssertEqual(AnnotationColor.blue.toggled, .red)
+    }
+
+    func testWithColor_changesColorBearingTypes() {
+        let arrow = Annotation.arrow(from: .zero, to: CGPoint(x: 10, y: 10), color: .red)
+        XCTAssertEqual(arrow.withColor(.blue).color, .blue)
+
+        let badge = Annotation.badge(center: .zero, number: 1, color: .red)
+        XCTAssertEqual(badge.withColor(.blue).color, .blue)
+
+        let text = Annotation.text(origin: .zero, width: 100, content: "Hi", fontSize: 24, color: .red)
+        XCTAssertEqual(text.withColor(.blue).color, .blue)
+    }
+
+    func testWithColor_colorlessTypesUnchanged() {
+        let crop = Annotation.crop(rect: CGRect(x: 0, y: 0, width: 10, height: 10))
+        XCTAssertNil(crop.color)
+        XCTAssertEqual(crop.withColor(.blue), crop)
+
+        let blur = Annotation.blur(rect: CGRect(x: 0, y: 0, width: 10, height: 10))
+        XCTAssertNil(blur.color)
+        XCTAssertEqual(blur.withColor(.blue), blur)
     }
 
     // MARK: - SaveAction modifier mapping

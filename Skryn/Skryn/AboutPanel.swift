@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 
 final class AboutPanel: NSPanel {
     init() {
@@ -112,16 +113,27 @@ final class AboutPanel: NSPanel {
             .underlineColor: NSColor.linkColor
         ]))
 
+        let defaults = UserDefaults.standard
+        let keyCode = defaults.object(forKey: "hotkeyKeyCode") as? UInt32 ?? UInt32(kVK_ANSI_5)
+        let mods = defaults.object(forKey: "hotkeyModifiers") as? UInt32 ?? UInt32(cmdKey | shiftKey)
+        let captureShortcut = hotkeyDisplayString(keyCode: keyCode, carbonModifiers: mods)
+        let localMod = SaveModifier.configured(forKey: "modifierLocal", default: .opt)
+        let clipboardMod = SaveModifier.configured(forKey: "modifierClipboard", default: .cmd)
+        let cloudMod = SaveModifier.configured(forKey: "modifierCloud", default: .ctrl)
+
         appendSection(to: result, title: "Save", styles: s, richItems: [
-            ("\u{2318}\u{2325}5", s.plain("Take a screenshot")),
-            ("\u{2318}\u{23CE}", s.plain("Copy to clipboard")),
-            ("\u{2325}\u{23CE}", s.plain("Save to local folder")),
-            ("\u{2303}\u{23CE}", uploadAction)
+            (captureShortcut, s.plain("Take a screenshot")),
+            (clipboardMod.label, s.plain("Copy to clipboard")),
+            (localMod.label, s.plain("Save to local folder")),
+            (cloudMod.label, uploadAction)
         ])
         appendSection(to: result, title: "Drawing", styles: s, items: [
             ("Drag", "Arrow"), ("\u{21E7} Drag", "Line"),
-            ("\u{2318} Drag", "Rectangle"), ("\u{2303} Drag", "Blur"),
-            ("\u{2325} Drag", "Crop screenshot"), ("\u{238B}", "Cancel crop")
+            ("\u{2318} Drag", "Rectangle"), ("\u{21E7}\u{2318} Drag", "Ellipse"),
+            ("\u{2303} Drag", "Blur"),
+            ("\u{2325} Drag", "Crop screenshot"), ("\u{238B}", "Cancel crop"),
+            ("1\u{2013}0", "Numbered badge at cursor"),
+            ("C", "Switch color (red/blue)")
         ])
         appendSection(to: result, title: "Text", styles: s, items: [
             ("T, then click", "Text"), ("U", "Capture time (UTC)"),
