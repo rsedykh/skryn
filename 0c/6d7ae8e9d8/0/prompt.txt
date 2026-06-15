@@ -1,0 +1,9 @@
+Do recent changes (see last 3 commits) are reflected in the About and website keybinds lists?
+
+---
+
+Yes, update, and open it for me, I'll take a look
+
+---
+
+Good, push and actually make a new release (see what was the last one, show me the release notes)
