@@ -173,20 +173,22 @@ extension Annotation {
         }
     }
 
-    /// Returns true if the given screenshot-space point hits this annotation's body
+    /// Returns true if the given screenshot-space point hits this annotation's body.
+    /// Outlined shapes (rectangle, ellipse, crop) hit only near their stroke, so the
+    /// area inside them stays free for drawing new annotations.
     func bodyContains(_ point: CGPoint, hitRadius: CGFloat) -> Bool {
         switch self {
         case .arrow(let from, let to, _), .line(let from, let to, _):
             return distanceToSegment(point: point, a: from, b: to) <= hitRadius
-        case .rectangle(let rect, _), .crop(let rect), .blur(let rect):
+        case .rectangle(let rect, _), .crop(let rect):
+            let outer = rect.insetBy(dx: -hitRadius, dy: -hitRadius)
+            let inner = rect.insetBy(dx: hitRadius, dy: hitRadius)
+            return outer.contains(point) && !inner.contains(point)
+        case .blur(let rect):
             return rect.contains(point)
         case .ellipse(let rect, _):
-            let halfWidth = rect.width / 2 + hitRadius
-            let halfHeight = rect.height / 2 + hitRadius
-            guard halfWidth > 0, halfHeight > 0 else { return false }
-            let nx = (point.x - rect.midX) / halfWidth
-            let ny = (point.y - rect.midY) / halfHeight
-            return nx * nx + ny * ny <= 1
+            return Self.ellipse(rect, inset: -hitRadius, contains: point)
+                && !Self.ellipse(rect, inset: hitRadius, contains: point)
         case .text(let origin, let width, let content, let fontSize, _):
             let rect = Annotation.textBoundingRect(
                 origin: origin, width: width, content: content, fontSize: fontSize
@@ -195,6 +197,16 @@ extension Annotation {
         case .badge(let center, _, _):
             return hypot(point.x - center.x, point.y - center.y) <= Annotation.badgeRadius + hitRadius
         }
+    }
+
+    /// Whether the point lies inside the ellipse inscribed in `rect` shrunk by `inset` on each side
+    private static func ellipse(_ rect: CGRect, inset: CGFloat, contains point: CGPoint) -> Bool {
+        let halfWidth = rect.width / 2 - inset
+        let halfHeight = rect.height / 2 - inset
+        guard halfWidth > 0, halfHeight > 0 else { return false }
+        let nx = (point.x - rect.midX) / halfWidth
+        let ny = (point.y - rect.midY) / halfHeight
+        return nx * nx + ny * ny <= 1
     }
 
     private func distanceToSegment(point: CGPoint, a: CGPoint, b: CGPoint) -> CGFloat {

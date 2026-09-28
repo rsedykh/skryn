@@ -31,10 +31,10 @@ Click the camera icon in the menu bar or press **Cmd+Shift+5** (configurable in 
 - **Esc** — Remove crop
 - **Delete** — Remove hovered annotation
 - **Cmd+Z / Cmd+Shift+Z** — Undo / Redo
-- **T** — Toggle text mode
+- **T** — Type text at the cursor (over existing text, edits it)
 - **U** — Insert capture time (UTC) at cursor
 - **Cmd + + / Cmd + -** — Increase / Decrease text size
-- **Shift + Enter** — new text line (Enter will exit text mode)
+- **Shift + Enter** — new text line (Enter or Esc finishes the text; empty text is discarded)
 - **Cmd+Enter** and **Option+Enter** and **Control+Enter** — Save to different locations (configurable in Settings)
 - **Cmd+W** — Cancel screenshot
 

@@ -136,10 +136,10 @@ final class AboutPanel: NSPanel {
             ("C", "Switch color (red/blue)")
         ])
         appendSection(to: result, title: "Text", styles: s, items: [
-            ("T, then click", "Text"), ("U", "Capture time (UTC)"),
+            ("T", "Type text at cursor"), ("U", "Capture time (UTC)"),
             ("\u{23CE} / \u{238B}", "Finalize text"),
             ("\u{21E7}\u{23CE}", "New line"), ("\u{2318}+ / \u{2318}-", "Adjust font size"),
-            ("Click text", "Edit")
+            ("Click text / T over it", "Edit")
         ])
         appendSection(to: result, title: "Editing", styles: s, items: [
             ("Drag annotation", "Move it"), ("Drag handle", "Resize / reshape"),

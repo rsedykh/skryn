@@ -320,34 +320,34 @@ final class AnnotationViewTests: XCTestCase {
         }
     }
 
-    // MARK: - textAnnotationAt hit testing
+    // MARK: - Text body hit testing
 
-    func testTextAnnotationAt_hitsTextBounds() {
+    func testAnnotationBodyAt_text_hitsTextBounds() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
             .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red)
         ])
-        let result = view.textAnnotationAt(CGPoint(x: 150, y: 110))
+        let result = view.annotationBodyAt(CGPoint(x: 150, y: 110))
         XCTAssertEqual(result, 0)
     }
 
-    func testTextAnnotationAt_missesOutsideBounds() {
+    func testAnnotationBodyAt_text_missesOutsideBounds() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
             .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red)
         ])
-        let result = view.textAnnotationAt(CGPoint(x: 50, y: 50))
+        let result = view.annotationBodyAt(CGPoint(x: 50, y: 50))
         XCTAssertNil(result)
     }
 
-    func testTextAnnotationAt_prefersTopmostText() {
+    func testAnnotationBodyAt_text_prefersTopmostText() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
             .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "First", fontSize: 24, color: .red),
             .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Second", fontSize: 24, color: .red)
         ])
         // Both overlap at (150, 110) — topmost (index 1) should win
-        let result = view.textAnnotationAt(CGPoint(x: 150, y: 110))
+        let result = view.annotationBodyAt(CGPoint(x: 150, y: 110))
         XCTAssertEqual(result, 1)
     }
 
@@ -392,22 +392,51 @@ final class AnnotationViewTests: XCTestCase {
         XCTAssertNil(result)
     }
 
-    func testAnnotationBodyAt_hitsRectangleInterior() {
+    func testAnnotationBodyAt_hitsRectangleEdge() {
         let view = makeView()
         view.setAnnotations(forTesting: [
             .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red)
         ])
-        let result = view.annotationBodyAt(CGPoint(x: 50, y: 40))
-        XCTAssertEqual(result, 0)
+        // Near the left edge (x = 20), between corner handles
+        XCTAssertEqual(view.annotationBodyAt(CGPoint(x: 22, y: 40)), 0)
+        // Just outside the top edge (y = 20)
+        XCTAssertEqual(view.annotationBodyAt(CGPoint(x: 50, y: 17)), 0)
+    }
+
+    func testAnnotationBodyAt_missesRectangleInterior() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red)
+        ])
+        XCTAssertNil(view.annotationBodyAt(CGPoint(x: 50, y: 40)))
+    }
+
+    func testAnnotationBodyAt_missesCropInterior() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .crop(rect: CGRect(x: 20, y: 20, width: 160, height: 60))
+        ])
+        XCTAssertNil(view.annotationBodyAt(CGPoint(x: 100, y: 50)))
+        XCTAssertEqual(view.annotationBodyAt(CGPoint(x: 100, y: 79)), 0)
+    }
+
+    func testAnnotationBodyAt_arrowInsideRectangleIsReachable() {
+        let view = makeView()
+        view.setAnnotations(forTesting: [
+            .arrow(from: CGPoint(x: 30, y: 40), to: CGPoint(x: 70, y: 40), color: .red),
+            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red)
+        ])
+        // Rectangle is topmost, but its interior no longer shadows the arrow
+        XCTAssertEqual(view.annotationBodyAt(CGPoint(x: 50, y: 40)), 0)
     }
 
     func testAnnotationBodyAt_prefersTopmostAnnotation() {
         let view = makeView()
         view.setAnnotations(forTesting: [
             .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red),
-            .rectangle(rect: CGRect(x: 30, y: 30, width: 40, height: 20), color: .red)
+            .rectangle(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .blue)
         ])
-        let result = view.annotationBodyAt(CGPoint(x: 50, y: 40))
+        let result = view.annotationBodyAt(CGPoint(x: 21, y: 40))
         XCTAssertEqual(result, 1)
     }
 
@@ -480,9 +509,17 @@ final class AnnotationViewTests: XCTestCase {
         XCTAssertEqual(annotation.handles.count, 4)
     }
 
-    func testBodyContains_ellipseCenterHits() {
+    func testBodyContains_ellipseOutlineHits() {
         let annotation = Annotation.ellipse(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red)
-        XCTAssertTrue(annotation.bodyContains(CGPoint(x: 50, y: 40), hitRadius: 5))
+        // Leftmost point of the outline, and just inside/outside it
+        XCTAssertTrue(annotation.bodyContains(CGPoint(x: 20, y: 40), hitRadius: 5))
+        XCTAssertTrue(annotation.bodyContains(CGPoint(x: 23, y: 40), hitRadius: 5))
+        XCTAssertTrue(annotation.bodyContains(CGPoint(x: 17, y: 40), hitRadius: 5))
+    }
+
+    func testBodyContains_ellipseCenterMisses() {
+        let annotation = Annotation.ellipse(rect: CGRect(x: 20, y: 20, width: 60, height: 40), color: .red)
+        XCTAssertFalse(annotation.bodyContains(CGPoint(x: 50, y: 40), hitRadius: 5))
     }
 
     func testBodyContains_ellipseCornerMisses() {

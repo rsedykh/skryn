@@ -97,11 +97,9 @@ func hotkeyDisplayString(keyCode: UInt32, carbonModifiers mods: UInt32) -> Strin
 // MARK: - HotkeyRecorderButton
 
 final class HotkeyRecorderButton: NSButton {
-    private(set) var recordedKeyCode: UInt32 = UInt32(kVK_ANSI_5)
-    private(set) var recordedCarbonModifiers: UInt32 = UInt32(cmdKey | shiftKey)
+    private(set) var recordedKeyCode = Defaults.defaultHotkeyKeyCode
+    private(set) var recordedCarbonModifiers = Defaults.defaultHotkeyModifiers
     private(set) var isRecording = false
-
-    var onHotkeyRecorded: ((_ keyCode: UInt32, _ carbonModifiers: UInt32) -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -165,7 +163,6 @@ final class HotkeyRecorderButton: NSButton {
         recordedCarbonModifiers = carbonModifiers(from: mods)
         isRecording = false
         updateTitle()
-        onHotkeyRecorded?(recordedKeyCode, recordedCarbonModifiers)
     }
 
     func cancelRecording() {

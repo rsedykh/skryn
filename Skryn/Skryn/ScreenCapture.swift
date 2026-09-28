@@ -1,6 +1,20 @@
 import AppKit
 import ScreenCaptureKit
 
+enum ScreenCaptureError: LocalizedError {
+    case permissionDenied
+    case displayNotFound
+    case failed(Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .permissionDenied: return "Screen capture failed: Screen Recording permission is missing"
+        case .displayNotFound: return "Screen capture failed: display not found"
+        case .failed(let error): return "Screen capture failed: \(error.localizedDescription)"
+        }
+    }
+}
+
 struct ScreenCapture {
     /// Returns the display ID of the given screen, falling back to the main display.
     static func displayID(for screen: NSScreen) -> CGDirectDisplayID {
@@ -8,18 +22,18 @@ struct ScreenCapture {
         return screen.deviceDescription[key] as? CGDirectDisplayID ?? CGMainDisplayID()
     }
 
-    static func capture(displayID targetDisplayID: CGDirectDisplayID, scale: CGFloat) async -> NSImage? {
+    static func capture(displayID targetDisplayID: CGDirectDisplayID, scale: CGFloat) async throws -> NSImage {
         let content: SCShareableContent
         do {
             content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         } catch {
             print("ScreenCapture: failed to get shareable content — \(error)")
-            return nil
+            throw CGPreflightScreenCaptureAccess() ? ScreenCaptureError.failed(error) : .permissionDenied
         }
 
         guard let display = content.displays.first(where: { $0.displayID == targetDisplayID }) else {
             print("ScreenCapture: display not found")
-            return nil
+            throw ScreenCaptureError.displayNotFound
         }
 
         let ownPID = ProcessInfo.processInfo.processIdentifier
@@ -38,7 +52,7 @@ struct ScreenCapture {
             cgImage = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
         } catch {
             print("ScreenCapture: capture failed — \(error)")
-            return nil
+            throw ScreenCaptureError.failed(error)
         }
 
         let pointSize = NSSize(width: display.width, height: display.height)

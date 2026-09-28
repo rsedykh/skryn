@@ -2,6 +2,45 @@ import AppKit
 import Carbon.HIToolbox
 import ServiceManagement
 
+/// UserDefaults keys and default values shared across the app
+enum Defaults {
+    static let uploadcarePublicKey = "uploadcarePublicKey"
+    static let saveFolderPath = "saveFolderPath"
+    static let hotkeyKeyCode = "hotkeyKeyCode"
+    static let hotkeyModifiers = "hotkeyModifiers"
+    static let hasLaunchedBefore = "hasLaunchedBefore"
+
+    static let defaultHotkeyKeyCode = UInt32(kVK_ANSI_5)
+    static let defaultHotkeyModifiers = UInt32(cmdKey | shiftKey)
+
+    /// The configured global hotkey, falling back to ⌘⇧5
+    static var hotkey: (keyCode: UInt32, modifiers: UInt32) {
+        let defaults = UserDefaults.standard
+        return (
+            defaults.object(forKey: hotkeyKeyCode) as? UInt32 ?? defaultHotkeyKeyCode,
+            defaults.object(forKey: hotkeyModifiers) as? UInt32 ?? defaultHotkeyModifiers
+        )
+    }
+
+    /// The Uploadcare public key, or nil when none is configured
+    static var publicKey: String? {
+        guard let key = UserDefaults.standard.string(forKey: uploadcarePublicKey), !key.isEmpty
+        else { return nil }
+        return key
+    }
+
+    static var desktopFolder: URL {
+        FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    /// Where local saves go: the custom folder if one is set, otherwise the Desktop
+    static var saveFolder: URL {
+        guard let path = UserDefaults.standard.string(forKey: saveFolderPath) else { return desktopFolder }
+        return URL(fileURLWithPath: path)
+    }
+}
+
 enum SaveModifier: String, CaseIterable {
     case cmd
     case opt
@@ -30,19 +69,32 @@ enum SaveModifier: String, CaseIterable {
     }
 }
 
-enum SaveAction: Equatable {
+enum SaveAction: CaseIterable {
     case local, clipboard, cloud
+
+    var defaultsKey: String {
+        switch self {
+        case .local: return "modifierLocal"
+        case .clipboard: return "modifierClipboard"
+        case .cloud: return "modifierCloud"
+        }
+    }
+
+    var defaultModifier: SaveModifier {
+        switch self {
+        case .local: return .opt
+        case .clipboard: return .cmd
+        case .cloud: return .ctrl
+        }
+    }
+
+    var configuredModifier: SaveModifier {
+        SaveModifier.configured(forKey: defaultsKey, default: defaultModifier)
+    }
 
     static func action(for flags: NSEvent.ModifierFlags) -> SaveAction? {
         let relevant = flags.intersection([.command, .option, .control])
-        let localMod = SaveModifier.configured(forKey: "modifierLocal", default: .opt)
-        let clipboardMod = SaveModifier.configured(forKey: "modifierClipboard", default: .cmd)
-        let cloudMod = SaveModifier.configured(forKey: "modifierCloud", default: .ctrl)
-
-        if relevant == localMod.flags { return .local }
-        if relevant == clipboardMod.flags { return .clipboard }
-        if relevant == cloudMod.flags { return .cloud }
-        return nil
+        return allCases.first { $0.configuredModifier.flags == relevant }
     }
 }
 
@@ -246,7 +298,9 @@ final class SettingsPanel: NSPanel {
             title: "Reset to default", target: self, action: #selector(resetHotkeyClicked)
         )
         defaultButton.bezelStyle = .rounded
-        defaultButton.toolTip = "Reset to \u{2318}\u{21E7}5"
+        defaultButton.toolTip = "Reset to " + hotkeyDisplayString(
+            keyCode: Defaults.defaultHotkeyKeyCode, carbonModifiers: Defaults.defaultHotkeyModifiers
+        )
         let row = NSStackView(views: [hotkeyLabel, hotkeyRecorder, defaultButton])
         row.orientation = .horizontal
         row.spacing = 8
@@ -279,30 +333,23 @@ final class SettingsPanel: NSPanel {
     }
 
     private func loadSettings() {
-        let defaults = UserDefaults.standard
+        keyField.stringValue = Defaults.publicKey ?? ""
 
-        keyField.stringValue = defaults.string(forKey: "uploadcarePublicKey") ?? ""
-
-        let folderPath = defaults.string(forKey: "saveFolderPath")
-            ?? FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.path
-            ?? "~/Desktop"
+        let folderPath = Defaults.saveFolder.path
         selectedFolderPath = folderPath
         folderLabel.stringValue = abbreviatePath(folderPath)
         folderLabel.toolTip = folderPath
 
-        modifierLocal = SaveModifier(rawValue: defaults.string(forKey: "modifierLocal") ?? "opt") ?? .opt
-        modifierClipboard = SaveModifier(
-            rawValue: defaults.string(forKey: "modifierClipboard") ?? "cmd"
-        ) ?? .cmd
-        modifierCloud = SaveModifier(rawValue: defaults.string(forKey: "modifierCloud") ?? "ctrl") ?? .ctrl
+        modifierLocal = SaveAction.local.configuredModifier
+        modifierClipboard = SaveAction.clipboard.configuredModifier
+        modifierCloud = SaveAction.cloud.configuredModifier
         syncPopups()
 
-        let keyCode = defaults.object(forKey: "hotkeyKeyCode") as? UInt32 ?? UInt32(kVK_ANSI_5)
-        let mods = defaults.object(forKey: "hotkeyModifiers") as? UInt32 ?? UInt32(cmdKey | shiftKey)
-        hotkeyRecorder.setHotkey(keyCode: keyCode, carbonModifiers: mods)
+        let hotkey = Defaults.hotkey
+        hotkeyRecorder.setHotkey(keyCode: hotkey.keyCode, carbonModifiers: hotkey.modifiers)
 
         let status = SMAppService.mainApp.status
-        launchAtLoginCheckbox.state = (status == .enabled) ? .on : .off
+        launchAtLoginCheckbox.state = (status == .enabled || status == .requiresApproval) ? .on : .off
     }
 
     private func syncPopups() {
@@ -370,7 +417,9 @@ final class SettingsPanel: NSPanel {
     }
 
     @objc private func resetHotkeyClicked() {
-        hotkeyRecorder.setHotkey(keyCode: UInt32(kVK_ANSI_5), carbonModifiers: UInt32(cmdKey | shiftKey))
+        hotkeyRecorder.setHotkey(
+            keyCode: Defaults.defaultHotkeyKeyCode, carbonModifiers: Defaults.defaultHotkeyModifiers
+        )
     }
 
     @objc private func cancelClicked() {
@@ -383,45 +432,71 @@ final class SettingsPanel: NSPanel {
 
         // Persist Uploadcare key
         if key.isEmpty {
-            defaults.removeObject(forKey: "uploadcarePublicKey")
+            defaults.removeObject(forKey: Defaults.uploadcarePublicKey)
         } else {
-            defaults.set(key, forKey: "uploadcarePublicKey")
+            defaults.set(key, forKey: Defaults.uploadcarePublicKey)
         }
 
         // Clean up legacy CDN base key (now auto-computed from public key)
         defaults.removeObject(forKey: "uploadcareCdnBase")
 
         // Persist folder path
-        let desktopPath = FileManager.default.urls(
-            for: .desktopDirectory, in: .userDomainMask
-        ).first?.path
-        if selectedFolderPath == desktopPath {
-            defaults.removeObject(forKey: "saveFolderPath")
+        if selectedFolderPath == Defaults.desktopFolder.path {
+            defaults.removeObject(forKey: Defaults.saveFolderPath)
         } else {
-            defaults.set(selectedFolderPath, forKey: "saveFolderPath")
+            defaults.set(selectedFolderPath, forKey: Defaults.saveFolderPath)
         }
 
         // Persist modifier assignments
-        defaults.set(modifierLocal.rawValue, forKey: "modifierLocal")
-        defaults.set(modifierClipboard.rawValue, forKey: "modifierClipboard")
-        defaults.set(modifierCloud.rawValue, forKey: "modifierCloud")
+        defaults.set(modifierLocal.rawValue, forKey: SaveAction.local.defaultsKey)
+        defaults.set(modifierClipboard.rawValue, forKey: SaveAction.clipboard.defaultsKey)
+        defaults.set(modifierCloud.rawValue, forKey: SaveAction.cloud.defaultsKey)
 
         // Remove legacy key
         defaults.removeObject(forKey: "saveMode")
 
         // Persist hotkey
-        defaults.set(hotkeyRecorder.recordedKeyCode, forKey: "hotkeyKeyCode")
-        defaults.set(hotkeyRecorder.recordedCarbonModifiers, forKey: "hotkeyModifiers")
+        defaults.set(hotkeyRecorder.recordedKeyCode, forKey: Defaults.hotkeyKeyCode)
+        defaults.set(hotkeyRecorder.recordedCarbonModifiers, forKey: Defaults.hotkeyModifiers)
 
-        // Launch at login
-        let service = SMAppService.mainApp
-        if launchAtLoginCheckbox.state == .on {
-            try? service.register()
-        } else {
-            try? service.unregister()
-        }
+        applyLaunchAtLogin(launchAtLoginCheckbox.state == .on)
 
         onSettingsChanged?()
         close()
+    }
+
+    /// Registers or unregisters the login item, telling the user when it fails or
+    /// when macOS needs them to approve it in System Settings.
+    private func applyLaunchAtLogin(_ enabled: Bool) {
+        let service = SMAppService.mainApp
+        let isRegistered = service.status == .enabled || service.status == .requiresApproval
+        if enabled != isRegistered {
+            do {
+                if enabled {
+                    try service.register()
+                } else {
+                    try service.unregister()
+                }
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = enabled
+                    ? "Couldn't enable launch at login"
+                    : "Couldn't disable launch at login"
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+                return
+            }
+        }
+
+        if enabled && service.status == .requiresApproval {
+            let alert = NSAlert()
+            alert.messageText = "Approve Skryn in Login Items"
+            alert.informativeText = "macOS needs your approval before Skryn can launch at login."
+            alert.addButton(withTitle: "Open Login Items")
+            alert.addButton(withTitle: "Later")
+            if alert.runModal() == .alertFirstButtonReturn {
+                SMAppService.openSystemSettingsLoginItems()
+            }
+        }
     }
 }

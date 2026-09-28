@@ -3,6 +3,7 @@ import Carbon.HIToolbox
 import ImageIO
 import UniformTypeIdentifiers
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var annotationWindow: AnnotationWindow?
@@ -12,8 +13,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var uploadTasks: [UUID: Task<Void, Never>] = [:]
     private var iconTimer: Timer?
     private var animationFrameIndex = 0
+    private var isCapturing = false
     private var uploadFailed = false
-    private var lastUploadError: String?
+    private var captureFailed = false
+    /// Shown in the right-click menu: upload, save, capture, or hotkey problems
+    private var lastError: String?
 
     private let spinnerSymbols = [
         "arrow.up", "arrow.up.right", "arrow.right", "arrow.down.right",
@@ -38,12 +42,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.addSubview(dropView)
         }
 
-        migrateModifierDefaults()
         installHotkeyHandler()
         registerHotkey()
 
-        if !UserDefaults.standard.bool(forKey: "hasLaunchedBefore") {
-            UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+        if !UserDefaults.standard.bool(forKey: Defaults.hasLaunchedBefore) {
+            UserDefaults.standard.set(true, forKey: Defaults.hasLaunchedBefore)
             // Delay lets the activation policy change propagate to the window server
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 self?.showAbout()
@@ -52,26 +55,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func migrateModifierDefaults() {
-        let defaults = UserDefaults.standard
-        if defaults.string(forKey: "modifierLocal") != nil { return }
-
-        defaults.set("opt", forKey: "modifierLocal")
-        defaults.set("cmd", forKey: "modifierClipboard")
-        defaults.set("ctrl", forKey: "modifierCloud")
-    }
-
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         guard let event = NSApp.currentEvent else { return }
 
         if event.type == .rightMouseUp {
             showQuitMenu()
         } else {
-            guard annotationWindow == nil else { return }
             captureScreen()
         }
     }
 
+    /// Installs the app's main menu. Used by every window we show (annotation, settings,
+    /// about) so shortcuts keep working whichever window was opened last. Items whose
+    /// action has no responder in the key window's chain are disabled automatically.
     private func installMainMenu() {
         let mainMenu = NSMenu()
 
@@ -84,9 +80,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(appItem)
 
         let fileMenu = NSMenu(title: "File")
-        fileMenu.addItem(NSMenuItem(
-            title: "Close", action: #selector(closeAnnotationWindow), keyEquivalent: "w"
-        ))
+        let closeItem = NSMenuItem(title: "Close", action: #selector(closeKeyWindow), keyEquivalent: "w")
+        closeItem.target = self
+        fileMenu.addItem(closeItem)
         let fileItem = NSMenuItem(title: "File", action: nil, keyEquivalent: "")
         fileItem.submenu = fileMenu
         mainMenu.addItem(fileItem)
@@ -118,8 +114,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
 
-    @objc private func closeAnnotationWindow() {
-        annotationWindow?.close()
+    /// Borderless windows don't support `performClose(_:)`, so Close calls `close()` directly
+    @objc private func closeKeyWindow() {
+        (NSApp.keyWindow ?? annotationWindow)?.close()
     }
 
     // MARK: - Right-Click Menu
@@ -132,13 +129,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(.separator())
         }
 
-        if let error = lastUploadError {
+        if let error = lastError {
             let errorItem = NSMenuItem(title: error, action: nil, keyEquivalent: "")
             errorItem.attributedTitle = NSAttributedString(
                 string: error,
                 attributes: [.foregroundColor: NSColor.red, .font: NSFont.menuFont(ofSize: 11)]
             )
             menu.addItem(errorItem)
+            if captureFailed && !CGPreflightScreenCaptureAccess() {
+                let openItem = NSMenuItem(
+                    title: "Open Screen Recording Settings…",
+                    action: #selector(openScreenRecordingSettings), keyEquivalent: ""
+                )
+                openItem.target = self
+                menu.addItem(openItem)
+                let hint = NSMenuItem(
+                    title: "If Skryn is already listed, remove it and add it again", action: nil, keyEquivalent: ""
+                )
+                hint.attributedTitle = NSAttributedString(
+                    string: hint.title,
+                    attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.menuFont(ofSize: 11)]
+                )
+                menu.addItem(hint)
+            }
             menu.addItem(.separator())
         }
 
@@ -216,33 +229,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (e.g. cloud upload without a key configured), so the caller can keep the window open.
     @discardableResult
     func handleAction(_ action: SaveAction, cgImage: CGImage, captureDate: Date) -> Bool {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMddHHmmss"
-        let filename = "skryn-\(formatter.string(from: captureDate)).png"
+        let filename = "skryn-\(Self.filenameFormatter.string(from: captureDate)).png"
 
         switch action {
         case .clipboard:
-            let nsImage = NSImage(
-                cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)
-            )
+            // PNG first for apps and browsers that prefer it; TIFF for older AppKit consumers
+            guard let pngData = imageData(from: cgImage, type: .png),
+                  let tiffData = imageData(from: cgImage, type: .tiff) else {
+                reportSaveFailure("Copy failed: could not encode image")
+                return false
+            }
+            let item = NSPasteboardItem()
+            item.setData(pngData, forType: .png)
+            item.setData(tiffData, forType: .tiff)
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.writeObjects([nsImage])
+            NSPasteboard.general.writeObjects([item])
             return true
 
         case .local:
-            guard let pngData = pngData(from: cgImage) else {
+            guard let pngData = imageData(from: cgImage, type: .png) else {
                 reportSaveFailure("Save failed: could not create PNG data")
                 return false
             }
             return saveLocally(pngData: pngData, filename: filename)
 
         case .cloud:
-            guard let publicKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey"),
-                  !publicKey.isEmpty else {
+            guard let publicKey = Defaults.publicKey else {
                 NSSound.beep()
                 return false
             }
-            guard let pngData = pngData(from: cgImage) else {
+            guard let pngData = imageData(from: cgImage, type: .png) else {
                 reportSaveFailure("Upload failed: could not create PNG data")
                 return false
             }
@@ -250,15 +266,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private static let filenameFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyyMMddHHmmss"
+        return formatter
+    }()
+
     @discardableResult
     private func saveLocally(pngData: Data, filename: String) -> Bool {
-        let saveFolder: URL
-        if let customPath = UserDefaults.standard.string(forKey: "saveFolderPath") {
-            saveFolder = URL(fileURLWithPath: customPath)
-        } else {
-            saveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-                ?? FileManager.default.homeDirectoryForCurrentUser
-        }
+        let saveFolder = Defaults.saveFolder
         let fileURL = saveFolder.appendingPathComponent(filename)
 
         do {
@@ -273,7 +292,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func reportSaveFailure(_ message: String) {
-        lastUploadError = message
+        lastError = message
         NSSound.beep()
         print("AppDelegate: \(message)")
     }
@@ -287,15 +306,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let upload = RecentUpload(filename: filename, cdnURL: nil, date: Date(), cacheFilePath: cachePath)
         UploadHistory.add(upload)
 
-        performUpload(
-            fileData: pngData, filename: filename, contentType: "image/png",
-            publicKey: publicKey, fallbackSave: pngData
-        )
+        performUpload(pngData: pngData, filename: filename, publicKey: publicKey, fallbackSave: true)
         return true
     }
 
     func openDroppedImage(_ url: URL) {
-        guard annotationWindow == nil else { return }
+        guard annotationWindow == nil, !isCapturing else { return }
         guard let image = NSImage(contentsOf: url) else { return }
         showAnnotationWindow(with: image)
     }
@@ -305,58 +321,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Invalid file"
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.resetIcon()
+            self?.updateIdleIcon()
         }
     }
 
     @objc private func retryUpload(_ sender: NSMenuItem) {
         guard let box = sender.representedObject as? RecentUploadBox,
-              let publicKey = UserDefaults.standard.string(forKey: "uploadcarePublicKey"),
-              !publicKey.isEmpty,
+              let publicKey = Defaults.publicKey,
               let pngData = UploadHistory.cachedData(at: box.value.cacheFilePath) else { return }
 
-        performUpload(
-            fileData: pngData, filename: box.value.filename, contentType: "image/png",
-            publicKey: publicKey, fallbackSave: nil
-        )
+        performUpload(pngData: pngData, filename: box.value.filename, publicKey: publicKey, fallbackSave: false)
     }
 
     /// Shared upload logic: animates icon, runs async upload, updates history, handles errors.
-    /// If `fallbackSave` is provided, saves locally on upload failure.
-    private func performUpload(fileData: Data, filename: String, contentType: String,
-                               publicKey: String, fallbackSave: Data?) {
+    /// If `fallbackSave` is true, saves locally on upload failure.
+    private func performUpload(pngData: Data, filename: String, publicKey: String, fallbackSave: Bool) {
         let uploadID = UUID()
         let cdnBase = UploadcareService.cdnBase(forPublicKey: publicKey)
         if uploadTasks.isEmpty {
             uploadFailed = false
-            lastUploadError = nil
+            captureFailed = false
+            lastError = nil
         }
         startIconAnimation()
 
+        // Task inherits the main actor from this @MainActor class
         let task = Task {
             do {
                 let cdnURL = try await UploadcareService.upload(
-                    fileData: fileData, filename: filename, contentType: contentType,
-                    publicKey: publicKey, cdnBase: cdnBase
+                    pngData: pngData, filename: filename, publicKey: publicKey, cdnBase: cdnBase
                 )
-                await MainActor.run {
-                    UploadHistory.updateCDNURL(for: filename, url: cdnURL)
-                    copyToClipboard(cdnURL)
-                    if !self.uploadFailed {
-                        self.lastUploadError = nil
-                    }
-                    self.finishUpload(id: uploadID, failed: false)
-                    print("Uploaded: \(cdnURL)")
+                UploadHistory.updateCDNURL(for: filename, url: cdnURL)
+                copyToClipboard(cdnURL)
+                if !uploadFailed {
+                    lastError = nil
                 }
+                finishUpload(id: uploadID, failed: false)
+                print("Uploaded: \(cdnURL)")
             } catch {
-                await MainActor.run {
-                    self.lastUploadError = "Upload failed: \(error.localizedDescription)"
-                    if let pngData = fallbackSave {
-                        self.saveLocally(pngData: pngData, filename: filename)
-                    }
-                    self.finishUpload(id: uploadID, failed: true)
-                    print("Upload failed: \(error.localizedDescription)")
+                lastError = "Upload failed: \(error.localizedDescription)"
+                if fallbackSave {
+                    saveLocally(pngData: pngData, filename: filename)
                 }
+                finishUpload(id: uploadID, failed: true)
+                print("Upload failed: \(error.localizedDescription)")
             }
         }
         uploadTasks[uploadID] = task
@@ -372,9 +380,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let data = UploadHistory.cachedData(at: box.value.cacheFilePath) else { return }
         let upload = box.value
 
-        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-        let fileURL = desktop.appendingPathComponent(upload.filename)
+        let fileURL = Defaults.desktopFolder.appendingPathComponent(upload.filename)
         do {
             try data.write(to: fileURL)
             print("Saved to desktop: \(fileURL.path)")
@@ -395,12 +401,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard iconTimer == nil else { return }
         animationFrameIndex = 0
 
+        // Scheduled on the main run loop, so the callback is already on the main actor
         iconTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
-            guard let self, !self.spinnerImages.isEmpty else { return }
-            self.statusItem.button?.image = self.spinnerImages[
-                self.animationFrameIndex % self.spinnerImages.count
-            ]
-            self.animationFrameIndex += 1
+            MainActor.assumeIsolated {
+                guard let self, !self.spinnerImages.isEmpty else { return }
+                self.statusItem.button?.image = self.spinnerImages[
+                    self.animationFrameIndex % self.spinnerImages.count
+                ]
+                self.animationFrameIndex += 1
+            }
         }
     }
 
@@ -410,28 +419,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             uploadFailed = true
         }
         if uploadTasks.isEmpty {
-            stopIconAnimation(failed: uploadFailed)
+            iconTimer?.invalidate()
+            iconTimer = nil
+            updateIdleIcon()
         }
     }
 
-    private func stopIconAnimation(failed: Bool) {
-        iconTimer?.invalidate()
-        iconTimer = nil
-        uploadFailed = failed
-
-        if failed {
-            statusItem.button?.image = NSImage(
-                systemSymbolName: "camera", accessibilityDescription: "Skryn"
-            )?.withSymbolConfiguration(.init(paletteColors: [.red]))
-        } else {
-            resetIcon()
-        }
-    }
-
-    private func resetIcon() {
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "camera", accessibilityDescription: "Skryn"
-        )
+    /// Shows the resting icon: red when the last upload or capture failed, normal otherwise.
+    /// No-op while the upload spinner is running.
+    private func updateIdleIcon() {
+        guard iconTimer == nil else { return }
+        let icon = NSImage(systemSymbolName: "camera", accessibilityDescription: "Skryn")
+        statusItem.button?.image = (uploadFailed || captureFailed)
+            ? icon?.withSymbolConfiguration(.init(paletteColors: [.red]))
+            : icon
     }
 
     // MARK: - About Panel
@@ -443,7 +444,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.regular)
-        installEditOnlyMenu()
+        installMainMenu()
         NSApp.activate(ignoringOtherApps: true)
 
         let panel = AboutPanel()
@@ -461,46 +462,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.regular)
-        installEditOnlyMenu()
+        installMainMenu()
         NSApp.activate(ignoringOtherApps: true)
 
         let panel = SettingsPanel()
         panel.delegate = self
         panel.onSettingsChanged = { [weak self] in
-            self?.lastUploadError = nil
-            self?.resetIcon()
-            self?.registerHotkey()
+            guard let self else { return }
+            lastError = nil
+            uploadFailed = false
+            captureFailed = false
+            updateIdleIcon()
+            registerHotkey()
         }
         settingsPanel = panel
         panel.makeKeyAndOrderFront(nil)
-    }
-
-    private func installEditOnlyMenu() {
-        let mainMenu = NSMenu()
-
-        let appMenu = NSMenu()
-        let appItem = NSMenuItem()
-        appItem.submenu = appMenu
-        mainMenu.addItem(appItem)
-
-        let editMenu = NSMenu(title: "Edit")
-        editMenu.addItem(NSMenuItem(
-            title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"
-        ))
-        editMenu.addItem(NSMenuItem(
-            title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"
-        ))
-        editMenu.addItem(NSMenuItem(
-            title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"
-        ))
-        editMenu.addItem(NSMenuItem(
-            title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"
-        ))
-        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
-        editItem.submenu = editMenu
-        mainMenu.addItem(editItem)
-
-        NSApp.mainMenu = mainMenu
     }
 
     // MARK: - Global Hotkey
@@ -538,9 +514,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func registerHotkey() {
         unregisterHotkey()
 
-        let defaults = UserDefaults.standard
-        let keyCode = defaults.object(forKey: "hotkeyKeyCode") as? UInt32 ?? UInt32(kVK_ANSI_5)
-        let mods = defaults.object(forKey: "hotkeyModifiers") as? UInt32 ?? UInt32(cmdKey | shiftKey)
+        let (keyCode, mods) = Defaults.hotkey
 
         let hotKeyID = EventHotKeyID(signature: OSType(0x534B5259), id: 1)
         let status = RegisterEventHotKey(
@@ -553,7 +527,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         if status != noErr || hotKeyRef == nil {
             let shortcut = hotkeyDisplayString(keyCode: keyCode, carbonModifiers: mods)
-            lastUploadError = "Hotkey \(shortcut) unavailable — it may be taken by another app"
+            lastError = "Hotkey \(shortcut) unavailable — it may be taken by another app"
         }
     }
 
@@ -562,7 +536,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsPanel?.confirmCurrentHotkey()
             return
         }
-        guard annotationWindow == nil else { return }
         captureScreen()
     }
 
@@ -574,19 +547,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return NSScreen.screens.first { $0.frame.contains(mouseLocation) } ?? NSScreen.main
     }
 
+    /// Captures the display under the cursor. `isCapturing` blocks a second capture
+    /// (e.g. a double-pressed hotkey) from opening another window while this one is in flight.
     private func captureScreen() {
-        guard let screen = screenWithMouse() else { return }
+        guard annotationWindow == nil, !isCapturing, let screen = screenWithMouse() else { return }
         let displayID = ScreenCapture.displayID(for: screen)
         let scale = max(screen.backingScaleFactor, 1)
+        isCapturing = true
         Task {
-            guard let screenshot = await ScreenCapture.capture(displayID: displayID, scale: scale)
-            else { return }
-
-            await MainActor.run {
+            defer { isCapturing = false }
+            do {
+                let screenshot = try await ScreenCapture.capture(displayID: displayID, scale: scale)
+                if captureFailed {
+                    captureFailed = false
+                    lastError = nil
+                    updateIdleIcon()
+                }
                 let target = NSScreen.screens.first { ScreenCapture.displayID(for: $0) == displayID }
                 showAnnotationWindow(with: screenshot, on: target)
+            } catch {
+                captureFailed = true
+                lastError = error.localizedDescription
+                NSSound.beep()
+                updateIdleIcon()
             }
         }
+    }
+
+    @objc private func openScreenRecordingSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+        if let url { NSWorkspace.shared.open(url) }
     }
 
     private func showAnnotationWindow(with screenshot: NSImage, on screen: NSScreen? = nil) {
@@ -604,9 +594,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Helpers
 
-    private func pngData(from cgImage: CGImage) -> Data? {
+    private func imageData(from cgImage: CGImage, type: UTType) -> Data? {
         let data = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(data as CFMutableData, "public.png" as CFString, 1, nil)
+        guard let dest = CGImageDestinationCreateWithData(data as CFMutableData, type.identifier as CFString, 1, nil)
         else { return nil }
         CGImageDestinationAddImage(dest, cgImage, nil)
         guard CGImageDestinationFinalize(dest) else { return nil }

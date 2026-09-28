@@ -36,10 +36,11 @@ final class UploadcareServiceTests: XCTestCase {
             pngData: Data("fake-png".utf8),
             filename: "test.png",
             publicKey: "test-key",
+            cdnBase: "https://abc.ucarecd.net",
             session: session
         )
 
-        XCTAssertEqual(url, "https://ucarecdn.com/abc-123-def/")
+        XCTAssertEqual(url, "https://abc.ucarecd.net/abc-123-def/")
     }
 
     // MARK: - Multipart body
@@ -61,6 +62,7 @@ final class UploadcareServiceTests: XCTestCase {
             pngData: Data("png-bytes".utf8),
             filename: "shot.png",
             publicKey: "my-pub-key",
+            cdnBase: "https://abc.ucarecd.net",
             session: session
         )
 
@@ -90,7 +92,8 @@ final class UploadcareServiceTests: XCTestCase {
 
         do {
             _ = try await UploadcareService.upload(
-                pngData: Data(), filename: "t.png", publicKey: "k", session: session
+                pngData: Data(), filename: "t.png", publicKey: "k",
+                cdnBase: "https://abc.ucarecd.net", session: session
             )
             XCTFail("Expected serverError")
         } catch let error as UploadcareError {
@@ -123,64 +126,6 @@ final class UploadcareServiceTests: XCTestCase {
         )
 
         XCTAssertEqual(url, "https://mycdn.ucarecd.net/custom-uuid/")
-    }
-
-    // MARK: - CDN Base Normalization
-
-    func testNormalizeCdnBase_empty_returnsDefault() {
-        XCTAssertEqual(
-            UploadcareService.normalizeCdnBase(""),
-            "https://ucarecdn.com"
-        )
-    }
-
-    func testNormalizeCdnBase_whitespace_returnsDefault() {
-        XCTAssertEqual(
-            UploadcareService.normalizeCdnBase("  \n "),
-            "https://ucarecdn.com"
-        )
-    }
-
-    func testNormalizeCdnBase_bareSubdomain_addsUcarecdNet() {
-        XCTAssertEqual(
-            UploadcareService.normalizeCdnBase("2ijp1do3td"),
-            "https://2ijp1do3td.ucarecd.net"
-        )
-    }
-
-    func testNormalizeCdnBase_domainWithDot_addsHttps() {
-        XCTAssertEqual(
-            UploadcareService.normalizeCdnBase("2ijp1do3td.ucarecd.net"),
-            "https://2ijp1do3td.ucarecd.net"
-        )
-    }
-
-    func testNormalizeCdnBase_fullHttpsURL_returnsAsIs() {
-        XCTAssertEqual(
-            UploadcareService.normalizeCdnBase("https://cdn.example.com"),
-            "https://cdn.example.com"
-        )
-    }
-
-    func testNormalizeCdnBase_trailingSlash_stripped() {
-        XCTAssertEqual(
-            UploadcareService.normalizeCdnBase("https://cdn.example.com/"),
-            "https://cdn.example.com"
-        )
-    }
-
-    func testNormalizeCdnBase_customDomain_addsHttps() {
-        XCTAssertEqual(
-            UploadcareService.normalizeCdnBase("cdn.mysite.com"),
-            "https://cdn.mysite.com"
-        )
-    }
-
-    func testNormalizeCdnBase_httpUpgradedToHttps() {
-        XCTAssertEqual(
-            UploadcareService.normalizeCdnBase("http://cdn.example.com"),
-            "https://cdn.example.com"
-        )
     }
 
     // MARK: - CNAME Prefix
@@ -241,7 +186,8 @@ final class UploadcareServiceTests: XCTestCase {
 
         do {
             _ = try await UploadcareService.upload(
-                pngData: Data(), filename: "t.png", publicKey: "k", session: session
+                pngData: Data(), filename: "t.png", publicKey: "k",
+                cdnBase: "https://abc.ucarecd.net", session: session
             )
             XCTFail("Expected missingFileID")
         } catch is UploadcareError {
