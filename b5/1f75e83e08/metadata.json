@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "b51f75e83e08",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "Skryn/Skryn/Annotation.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b5/1f75e83e08/0/metadata.json",
+      "transcript": "/b5/1f75e83e08/0/full.jsonl",
+      "context": "/b5/1f75e83e08/0/context.md",
+      "content_hash": "/b5/1f75e83e08/0/content_hash.txt",
+      "prompt": "/b5/1f75e83e08/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 126,
+    "cache_creation_tokens": 384846,
+    "cache_read_tokens": 11089034,
+    "output_tokens": 78205,
+    "api_call_count": 63
+  }
+}

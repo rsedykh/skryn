@@ -1,0 +1,44 @@
+This app works just fine, but can you see if you find any bugs, any improvements you can refactor?
+
+---
+
+Bugs:
+1. It doesn't undo annotations (just tested), but doesn't undo the text either.
+2. But will somebody ever do it?.. Not sure that I understand the fix.
+3. Tried to replicate, couldn't.
+4. That's actually annoying and I would love a fix, yes. Thank you for spotting it!
+5. True, would love to have a better solution.
+6. UTC and standard calendar would be nice, yes.
+7. Pressing C hitting a different annotation - I think sometimes I saw it. A little bit annoying, but if fix is easy - let's fix it. Dragging fully off - would be nice not to allow it. Claude.md fix - yeah, fix it; or maybe completely update it if it's out of date/unnecessary.
+
+Improvements:
+- Clipboard - nice.
+- Capture failures - yes, let's do it.
+- Blur cache - sounds like make sense, do it carefully. Not that it's a big problem that I had any issue with though.
+- Launch at login - I guess ok to fix it
+
+Refactor - do it.
+
+---
+
+"Filenames still use local time. Did you want those in UTC too? It's a one-line change." - yes. Build the app after it, and put it into the Applications folder instead of the existing app, and restart it.
+
+---
+
+Did you change text to "press T then click" from just press T, or it was like that?
+
+---
+
+Do you foresee any issues with just press T and start typing, w/o additional click?
+
+---
+
+Yes, do it all
+
+---
+
+Commit and push and make a new release
+
+---
+
+Try again
