@@ -41,3 +41,35 @@ Commit and push and make a new release
 
 Try again
 
+### Prompt 9
+
+<bash-input> cd /Users/rsedykh/GitHub/skryn && git add -A && git commit -F REDACTED.txt && git push origin main</bash-input>
+
+### Prompt 10
+
+<bash-stdout>warning: in the working copy of '.swiftlint.yml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'CLAUDE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/index.html', LF will be replaced by CRLF the next time Git touches it
+[main 036d3e1] Fix text undo, shape hit-testing, and capture errors;...
+
+### Prompt 11
+
+[Image #1] What happened to the notes like you've made before?..
+
+### Prompt 12
+
+[Image: source: REDACTED.png]
+
+### Prompt 13
+
+Yes
+
+### Prompt 14
+
+Just amend the existing commit
+
+### Prompt 15
+
+It's ok, we can delete previous release and re-release it
+

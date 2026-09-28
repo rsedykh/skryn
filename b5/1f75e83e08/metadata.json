@@ -3,9 +3,10 @@
   "checkpoint_id": "b51f75e83e08",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
-    "Skryn/Skryn/Annotation.swift"
+    ".claude/settings.local.json",
+    "CLAUDE.md"
   ],
   "sessions": [
     {
@@ -17,10 +18,10 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 126,
-    "cache_creation_tokens": 384846,
-    "cache_read_tokens": 11089034,
-    "output_tokens": 78205,
-    "api_call_count": 63
+    "input_tokens": 38,
+    "cache_creation_tokens": 13376,
+    "cache_read_tokens": 4347820,
+    "output_tokens": 6047,
+    "api_call_count": 18
   }
 }
