@@ -97,6 +97,23 @@
       margin-top: 12px;
     }
 
+    /* Demo video — wider than the text column, centered on the page */
+    .demo {
+      width: min(960px, 100vw - 48px);
+      margin-left: 50%;
+      translate: -50% 0;
+      padding-bottom: 32px;
+    }
+
+    .demo video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+    }
+
     /* Features */
     .features {
       padding: 48px 0;
@@ -238,6 +255,13 @@
       <p class="tagline">Screenshot & Annotate menu bar app</p>
       <a class="download-btn" href="https://github.com/rsedykh/skryn/releases/latest">Download for macOS</a>
       <p class="download-note">Requires macOS 14+.</p>
+    </section>
+
+    <section class="demo">
+      <video controls playsinline preload="none" poster="promo-poster.jpg" aria-label="Skryn in 40 seconds">
+        <source src="https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7" type="video/mp4">
+        <a href="https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7">Watch the demo video</a>
+      </video>
     </section>
 
     <section class="features">
