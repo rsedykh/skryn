@@ -1,0 +1,9 @@
+// Ad hoc signing by default, so a fresh clone builds without any certificate.
+// To sign with your own certificate instead (Screen Recording permission then
+// survives rebuilds), put this line in Signing.local.xcconfig (gitignored):
+//   CODE_SIGN_IDENTITY = <your certificate's name>
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+
+#include? "Signing.local.xcconfig"

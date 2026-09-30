@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 xcodebuild -project Skryn/Skryn.xcodeproj -scheme Skryn -configuration Debug build
 ```
 
+**Signing:** `Skryn/Signing.xcconfig` (the project-level base config, so both targets use it) signs ad hoc, so a fresh clone builds without a certificate. It includes the gitignored `Skryn/Signing.local.xcconfig` if present, which sets `CODE_SIGN_IDENTITY` to a local certificate (a self-signed one works; Xcode signs with it even when it's untrusted). Signed with a certificate, the designated requirement is `identifier "com.skryn.app" and certificate leaf = H"…"` and stays the same across builds; ad hoc it's a `cdhash` that changes every build, and macOS keys Screen Recording permission to it. Check with `codesign -d -r- <app>`. Don't set signing in the target build settings: they override the xcconfig.
+
 ## Lint
 
 ```bash
@@ -80,8 +82,11 @@ Unsigned app distributed via GitHub Releases. No paid Apple Developer account �
 ```bash
 # 0. Bump MARKETING_VERSION in project.pbxproj (4 occurrences), commit, push
 
-# 1. Build Release
+# 1. Build Release, and check it's signed with a certificate: the output must show Authority=,
+#    not Signature=adhoc (see Signing above). Always the same certificate: a different one
+#    changes the app's identity, and users lose Screen Recording permission on that update.
 xcodebuild -project Skryn/Skryn.xcodeproj -scheme Skryn -configuration Release build
+codesign -dvv ~/Library/Developer/Xcode/DerivedData/Skryn-*/Build/Products/Release/Skryn.app 2>&1 | grep -E "Authority=|Signature="
 
 # 2. Zip the .app
 cd ~/Library/Developer/Xcode/DerivedData/Skryn-*/Build/Products/Release && ditto -c -k --keepParent Skryn.app /tmp/Skryn.zip
@@ -115,7 +120,7 @@ Describe behavior, not implementation — leave out refactors, tests, and intern
 - **`NSApp.delegate` is SwiftUI's wrapper, not our `AppDelegate`.** With `@NSApplicationDelegateAdaptor`, `NSApp.delegate as? AppDelegate` returns nil. Always pass direct references (e.g., `weak var appDelegate`) instead of casting `NSApp.delegate`.
 - **Cmd+ shortcuts need `performKeyEquivalent`, not `keyDown`.** When a main menu is installed, the menu system intercepts Cmd+ key combos via `performKeyEquivalent` before they reach `keyDown`. Use `performKeyEquivalent` for Cmd+ shortcuts in views.
 - **NSTextView subviews must have isolated undo managers.** When an NSTextView is a subview, it inherits the parent's undo manager via the responder chain. Its internal text-editing undo operations (targeting text storage) leak into the parent's undo stack. When the text view is removed and deallocated, those operations become dangling pointers → crash on Cmd+Z. Fix: subclass NSTextView and override `undoManager` to return its own instance (`IsolatedUndoTextView`).
-- `project.pbxproj` is hand-crafted with simple hex IDs (AA000001, AB000001). Keep this convention when adding files. IDs `AB000008`/`AB000009` are taken by Skryn.entitlements and Info.plist. Latest source file IDs: `AB000015` (file ref), `AA000012` (build file). Latest test file IDs: `AB100005` (file ref), `AA100004` (build file).
+- `project.pbxproj` is hand-crafted with simple hex IDs (AA000001, AB000001). Keep this convention when adding files. IDs `AB000008`/`AB000009` are taken by Skryn.entitlements and Info.plist, `AB000016` by Signing.xcconfig. Latest source file IDs: `AB000016` (file ref), `AA000012` (build file). Latest test file IDs: `AB100005` (file ref), `AA100004` (build file).
 - Borderless windows don't support `performClose(_:)` — Close (Cmd+W) routes through `AppDelegate.closeKeyWindow()`, which calls `close()` on the key window.
 - **One main menu for every window.** `installMainMenu()` is used for the annotation window, settings, and about panels. Don't install a reduced menu for panels — opening one while annotating would strip Undo/Close from the annotation window.
 - **Undo while editing text.** NSTextView doesn't implement `undo:`/`redo:`, so the menu action reaches `AnnotationView.undo(_:)`, which forwards to the text view's own undo manager during `.editingText`.

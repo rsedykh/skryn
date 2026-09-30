@@ -1,3 +1,4 @@
 xcuserdata/
 *.xcworkspace/
 *.profraw
+Signing.local.xcconfig
