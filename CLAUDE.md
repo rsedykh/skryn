@@ -75,7 +75,7 @@ macOS menu bar screenshot app. SwiftUI is only the entry point (`SkrynApp.swift`
 
 ## Distribution
 
-Unsigned app distributed via GitHub Releases. No paid Apple Developer account — notarization (no warnings) requires $99/yr Apple Developer Program.
+Self-signed app (see Build → Signing) distributed via GitHub Releases. No paid Apple Developer account — notarization (no Gatekeeper warning) requires $99/yr Apple Developer Program.
 
 **Release workflow** (only when explicitly asked — never create releases autonomously):
 
@@ -111,9 +111,9 @@ gh release create v0.x.x /tmp/Skryn.zip --title "Skryn v0.x.x" --notes-file <not
 
 Describe behavior, not implementation — leave out refactors, tests, and internal changes. Omit the Fixes section if there are none.
 
-**User install:** Download `Skryn.zip` from [Releases](https://github.com/rsedykh/skryn/releases) → unzip → drag to Applications → right-click → Open on first launch (bypasses Gatekeeper). Grant Screen Recording permission when prompted.
+**User install:** Download `Skryn.zip` from [Releases](https://github.com/rsedykh/skryn/releases) → unzip → drag to Applications → on first launch, System Settings → Privacy & Security → Open Anyway (right-click → Open also works on macOS 14, not on 15+). Grant Screen Recording permission when prompted.
 
-**Screen Recording permission after update:** Since the app is unsigned, macOS may revoke Screen Recording permission after updating. Users must remove Skryn from System Settings → Privacy & Security → Screen Recording, then re-add it (toggling off/on doesn't work).
+**Screen Recording permission after update:** From v0.1.6 on, releases are signed with a stable certificate, so the permission survives updates. Updating from v0.1.5 or earlier (signed ad hoc) needs a one-time reset: remove Skryn from System Settings → Privacy & Security → Screen Recording, then re-add it (toggling off/on doesn't work).
 
 ## Key Gotchas
 

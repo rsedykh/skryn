@@ -8,16 +8,18 @@ https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7
 
 1. Download `Skryn.zip` from the [latest release](https://github.com/rsedykh/skryn/releases/latest)
 2. Unzip and drag `Skryn.app` to your Applications folder
-3. Right-click the app → Open on first launch (required for unsigned apps)
+3. Open the app. macOS blocks the first launch because Skryn isn't notarized by Apple: go to System Settings → Privacy & Security and click **Open Anyway** (on macOS 14, right-click the app → Open also works)
 4. Grant Screen Recording permission when prompted
 
 ### Updating
 
-Since the app is unsigned, macOS may revoke Screen Recording permission after updating. If screenshots stop working:
+Since v0.1.6, Skryn is signed with a stable certificate, so Screen Recording permission carries over when you update.
+
+Updating from v0.1.5 or earlier needs a one-time reset, because the signature changed. If screenshots stop working:
 
 1. Go to System Settings → Privacy & Security → Screen Recording
 2. Remove Skryn from the list
-3. Re-add it; the app will prompt for permission again
+3. Take a screenshot; Skryn will ask for permission again
 
 ## Usage
 
