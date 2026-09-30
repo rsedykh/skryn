@@ -3,9 +3,16 @@
   "checkpoint_id": "77b06fbee656",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 3,
   "files_touched": [
-    ".claude/settings.local.json"
+    ".claude/settings.local.json",
+    "docs/index.html",
+    "promo/README.md",
+    "promo/render/App.swift",
+    "promo/render/Kit.swift",
+    "promo/render/Stage.swift",
+    "promo/render/main.swift",
+    "promo/stage/desktop.html"
   ],
   "sessions": [
     {
@@ -14,13 +21,20 @@
       "context": "/77/b06fbee656/0/context.md",
       "content_hash": "/77/b06fbee656/0/content_hash.txt",
       "prompt": "/77/b06fbee656/0/prompt.txt"
+    },
+    {
+      "metadata": "/77/b06fbee656/1/metadata.json",
+      "transcript": "/77/b06fbee656/1/full.jsonl",
+      "context": "/77/b06fbee656/1/context.md",
+      "content_hash": "/77/b06fbee656/1/content_hash.txt",
+      "prompt": "/77/b06fbee656/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 22,
-    "cache_creation_tokens": 4768,
-    "cache_read_tokens": 2506300,
-    "output_tokens": 2807,
-    "api_call_count": 10
+    "input_tokens": 144,
+    "cache_creation_tokens": 295615,
+    "cache_read_tokens": 15594370,
+    "output_tokens": 141613,
+    "api_call_count": 71
   }
 }

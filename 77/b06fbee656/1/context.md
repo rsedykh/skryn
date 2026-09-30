@@ -1,0 +1,20 @@
+# Session Context
+
+## User Prompts
+
+### Prompt 1
+
+I've done promo video for skrami (another repo), but that was a web project. Do you think you can render promo video for skryn, which is a desktop app? I love the convinience of this tool so much, that it's so keybind heavy but super snappy, and would love to show it out in a short video on a website.
+
+### Prompt 2
+
+[Image: original 2560x1440, displayed at 2000x1125. Multiply coordinates by 1.28 to map to original image.]
+
+### Prompt 3
+
+Genious. Add it to the website. I think it's on github pages, and I guess you can use already uploaded https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7 (I've already added it to the readme)
+
+### Prompt 4
+
+[Image: original 2880x2000, displayed at 2000x1389. Multiply coordinates by 1.44 to map to original image.]
+
