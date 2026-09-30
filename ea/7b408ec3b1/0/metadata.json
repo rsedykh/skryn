@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "ea7b408ec3b1",
+  "session_id": "5b078cd6-1249-4814-992a-6266789a1c16",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-30T17:58:40.82522Z",
+  "branch": "main",
+  "checkpoints_count": 4,
+  "files_touched": [
+    ".claude/settings.local.json",
+    "SIGNING-TODO.md",
+    "Skryn/Signing.xcconfig",
+    "Skryn/Skryn/AppDelegate.swift"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 92,
+    "cache_creation_tokens": 112477,
+    "cache_read_tokens": 4929054,
+    "output_tokens": 34283,
+    "api_call_count": 45
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-30T17:58:40.481314Z",
+    "agent_lines": 0,
+    "human_added": 1,
+    "human_modified": 1442,
+    "human_removed": 0,
+    "total_committed": 9,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-rsedykh-GitHub-skryn/5b078cd6-1249-4814-992a-6266789a1c16.jsonl"
+}

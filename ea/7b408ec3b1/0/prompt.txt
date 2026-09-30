@@ -1,0 +1,41 @@
+Check out signing handoff documentation about rsedykh-apps certificate. I guess skryn can also benefit of being signed when build locally.
+
+---
+
+<bash-input>open ~/Library/Developer/Xcode/DerivedData/Skryn-*/Build/Products/Debug/Skryn.app</bash-input>
+
+---
+
+<bash-stdout>(Bash completed with no output)</bash-stdout><bash-stderr></bash-stderr>
+
+---
+
+I already went to remove screen recodging permissions. I'm confused, what should I do
+
+---
+
+Is it good now?
+
+---
+
+yes, go ahead
+
+---
+
+Done. Good?
+
+---
+
+[Image #1] this happened, just clicked allow and it worked
+
+---
+
+[Image: source: /Users/rsedykh/Desktop/Screenshot 2026-09-30 at 14.54.19.png]
+
+---
+
+When somebody else will use my app (from built releases), are they ok with my signature?
+
+---
+
+commit the signing setup

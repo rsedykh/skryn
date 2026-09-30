@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "ea7b408ec3b1",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 4,
+  "files_touched": [
+    ".claude/settings.local.json",
+    "SIGNING-TODO.md",
+    "Skryn/Signing.xcconfig",
+    "Skryn/Skryn/AppDelegate.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ea/7b408ec3b1/0/metadata.json",
+      "transcript": "/ea/7b408ec3b1/0/full.jsonl",
+      "context": "/ea/7b408ec3b1/0/context.md",
+      "content_hash": "/ea/7b408ec3b1/0/content_hash.txt",
+      "prompt": "/ea/7b408ec3b1/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 92,
+    "cache_creation_tokens": 112477,
+    "cache_read_tokens": 4929054,
+    "output_tokens": 34283,
+    "api_call_count": 45
+  }
+}
