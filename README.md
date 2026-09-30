@@ -2,6 +2,8 @@
 
 A lightweight macOS menu bar app for taking screenshots and annotating them.
 
+https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7
+
 ## Installation
 
 1. Download `Skryn.zip` from the [latest release](https://github.com/rsedykh/skryn/releases/latest)
