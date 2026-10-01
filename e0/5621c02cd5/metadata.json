@@ -3,8 +3,11 @@
   "checkpoint_id": "e05621c02cd5",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
+    "Skryn/Skryn/Annotation.swift",
+    "Skryn/Skryn/AnnotationView.swift",
+    "Skryn/SkrynTests/AnnotationViewTests.swift",
     "docs/v2/index.html"
   ],
   "sessions": [
@@ -14,13 +17,20 @@
       "context": "/e0/5621c02cd5/0/context.md",
       "content_hash": "/e0/5621c02cd5/0/content_hash.txt",
       "prompt": "/e0/5621c02cd5/0/prompt.txt"
+    },
+    {
+      "metadata": "/e0/5621c02cd5/1/metadata.json",
+      "transcript": "/e0/5621c02cd5/1/full.jsonl",
+      "context": "/e0/5621c02cd5/1/context.md",
+      "content_hash": "/e0/5621c02cd5/1/content_hash.txt",
+      "prompt": "/e0/5621c02cd5/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 286,
-    "cache_creation_tokens": 829142,
-    "cache_read_tokens": 35905981,
-    "output_tokens": 127808,
-    "api_call_count": 139
+    "input_tokens": 322,
+    "cache_creation_tokens": 889252,
+    "cache_read_tokens": 37308898,
+    "output_tokens": 135195,
+    "api_call_count": 157
   }
 }

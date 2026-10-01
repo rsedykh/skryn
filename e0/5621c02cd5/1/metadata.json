@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "e05621c02cd5",
+  "session_id": "ccf2bae6-0d4d-4f0d-b51d-ae78eae9d4f8",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-01T01:58:25.081249Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "Skryn/Skryn/Annotation.swift",
+    "Skryn/Skryn/AnnotationView.swift",
+    "Skryn/SkrynTests/AnnotationViewTests.swift"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 36,
+    "cache_creation_tokens": 60110,
+    "cache_read_tokens": 1402917,
+    "output_tokens": 7387,
+    "api_call_count": 18
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-01T01:58:24.81632Z",
+    "agent_lines": 0,
+    "human_added": 120,
+    "human_modified": 421,
+    "human_removed": 0,
+    "total_committed": 152,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-rsedykh-GitHub-skryn/ccf2bae6-0d4d-4f0d-b51d-ae78eae9d4f8.jsonl"
+}

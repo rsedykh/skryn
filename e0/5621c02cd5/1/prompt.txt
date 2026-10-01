@@ -1,0 +1,13 @@
+increase size change for text in ≈3 times per increment (afaik current is +-2, make it +-6 I guess, or suggest something better, like typical font scaling steps maybe - yes, i think that's actually the best way unless you have ideas)
+
+---
+
+Sounds good
+
+---
+
+Can I test it?
+
+---
+
+Good, commit and release a new version
