@@ -31,6 +31,17 @@ enum Annotation: Equatable {
     case badge(center: CGPoint, number: Int, color: AnnotationColor)
 
     static let badgeRadius: CGFloat = 16
+
+    /// Font sizes that Cmd+= / Cmd+- step through (roughly ×1.25 per step)
+    static let textFontSizes: [CGFloat] = [12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128]
+
+    /// Next size on the scale above or below `size`, clamped to the scale's ends
+    static func steppedFontSize(_ size: CGFloat, larger: Bool) -> CGFloat {
+        if larger {
+            return textFontSizes.first { $0 > size } ?? textFontSizes.last ?? size
+        }
+        return textFontSizes.last { $0 < size } ?? textFontSizes.first ?? size
+    }
 }
 
 enum AnnotationHandle {

@@ -371,6 +371,23 @@ final class AnnotationViewTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(rect.height, 36)
     }
 
+    // MARK: - steppedFontSize
+
+    func testSteppedFontSize_stepsAlongScale() {
+        XCTAssertEqual(Annotation.steppedFontSize(24, larger: true), 32)
+        XCTAssertEqual(Annotation.steppedFontSize(24, larger: false), 20)
+    }
+
+    func testSteppedFontSize_clampsAtEnds() {
+        XCTAssertEqual(Annotation.steppedFontSize(128, larger: true), 128)
+        XCTAssertEqual(Annotation.steppedFontSize(12, larger: false), 12)
+    }
+
+    func testSteppedFontSize_offScaleSnapsToNeighbor() {
+        XCTAssertEqual(Annotation.steppedFontSize(26, larger: true), 32)
+        XCTAssertEqual(Annotation.steppedFontSize(26, larger: false), 24)
+    }
+
     // MARK: - annotationBodyAt hit testing
 
     func testAnnotationBodyAt_hitsArrowLine() {

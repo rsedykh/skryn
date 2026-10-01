@@ -603,11 +603,11 @@ final class AnnotationView: NSView {
             // Font size: Cmd+= / Cmd++ to increase, Cmd+- to decrease
             if event.modifierFlags.contains(.command) {
                 if event.keyCode == 24 { // = / + key
-                    adjustFontSize(delta: 2)
+                    adjustFontSize(larger: true)
                     return true
                 }
                 if event.keyCode == 27 { // - key
-                    adjustFontSize(delta: -2)
+                    adjustFontSize(larger: false)
                     return true
                 }
             }
@@ -896,8 +896,8 @@ final class AnnotationView: NSView {
         return formatter
     }()
 
-    private func adjustFontSize(delta: CGFloat) {
-        let newSize = max(textFontSize + delta, 8)
+    private func adjustFontSize(larger: Bool) {
+        let newSize = Annotation.steppedFontSize(textFontSize, larger: larger)
         textFontSize = newSize
         guard case .editingText(let textView, _) = interactionState else { return }
         let scale = screenshotToViewScale()
