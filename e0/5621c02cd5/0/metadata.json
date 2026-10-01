@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "e05621c02cd5",
+  "session_id": "71183914-e83d-4503-afe0-4d46d21c5038",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-01T01:58:18.913226Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/v2/index.html"
+  ],
+  "agent": "Claude Code",
+  "transcript_identifier_at_start": "561fe296-ad41-4954-a70d-77a643cf84c0",
+  "token_usage": {
+    "input_tokens": 286,
+    "cache_creation_tokens": 829142,
+    "cache_read_tokens": 35905981,
+    "output_tokens": 127808,
+    "api_call_count": 139
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-01T01:58:17.416201Z",
+    "agent_lines": 0,
+    "human_added": 384,
+    "human_modified": 1518,
+    "human_removed": 0,
+    "total_committed": 1708,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-rsedykh-GitHub-skryn/71183914-e83d-4503-afe0-4d46d21c5038.jsonl"
+}
