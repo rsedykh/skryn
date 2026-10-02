@@ -115,6 +115,14 @@ Describe behavior, not implementation — leave out refactors, tests, and intern
 
 **Screen Recording permission after update:** From v0.1.6 on, releases are signed with a stable certificate, so the permission survives updates. Updating from v0.1.5 or earlier (signed ad hoc) needs a one-time reset: remove Skryn from System Settings → Privacy & Security → Screen Recording, then re-add it (toggling off/on doesn't work).
 
+## Website
+
+`docs/` is the GitHub Pages site for skryn.app (served from `main` `/docs`, with `CNAME`). It's one self-contained `index.html` (inline CSS and JS, no build step, dark only) plus `docs/assets/`. The only external request is the demo video, hosted as a GitHub user-attachment.
+
+- **Marks** on the page are drawn by JS from `data-mark` attributes (`rect`, `ellipse`, `line`, `arrow` with `data-to`) inside `data-ink` blocks, so they follow reflow. Keep them in the app's style: 3pt strokes, 18pt arrowheads at ±30°.
+- **Demo:** devices with a fine pointer get a browser replica of `AnnotationView` behind Skryn's blur (`initDemo()`, `initPlayground()`); touch devices get the video. The replica copies the app's drawing (stroke widths, arrowheads, badge size, colors, blur block size `max(max(w, h) / 40, 10pt)`) and key handling, so change it together with `AnnotationView.swift` / `Annotation.swift`.
+- **Copy** only states what the app does: no "free", no "open source" (there's no LICENSE), no speed numbers.
+
 ## Key Gotchas
 
 - **`NSApp.delegate` is SwiftUI's wrapper, not our `AppDelegate`.** With `@NSApplicationDelegateAdaptor`, `NSApp.delegate as? AppDelegate` returns nil. Always pass direct references (e.g., `weak var appDelegate`) instead of casting `NSApp.delegate`.

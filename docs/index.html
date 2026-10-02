@@ -2,336 +2,1729 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Skryn — Screenshot and Annotate for macOS</title>
-  <meta name="description" content="A lightweight macOS menu bar app for taking screenshots and annotating them. Arrows, lines, rectangles, ellipses, blur, text, badges, crop — then copy, save, or upload.">
-  <link rel="icon" type="image/png" href="icon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skryn — Screenshot and annotate for macOS</title>
+  <meta name="description" content="Skryn is a macOS menu bar app for screenshots. Press ⇧⌘5, mark it up with arrows, boxes, blur, text and numbered badges, then copy, save or upload it in one keystroke.">
+  <link rel="canonical" href="https://skryn.app/">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#151517">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://skryn.app/">
+  <meta property="og:title" content="Skryn — Screenshot and annotate for macOS">
+  <meta property="og:description" content="A macOS menu bar app: capture, mark it up with arrows, boxes, blur, text and numbered badges, then copy, save or upload.">
+  <meta property="og:image" content="https://skryn.app/assets/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/icon-64.png" sizes="64x64" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
     :root {
-      --bg: #fafafa;
-      --text: #1a1a1a;
-      --muted: #666;
-      --border: #e0e0e0;
-      --card-bg: #fff;
-      --kbd-bg: #f0f0f0;
-      --kbd-border: #d0d0d0;
-      --accent: #1a1a1a;
-      --link: #4a90d9;
+      --paper: #151517;
+      --paper-2: #1c1c1f;
+      --card: #1e1e21;
+      --ink: #f3f2ef;
+      --muted: #a3a19b;
+      --faint: #74726d;
+      --rule: #2d2d31;
+      --red: #ff3b3b;
+      --blue: #0a84ff;
+      --pill: #2b2b2f;
+      --pill-ink: #f3f2ef;
+      --cap: #f3f2ef;
+      --cap-ink: #1d1d1f;
+      --cap-edge: #8e8e93;
+      --secret-bg: #2a2a2e;
+      --secret-ink: #d8d6d0;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 16px 40px -16px rgba(0, 0, 0, .7);
+      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, monospace;
+      --gutter: clamp(16px, 4vw, 40px);
     }
 
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #111;
-        --text: #e8e8e8;
-        --muted: #999;
-        --border: #2a2a2a;
-        --card-bg: #1a1a1a;
-        --kbd-bg: #252525;
-        --kbd-border: #333;
-        --accent: #fff;
-        --link: #6ab0f3;
-      }
-    }
-
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 17px/1.55 var(--sans);
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    img, video, svg { display: block; max-width: 100%; }
+    a { color: inherit; }
+    p { margin: 0; }
+    h1, h2, h3 { margin: 0; font-weight: 800; letter-spacing: -.03em; line-height: 1.05; text-wrap: balance; }
+    :focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+    .wrap { width: min(1120px, 100% - 2 * var(--gutter)); margin-inline: auto; }
+    .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+    /* ---------- the annotation layer ---------- */
+    [data-ink] { position: relative; }
+    .ink {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      overflow: visible; pointer-events: none; z-index: 3;
+    }
+    .ink .red { stroke: var(--red); fill: none; }
+    .ink .blue { stroke: var(--blue); fill: none; }
+    .ink .head.red { fill: var(--red); stroke: none; }
+    .ink .head.blue { fill: var(--blue); stroke: none; }
+    .ink .handle { fill: #fff; stroke: var(--red); stroke-width: 2; }
+    .ink .s {
+      stroke-dasharray: var(--len);
+      stroke-dashoffset: var(--len);
+      transition: stroke-dashoffset .55s cubic-bezier(.55, 0, .25, 1) var(--delay, 0s);
+    }
+    .is-drawn .ink .s { stroke-dashoffset: 0; }
+    .ink .pop, .js [data-ink] .badge, .js [data-ink] .note {
+      transform-box: fill-box; transform-origin: center;
+      transition: transform .38s cubic-bezier(.3, 1.5, .5, 1) var(--delay, 0s), opacity .25s linear var(--delay, 0s);
+    }
+    .ink .pop, .js [data-ink]:not(.is-drawn) .badge { transform: scale(0); }
+    .js [data-ink]:not(.is-drawn) .note { opacity: 0; transform: translateY(6px); }
+    .is-drawn .ink .pop { transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .ink .s { stroke-dashoffset: 0; transition: none; }
+      .ink .pop, .js [data-ink]:not(.is-drawn) .badge, .js [data-ink]:not(.is-drawn) .note { transform: none; opacity: 1; transition: none; }
     }
 
-    a { color: var(--link); }
-
-    .container {
-      max-width: 640px;
-      margin: 0 auto;
-      padding: 0 24px;
+    /* Skryn's own marks, as HTML */
+    .badge {
+      display: inline-grid; place-items: center; flex: none;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--red); color: #fff;
+      font: 700 18px/1 var(--sans); letter-spacing: -.02em;
+      font-variant-numeric: tabular-nums;
+      vertical-align: middle;
     }
+    .badge.blue { background: var(--blue); }
+    .note { color: var(--red); font-weight: 700; letter-spacing: -.01em; line-height: 1.15; }
+    .note.blue { color: var(--blue); }
 
-    /* Hero */
-    .hero {
-      text-align: center;
-      padding: 80px 0 48px;
+    /* keycaps in the video's style: white caps on a dark pill */
+    .keys {
+      display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap;
+      padding: 5px 10px 5px 5px; border-radius: 10px;
+      background: var(--pill); color: var(--pill-ink);
+      font: 600 13px/1 var(--sans); white-space: nowrap;
+      vertical-align: middle;
     }
-
-    .hero img {
-      width: 128px;
-      height: 128px;
-      border-radius: 28px;
-      margin-bottom: 24px;
-    }
-
-    .hero h1 {
-      font-size: 36px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      margin-bottom: 8px;
-    }
-
-    .hero .tagline {
-      font-size: 18px;
-      color: var(--muted);
-      margin-bottom: 32px;
-    }
-
-    .download-btn {
-      display: inline-block;
-      background: var(--accent);
-      color: var(--bg);
-      text-decoration: none;
-      padding: 12px 32px;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 600;
-      transition: opacity 0.15s;
-    }
-
-    .download-btn:hover { opacity: 0.8; }
-
-    .download-note {
-      font-size: 13px;
-      color: var(--muted);
-      margin-top: 12px;
-    }
-
-    /* Demo video — wider than the text column, centered on the page */
-    .demo {
-      width: min(960px, 100vw - 48px);
-      margin-left: 50%;
-      translate: -50% 0;
-      padding-bottom: 32px;
-    }
-
-    .demo video {
-      display: block;
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background: var(--card-bg);
-    }
-
-    /* Features */
-    .features {
-      padding: 48px 0;
-    }
-
-    .features h2 {
-      font-size: 14px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--muted);
-      margin-bottom: 24px;
-    }
-
-    .feature-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-
-    .feature {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-    }
-
-    .feature .title {
-      font-weight: 600;
-      font-size: 15px;
-      margin-bottom: 4px;
-    }
-
-    .feature .desc {
-      font-size: 14px;
-      color: var(--muted);
-    }
-
-    /* Shortcuts */
-    .shortcuts {
-      padding: 48px 0;
-    }
-
-    .shortcuts h2 {
-      font-size: 14px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--muted);
-      margin-bottom: 24px;
-    }
-
-    .shortcut-list {
-      list-style: none;
-      columns: 2;
-      column-gap: 24px;
-    }
-
-    .shortcut-list li {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 14px;
-    }
-
-    .shortcut-list .keys {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-
+    .keys:not(:has(b)) { padding-right: 5px; }
+    .keys b { font-weight: 600; margin-left: 3px; }
     kbd {
-      background: var(--kbd-bg);
-      border: 1px solid var(--kbd-border);
-      border-radius: 5px;
-      padding: 2px 8px;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
-      font-size: 13px;
-      white-space: nowrap;
+      display: inline-grid; place-items: center;
+      min-width: 24px; height: 24px; padding: 0 6px;
+      border-radius: 6px; background: var(--cap); color: var(--cap-ink);
+      box-shadow: inset 0 -2px 0 var(--cap-edge);
+      font: 600 13px/1 var(--sans);
+    }
+    .keys.sm { padding: 3px 8px 3px 3px; border-radius: 8px; font-size: 12px; gap: 4px; }
+    .keys.sm:not(:has(b)) { padding-right: 3px; }
+    .keys b + kbd { margin-left: 6px; }
+    .keys.sm kbd { min-width: 20px; height: 20px; font-size: 12px; padding: 0 5px; border-radius: 5px; }
+
+    /* ---------- nav ---------- */
+    .top {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(21, 21, 23, .88); -webkit-backdrop-filter: saturate(1.4) blur(14px); backdrop-filter: saturate(1.4) blur(14px);
+      border-bottom: 1px solid transparent; transition: border-color .2s ease;
+    }
+    .top.scrolled { border-bottom-color: var(--rule); }
+    .top-in { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -.02em; text-decoration: none; }
+    .brand img { width: 34px; height: 34px; }
+    .top nav { display: flex; align-items: center; gap: clamp(12px, 3vw, 28px); font-size: 15px; color: var(--muted); }
+    .top nav .nav-dl { padding: 7px 14px; border-radius: 999px; background: var(--ink); color: var(--paper); font-weight: 600; font-size: 14px; }
+    .top nav .nav-dl:hover { color: var(--paper); opacity: .88; }
+    .top nav a { text-decoration: none; }
+    .top nav a:hover { color: var(--ink); }
+    @media (max-width: 620px) { .top nav a:not(.gh):not(.nav-dl) { display: none; } }
+
+    /* ---------- hero ---------- */
+    .hero { padding: clamp(24px, 6vw, 72px) 0 clamp(48px, 8vw, 96px); }
+    .hero h1 {
+      --fs: clamp(50px, 11.2vw, 160px);
+      font-size: var(--fs);
+      line-height: 1.04; letter-spacing: -.045em;
+    }
+    .hero h1 > span { display: block; }
+    .hero h1 .circled { display: inline-block; white-space: nowrap; }
+    .hero h1 .tag { margin-left: calc(var(--fs) * .28); vertical-align: .5em; letter-spacing: 0; }
+    /* no room beside the lines on phones: each tag goes under its line */
+    @media (max-width: 599px) { .hero h1 .tag { display: flex; width: max-content; margin: 8px 0 16px; vertical-align: 0; } }
+
+    .lede { max-width: 36em; margin-top: clamp(24px, 3vw, 36px); font-size: clamp(18px, 1.9vw, 21px); color: var(--muted); line-height: 1.5; }
+    .lede strong { color: var(--ink); font-weight: 600; }
+    .cta-row { display: grid; grid-template-columns: auto auto; justify-content: start; justify-items: start; align-items: center; gap: 14px clamp(48px, 7.5vw, 110px); margin-top: 44px; }
+    .cta-row .cta-meta { grid-column: 1; grid-row: 2; }
+    .download {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 15px 26px; border-radius: 12px;
+      background: var(--ink); color: var(--paper);
+      font-weight: 700; font-size: 17px; text-decoration: none; letter-spacing: -.01em;
+      transition: transform .15s ease;
+    }
+    .download:hover { transform: translateY(-1px); }
+    .download svg { width: 18px; height: 18px; }
+    .cta-meta { font-size: 14px; color: var(--muted); }
+    .cta-meta a { color: var(--muted); text-underline-offset: 3px; }
+    /* zero height: centered on the button without making the row taller, so the meta line stays close */
+    .start { display: flex; align-items: center; gap: 22px; height: 0; }
+    .start .note { font-size: 24px; }
+    .keys.legend { display: inline-grid; grid-template-columns: auto auto; gap: 5px 8px; padding: 6px 12px 6px 6px; }
+    .keys.legend > span { display: flex; justify-content: flex-end; gap: 4px; }
+    .keys.legend b { margin-left: 0; align-self: center; }
+    .keys.legend b + span { margin-left: 0; }
+    @media (max-width: 719px) {
+      .cta-row { grid-template-columns: 1fr; margin-top: 36px; }
+      .cta-row .start { grid-row: 1; height: auto; margin-bottom: 52px; gap: clamp(18px, 6vw, 40px); }
+      .cta-row .download { grid-row: 2; }
+      .cta-row .cta-meta { grid-row: 3; }
+      .start .note { margin-left: clamp(12px, 6vw, 48px); }
     }
 
-    /* Install */
-    .install {
-      padding: 48px 0;
+    /* ---------- demo: the video in a crop frame, or the playground in its window ---------- */
+    .stage {
+      position: relative; overflow: clip;
+      padding: clamp(56px, 8vw, 104px) 0;
+      background: #a9b6ea;
     }
-
-    .install h2 {
-      font-size: 14px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--muted);
-      margin-bottom: 24px;
+    .stage::before {
+      content: ""; position: absolute; inset: -24px;
+      background: url(assets/capture-start.webp) center / cover no-repeat;
+      filter: blur(5px) saturate(1.1);
     }
-
-    .install ol {
-      padding-left: 20px;
+    .crop-frame {
+      position: relative; z-index: 1;
+      width: min(1040px, 100% - 2 * var(--gutter)); margin-inline: auto;
+      outline: 2px solid #fff;
+      box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .5);
+      background: #000;
     }
-
-    .install li {
+    .crop-frame video { width: 100%; aspect-ratio: 16 / 9; background: #0d0d0f; }
+    .h {
+      position: absolute; z-index: 2; width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; border: 2px solid var(--red); translate: -50% -50%; pointer-events: none;
+    }
+    .h.tl { left: 0; top: 0; } .h.tr { left: 100%; top: 0; } .h.bl { left: 0; top: 100%; } .h.br { left: 100%; top: 100%; }
+    /* Play button on a light tint over the poster; native controls take over once the film plays */
+    .play {
+      display: none; position: absolute; z-index: 2; inset: 0; place-items: center;
+      border: 0; padding: 0; background: rgba(10, 10, 20, .26); cursor: pointer;
+      transition: background .2s ease;
+    }
+    .js .play { display: grid; }
+    .play[hidden] { display: none; }
+    .play:hover { background: rgba(10, 10, 20, .18); }
+    .play span {
+      display: grid; place-items: center;
+      width: clamp(56px, 8vw, 84px); aspect-ratio: 1; border-radius: 50%;
+      background: var(--red); color: #fff; box-shadow: 0 6px 24px rgba(0, 0, 0, .3);
+      transition: transform .15s ease;
+    }
+    .play:hover span { transform: scale(1.06); }
+    .play:focus-visible { outline: none; }
+    .play:focus-visible span { outline: 3px solid #fff; outline-offset: 3px; }
+    .play svg { width: 42%; margin-left: 8%; }
+    .stage-cap {
+      position: relative; z-index: 2; color: #1d1d1f;
+      width: min(1040px, 100% - 2 * var(--gutter)); margin: 0 auto;
+      display: flex; justify-content: flex-end; align-items: center; gap: 12px 24px; flex-wrap: wrap;
       font-size: 15px;
-      margin-bottom: 8px;
+    }
+    .stage-cap.above { margin-bottom: 22px; }
+    .stage-cap.below { margin-top: 22px; }
+    /* modes: the video by default; .pg-mode swaps in the playground, .gated puts Skryn's blur over it */
+    .stage .pg-win, .stage .gate, .stage .pg-bar, .stage .switch { display: none; }
+    .stage.pg-mode video, .stage.pg-mode .play, .stage.pg-mode .v-only, .stage.pg-mode .crop-frame > .h { display: none; }
+    .stage.pg-mode .pg-win { display: block; }
+    .stage.pg-mode.gated .gate { display: grid; }
+    .stage.pg-mode:not(.gated) .pg-bar { display: flex; }
+    .stage.can-play:not(.gated) .switch { display: inline-block; }
+    .stage.pg-mode .crop-frame { outline: 0; border-radius: 12px; }
+    .stage-cap.below .switch { order: -1; margin-right: auto; }
+    .switch {
+      border: 0; padding: 6px 2px; background: none; cursor: pointer;
+      font: 600 15px/1.2 var(--sans); color: #1d1d1f; text-decoration: underline; text-underline-offset: 3px;
+    }
+    .switch:hover { opacity: .75; }
+
+    /* the playground: a browser replica of Skryn's annotation window */
+    .pg-win {
+      position: relative; aspect-ratio: 872 / 543; border-radius: 12px; overflow: hidden; background: #fff;
+      user-select: none; -webkit-user-select: none; outline: none;
+    }
+    .pg-win:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, .7); }
+    .pg-win img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    .pg-win canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .pg-win textarea {
+      position: absolute; margin: 0; padding: 0; border: 0; resize: none; overflow: hidden; background: transparent;
+      font-family: var(--sans); font-weight: 700; line-height: 1.2; white-space: pre-wrap; overflow-wrap: break-word;
+      outline: 1px dashed rgba(0, 0, 0, .28); outline-offset: 2px; border-radius: 0; user-select: text; -webkit-user-select: text;
+    }
+    .pg-toast {
+      position: absolute; left: 50%; bottom: 14px; z-index: 3; display: inline-flex; align-items: center; gap: 8px;
+      max-width: calc(100% - 24px); padding: 7px 12px 7px 8px; border-radius: 12px;
+      background: rgba(22, 22, 26, .94); color: #f3f3f5; font: 600 13px/1.3 var(--sans);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .35); transform: translate(-50%, 8px); opacity: 0; pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .pg-toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .pg-toast kbd { flex: none; min-width: 22px; height: 22px; font-size: 12px; }
+    .pg-bar {
+      position: relative; z-index: 2; align-items: stretch; gap: 2px; width: max-content; max-width: min(1040px, 100% - 2 * var(--gutter));
+      margin: 18px auto 0; padding: 6px; border-radius: 16px; overflow-x: auto; scrollbar-width: none;
+      background: rgba(20, 20, 24, .94); box-shadow: 0 16px 40px -12px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .06);
+    }
+    .pg-bar::-webkit-scrollbar { display: none; }
+    .tb {
+      flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+      min-width: 54px; padding: 7px 7px 6px; border: 0; border-radius: 10px; background: transparent; color: #a9a9b3;
+      font: 600 11px/1 var(--sans); cursor: pointer; transition: background .12s ease, color .12s ease;
+    }
+    .tb kbd { height: 24px; min-width: 26px; font-size: 12.5px; transition: transform .08s ease; }
+    .tb:hover { background: rgba(255, 255, 255, .07); color: #f3f3f5; }
+    .tb.live { color: #fff; }
+    .tb.live kbd { transform: translateY(1px); box-shadow: 0 0 0 2px var(--red); }
+    .tb[aria-pressed="true"] { background: rgba(255, 255, 255, .13); color: #fff; box-shadow: inset 0 0 0 1.5px var(--red); }
+    .tb .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff0000; display: inline-block; margin-right: 4px; }
+    .tb .dot.blue { background: #0091ff; }
+    .pg-sep { flex: none; width: 1px; margin: 6px 4px; background: rgba(255, 255, 255, .12); }
+
+    /* the gate: the playground under Skryn's pixel blur, until you choose */
+    .gate { position: absolute; inset: 0; z-index: 3; place-items: center; border-radius: 12px; overflow: hidden; }
+    .gate > canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+    .gate::before { content: ""; position: absolute; inset: 0; z-index: 1; background: rgba(12, 12, 18, .42); transition: opacity .35s ease; }
+    .gate-ui { position: relative; z-index: 2; display: grid; justify-items: center; gap: 16px; padding: 24px; text-align: center; color: #fff; transition: opacity .25s ease; }
+    .gate-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+    .gate-btns button {
+      display: inline-flex; align-items: center; gap: 9px; border: 0; border-radius: 999px; cursor: pointer;
+      padding: 15px 28px; font: 700 18px/1 var(--sans); letter-spacing: -.01em; transition: transform .15s ease;
+    }
+    .gate-btns button:hover { transform: translateY(-1px); }
+    .gate-btns button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    .gate-try { background: var(--red); color: #fff; box-shadow: 0 8px 28px rgba(255, 40, 40, .35); }
+    .gate-watch { background: rgba(255, 255, 255, .94); color: #1d1d1f; }
+    .gate-watch svg { width: 15px; height: 15px; }
+    .gate-ui p { font-size: 15px; font-weight: 500; color: rgba(255, 255, 255, .88); text-shadow: 0 1px 8px rgba(0, 0, 0, .35); }
+    .gate-tag { position: absolute; z-index: 2; top: 14px; right: 14px; }
+    .gate.opening::before, .gate.opening .gate-ui, .gate.opening .gate-tag { opacity: 0; }
+
+    /* ---------- sections ---------- */
+    section { scroll-margin-top: 76px; }
+    .sec { padding: clamp(64px, 10vw, 128px) 0 0; }
+    .sec-head { display: grid; gap: 14px; max-width: 760px; margin-bottom: clamp(32px, 5vw, 56px); }
+    .sec-head h2 { font-size: clamp(36px, 5.6vw, 64px); }
+    .sec-head p { color: var(--muted); font-size: 19px; max-width: 34em; }
+
+    /* tools, each marked with itself */
+    .tools { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--rule); }
+    .tool {
+      display: grid; grid-template-rows: auto 1fr; gap: 16px;
+      padding: 34px 28px 32px 0; border-bottom: 1px solid var(--rule);
+      min-width: 0;
+    }
+    .tool:nth-child(even) { padding: 34px 0 32px 28px; border-left: 1px solid var(--rule); }
+    .spec {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 14px 18px;
+      min-height: 96px; font-size: clamp(40px, 4.6vw, 58px); font-weight: 800; letter-spacing: -.04em; line-height: 1;
+    }
+    .spec .w { display: inline-block; white-space: nowrap; }
+    .tool-foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; }
+    .tool-foot p { color: var(--muted); font-size: 16px; max-width: 26em; flex: 1 1 16em; }
+    @media (max-width: 760px) {
+      .tools { grid-template-columns: 1fr; }
+      .tool, .tool:nth-child(even) { padding: 28px 0; border-left: 0; }
+    }
+    .spec .tail { width: 0; height: 0; align-self: flex-start; margin: 2px 0 0 clamp(96px, 11vw, 150px); }
+    .secret {
+      position: relative; display: inline-block;
+      padding: 6px 10px; border-radius: 7px;
+      background: var(--secret-bg); color: var(--secret-ink);
+      font: 500 17px/1.35 var(--mono); letter-spacing: 0;
+    }
+    .secret canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: inherit; }
+    .secret.done { color: transparent; }
+    .crop-demo {
+      position: relative; display: inline-flex; align-items: center; overflow: clip; border-radius: 12px;
+      padding: 16px 22px; gap: .25em; background: var(--paper-2);
+      font-size: .62em; letter-spacing: -.02em; color: var(--muted);
+    }
+    .crop-win {
+      position: relative; z-index: 1; padding: 6px 10px; color: var(--ink);
+      background: var(--paper); outline: 2px solid #fff;
+      box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .5);
+    }
+    .crop-win .h { width: 12px; height: 12px; }
+    .spec .note { font-size: 30px; letter-spacing: -.02em; }
+    .caret { display: inline-block; width: 2px; height: 1em; margin-left: 2px; background: var(--red); vertical-align: -.12em; animation: blink 1.05s steps(1) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .caret { animation: none; } }
+    .badges { display: inline-flex; gap: 10px; align-items: center; }
+    .stamp { font-size: clamp(20px, 2.4vw, 27px) !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    /* editing */
+    .edit { display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(28px, 5vw, 64px); align-items: center; }
+    .mock {
+      background: var(--card); border-radius: 18px; box-shadow: var(--shadow);
+      padding: clamp(22px, 4vw, 40px); display: grid; gap: 22px;
+    }
+    .mock .bar { display: flex; gap: 7px; }
+    .mock .bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--rule); }
+    .mock .warn {
+      display: flex; gap: 10px; align-items: center; padding: 14px 16px; border-radius: 12px;
+      background: color-mix(in srgb, #f5b400 14%, var(--card)); border: 1px solid color-mix(in srgb, #f5b400 40%, var(--card));
+      font-size: clamp(15px, 1.7vw, 18px); color: color-mix(in srgb, #7a5200 80%, var(--ink));
+    }
+    .mock .warn .u { white-space: nowrap; }
+    .mock .rows { display: grid; gap: 10px; }
+    .mock .rows i { height: 12px; border-radius: 6px; background: color-mix(in srgb, var(--ink) 8%, var(--card)); }
+    .mock .keybox { display: inline-block; justify-self: start; font: 500 16px/1 var(--mono); padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 7%, var(--card)); }
+    .edit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--rule); }
+    .edit-list li { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--rule); font-size: 17px; }
+    .edit-list .keys { flex: none; }
+    @media (max-width: 860px) { .edit { grid-template-columns: 1fr; } }
+
+    /* send */
+    .send { display: grid; grid-template-columns: 1.35fr 1fr; gap: 0 clamp(28px, 5vw, 56px); }
+    .send .paste-note { grid-column: 1; justify-self: end; margin: 0 0 76px; font-size: 22px; }
+    .shot { position: relative; margin: 0; grid-column: 1; grid-row: 2; align-self: start; }
+    .shot-img { border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); background: #fff; }
+    .shot-img img { width: 100%; height: auto; aspect-ratio: 1744 / 1086; }
+    /* the cards stretch to the picture's height, so both columns start and end level */
+    .outs { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; align-content: space-between; grid-column: 2; grid-row: 2; }
+    .outs li { background: var(--card); border-radius: 16px; padding: 20px 22px; box-shadow: var(--shadow); display: grid; align-content: start; gap: 8px; }
+    .outs h3 { font-size: 20px; letter-spacing: -.02em; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .outs p { color: var(--muted); font-size: 15.5px; }
+    /* below 1200 the card column gets too narrow to stay level: picture on top, three equal cards under it */
+    @media (max-width: 1199px) {
+      .send { grid-template-columns: 1fr; }
+      .shot { grid-column: 1; grid-row: 2; }
+      .outs { grid-column: 1; grid-row: 3; grid-template-columns: repeat(3, 1fr); align-content: start; margin-top: 28px; }
+      .outs h3 { flex-direction: column; align-items: flex-start; gap: 10px; }
+    }
+    @media (max-width: 819px) {
+      .outs { grid-template-columns: 1fr; }
+      .outs h3 { flex-direction: row; align-items: center; gap: 12px; }
+      .send .paste-note { margin-bottom: 48px; }
     }
 
-    /* Footer */
-    footer {
-      text-align: center;
-      padding: 48px 0;
-      font-size: 13px;
-      color: var(--muted);
-      border-top: 1px solid var(--border);
+    /* menu bar */
+    .mb { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 5vw, 64px); align-items: start; }
+    .desk {
+      position: relative; border-radius: 18px; overflow: clip; min-height: 300px; align-self: stretch;
+      background: linear-gradient(160deg, #2d3170 0%, #3b3470 55%, #5b3448 100%);
+      box-shadow: var(--shadow);
     }
-
-    footer a {
-      color: var(--muted);
-      text-decoration: underline;
-      text-underline-offset: 2px;
+    .menubar {
+      display: flex; justify-content: flex-end; align-items: center; gap: 18px;
+      height: 34px; padding: 0 16px; font-size: 13.5px; font-weight: 600; color: #f3f2ef;
+      background: rgba(20, 20, 24, .5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     }
-
-    footer a:hover { color: var(--text); }
-
-    @media (max-width: 480px) {
-      .hero { padding: 48px 0 32px; }
-      .hero h1 { font-size: 28px; }
-      .hero .tagline { font-size: 16px; }
-      .feature-grid { grid-template-columns: 1fr; }
-      .shortcut-list { columns: 1; }
+    .menubar svg { width: 19px; height: 19px; }
+    .menubar .cam { display: grid; place-items: center; width: 30px; height: 24px; border-radius: 6px; background: rgba(255, 255, 255, .16); }
+    .desk .note { position: absolute; font-size: 22px; }
+    .desk .n-click { left: 24px; top: 30%; }
+    .desk .n-drop { right: 186px; bottom: 50px; max-width: 8em; text-align: right; }
+    .file {
+      position: absolute; right: 30px; bottom: 30px; width: 132px; height: 92px; border-radius: 10px;
+      background: #fff; box-shadow: 0 8px 22px rgba(30, 30, 80, .28); rotate: -4deg;
+      padding: 12px; display: grid; align-content: start; gap: 8px;
     }
+    .file::before { content: ""; height: 7px; width: 34px; border-radius: 4px; background: radial-gradient(circle at 3.5px, #ff5f57 3.5px, transparent 4px) 0 0 / 12px 7px repeat-x; }
+    .file i { height: 7px; border-radius: 4px; background: #e4e6ee; }
+    .file i:nth-child(1) { width: 70%; box-shadow: 0 0 0 5px #fff, 0 0 0 7px var(--red); border-radius: 50%; margin: 2px 0 2px 4px; }
+    .file i:nth-child(2) { width: 88%; }
+    .file i:nth-child(3) { width: 52%; }
+    .file span { position: absolute; left: 0; right: 0; bottom: -22px; text-align: center; font: 600 12px/1 var(--sans); color: #f3f2ef; }
+    .facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--rule); }
+    .facts li { padding: 16px 0; border-bottom: 1px solid var(--rule); display: grid; gap: 4px; }
+    .facts b { font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
+    .facts span { color: var(--muted); font-size: 16px; }
+    @media (max-width: 860px) { .mb { grid-template-columns: 1fr; } }
+
+    /* install */
+    .install { display: grid; grid-template-columns: 1.2fr 1fr; gap: clamp(28px, 5vw, 64px); align-items: start; }
+    .install > ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; }
+    .install > ol > li { display: grid; grid-template-columns: 32px 1fr; gap: 16px; align-items: start; font-size: 18px; }
+    .install > ol > li .badge { margin-top: -2px; }
+    .install > ol small { display: block; color: var(--muted); font-size: 15.5px; margin-top: 4px; }
+    .update { background: var(--card); border-radius: 18px; padding: 26px; box-shadow: var(--shadow); display: grid; gap: 12px; font-size: 16px; }
+    .update h3 { font-size: 22px; letter-spacing: -.02em; }
+    .update p, .update li { color: var(--muted); }
+    .update ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+    /* two columns: the steps span the card's height, step 1 level with "Updating", step 4 with its last line */
+    @media (min-width: 861px) {
+      .install { align-items: stretch; }
+      .install > ol { align-content: space-between; padding: 23px 0 26px; }
+    }
+    @media (max-width: 860px) { .install { grid-template-columns: 1fr; } }
+
+    /* closing */
+    .end { padding: clamp(80px, 12vw, 150px) 0 clamp(48px, 7vw, 80px); text-align: center; display: grid; justify-items: center; gap: 22px; }
+    .end h2 { font-size: clamp(40px, 7vw, 84px); }
+    .end .lede { margin-top: 0; }
+    .end-cta { margin-top: 10px; }
+    .end-cta .note { position: absolute; left: calc(100% + 120px); top: 50%; translate: 0 -50%; font-size: 24px; white-space: nowrap; }
+    @media (max-width: 719px) {
+      .end-cta { display: flex; flex-direction: column-reverse; align-items: center; gap: 64px; }
+      .end-cta .note { position: static; translate: none; margin-left: clamp(110px, 36vw, 200px); }
+    }
+    footer { border-top: 1px solid var(--rule); padding: 26px 0 40px; color: var(--muted); font-size: 14px; }
+    footer .wrap { display: flex; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+    footer a { color: var(--muted); text-underline-offset: 3px; }
+    footer a:hover { color: var(--ink); }
   </style>
 </head>
 <body>
-  <div class="container">
-    <section class="hero">
-      <img src="icon.png" alt="Skryn app icon" width="128" height="128">
-      <h1>Skryn</h1>
-      <p class="tagline">Screenshot & Annotate menu bar app</p>
-      <a class="download-btn" href="https://github.com/rsedykh/skryn/releases/latest">Download for macOS</a>
-      <p class="download-note">Requires macOS 14+.</p>
-    </section>
+  <script>document.documentElement.classList.add('js')</script>
 
-    <section class="demo">
-      <video controls playsinline preload="none" poster="promo-poster.jpg" aria-label="Skryn in 40 seconds">
-        <source src="https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7" type="video/mp4">
-        <a href="https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7">Watch the demo video</a>
-      </video>
-    </section>
+  <header class="top">
+    <div class="wrap top-in">
+      <a class="brand" href="#top" aria-label="Skryn, back to top"><img src="assets/icon.svg" alt="" width="34" height="34">Skryn</a>
+      <nav aria-label="Sections">
+        <a href="#demo" id="nav-demo">Demo</a>
+        <a href="#tools">Tools</a>
+        <a href="#install">Install</a>
+        <a class="gh" href="https://github.com/rsedykh/skryn">GitHub</a>
+        <a class="nav-dl" href="https://github.com/rsedykh/skryn/releases/latest">Download</a>
+      </nav>
+    </div>
+  </header>
 
-    <section class="features">
-      <h2>Features</h2>
-      <div class="feature-grid">
-        <div class="feature">
-          <div class="title">Menu bar app</div>
-          <div class="desc">Lives in your menu bar. Click or press a hotkey to capture.</div>
-        </div>
-        <div class="feature">
-          <div class="title">Annotate</div>
-          <div class="desc">Arrows, lines, rectangles, ellipses, blur, text, numbered badges, and crop before saving.</div>
-        </div>
-        <div class="feature">
-          <div class="title">Flexible output</div>
-          <div class="desc">Copy to clipboard, save to a folder, or upload to cloud.</div>
-        </div>
-        <div class="feature">
-          <div class="title">Edit annotations</div>
-          <div class="desc">Resize handles, drag to reposition, undo and redo.</div>
-        </div>
-        <div class="feature">
-          <div class="title">Drag &amp; drop</div>
-          <div class="desc">Drop an image onto the menu bar icon to annotate it.</div>
-        </div>
-        <div class="feature">
-          <div class="title">Lightweight</div>
-          <div class="desc">Native AppKit. No Electron, no bloat, no account required.</div>
+  <main id="top">
+    <!-- HERO -->
+    <section class="wrap hero" aria-labelledby="hero-h">
+      <div data-ink>
+        <h1 id="hero-h">
+          <span>Screenshot it.<span class="keys sm tag" aria-hidden="true"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>5</kbd><b>capture</b></span></span>
+          <span><span class="circled" data-mark="ellipse" data-pad="0.15em 0.07em">Mark it up.</span><span class="keys sm tag" aria-hidden="true"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>Drag</kbd><b>ellipse</b></span></span>
+          <span>Send it.<span class="keys sm tag" aria-hidden="true"><kbd>⌘</kbd><kbd>⏎</kbd><b>copy</b></span></span>
+        </h1>
+        <p class="lede">Skryn lives in your Mac's menu bar. Mark up a screenshot with arrows, boxes, blur, text and numbered steps, then copy, save or upload it in one keystroke.</p>
+        <div class="cta-row">
+          <a id="dl" class="download" href="https://github.com/rsedykh/skryn/releases/latest" data-mark="rect" data-pad="9 9">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5v10m0 0-4-4m4 4 4-4M3.5 15.5h13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Download for macOS
+          </a>
+          <div class="start">
+            <p class="note" data-mark="arrow" data-to="#dl" data-gap="20">Start here</p>
+            <span class="keys sm legend" aria-hidden="true"><span><kbd>T</kbd></span><b>text</b><span><kbd>Drag</kbd></span><b>arrow</b><span><kbd>⌘</kbd><kbd>Drag</kbd></span><b>rectangle</b></span>
+          </div>
+          <p class="cta-meta">macOS 14 or later · <a href="https://github.com/rsedykh/skryn">Source on GitHub</a></p>
         </div>
       </div>
     </section>
 
-    <section class="shortcuts">
-      <h2>Keyboard shortcuts</h2>
-      <ul class="shortcut-list">
-        <li><span>Arrow</span> <kbd>Drag</kbd></li>
-        <li><span>Line</span> <kbd>&#x21E7;Drag</kbd></li>
-        <li><span>Rectangle</span> <kbd>&#x2318;Drag</kbd></li>
-        <li><span>Ellipse</span> <kbd>&#x21E7;&#x2318;Drag</kbd></li>
-        <li><span>Blur</span> <kbd>&#x2303;Drag</kbd></li>
-        <li><span>Crop</span> <kbd>&#x2325;Drag</kbd></li>
-        <li><span>Remove crop</span> <kbd>&#x238B;</kbd></li>
-        <li><span>Numbered badge</span> <kbd>1&#x2013;0</kbd></li>
-        <li><span>Switch color (red/blue)</span> <kbd>C</kbd></li>
-        <li><span>Delete annotation</span> <kbd>&#x232B;</kbd></li>
-        <li><span>Undo or redo</span> <span class="keys"><kbd>&#x2318;Z</kbd> <kbd>&#x2318;&#x21E7;Z</kbd></span></li>
-        <li><span>Capture time (UTC)</span> <kbd>U</kbd></li>
-        <li><span>Type text at cursor</span> <kbd>T</kbd></li>
-        <li><span>New line in text</span> <kbd>&#x21E7;&#x23CE;</kbd></li>
-        <li><span>Increase or decrease text size</span> <span class="keys"><kbd>&#x2318;=</kbd> <kbd>&#x2318;-</kbd></span></li>
-        <li><span>Save to clipboard</span> <kbd>&#x2318;&#x23CE;</kbd></li>
-        <li><span>Save locally</span> <kbd>&#x2325;&#x23CE;</kbd></li>
-        <li><span>Save to cloud</span> <kbd>&#x2303;&#x23CE;</kbd></li>
-        <li><span>Cancel</span> <kbd>&#x2318;W</kbd></li>
-      </ul>
+    <!-- DEMO: live playground on a laptop, the video on phones (and for no-JS) -->
+    <section class="stage" id="demo" aria-label="Demo">
+      <div class="stage-cap above">
+        <span class="keys v-only" aria-hidden="true"><kbd>⌥</kbd><kbd>Drag</kbd><b>crop</b></span>
+      </div>
+      <div class="crop-frame">
+        <video controls playsinline preload="none" poster="assets/poster.webp" aria-label="Skryn demo video: capture, annotate, crop and paste">
+          <source src="https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7" type="video/mp4">
+          <a href="https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7">Watch the demo video</a>
+        </video>
+        <button class="play" type="button" aria-label="Play the demo video"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2Z" fill="currentColor"/></svg></span></button>
+        <div class="pg-win" id="pg" tabindex="0" role="application" aria-roledescription="annotation playground" inert
+             aria-label="Annotation playground. Drag to draw an arrow. Hold Shift for a line, Command for a rectangle, Shift and Command for an ellipse, Control for blur, Option for crop. Digits place badges, T types text, C switches color.">
+          <img data-src="assets/shot.webp" width="872" height="543" alt="Sample screenshot: the API keys page of a fictional Example Cloud console, with a production key, a test key and a revoked key." draggable="false">
+          <canvas aria-hidden="true"></canvas>
+          <div class="pg-toast" role="status" aria-live="polite"></div>
+        </div>
+        <div class="gate">
+          <canvas aria-hidden="true"></canvas>
+          <div class="gate-ui">
+            <div class="gate-btns">
+              <button type="button" class="gate-try">Try it</button>
+              <button type="button" class="gate-watch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2Z" fill="currentColor"/></svg>Watch the video</button>
+            </div>
+            <p>A browser replica of the annotation window, with the app's keys.</p>
+          </div>
+          <span class="keys sm gate-tag" aria-hidden="true"><kbd>⌃</kbd><kbd>Drag</kbd><b>blur</b></span>
+        </div>
+        <i class="h tl"></i><i class="h tr"></i><i class="h bl"></i><i class="h br"></i>
+      </div>
+      <div class="pg-bar" id="pg-bar" role="toolbar" aria-label="Playground tools">
+        <button class="tb" type="button" data-tool="arrow" aria-pressed="false"><kbd>Drag</kbd>Arrow</button>
+        <button class="tb" type="button" data-tool="line" aria-pressed="false"><kbd>⇧</kbd>Line</button>
+        <button class="tb" type="button" data-tool="rect" aria-pressed="false"><kbd>⌘</kbd>Rect</button>
+        <button class="tb" type="button" data-tool="ellipse" aria-pressed="false"><kbd>⇧⌘</kbd>Ellipse</button>
+        <button class="tb" type="button" data-tool="blur" aria-pressed="false"><kbd>⌃</kbd>Blur</button>
+        <button class="tb" type="button" data-tool="crop" aria-pressed="false"><kbd>⌥</kbd>Crop</button>
+        <button class="tb" type="button" data-tool="badge" aria-pressed="false"><kbd>1–0</kbd>Badge</button>
+        <button class="tb" type="button" data-tool="text" aria-pressed="false"><kbd>T</kbd>Text</button>
+        <span class="pg-sep" aria-hidden="true"></span>
+        <button class="tb" type="button" data-act="color" aria-label="Switch color (C)"><kbd>C</kbd><span><i class="dot" aria-hidden="true"></i><span class="cname">Red</span></span></button>
+        <button class="tb" type="button" data-act="undo" aria-label="Undo (Command Z)"><kbd>⌘Z</kbd>Undo</button>
+        <button class="tb" type="button" data-act="redo" aria-label="Redo (Shift Command Z)"><kbd>⇧⌘Z</kbd>Redo</button>
+        <button class="tb" type="button" data-act="reset" aria-label="Clear all marks"><kbd>↺</kbd>Clear</button>
+        <span class="pg-sep" aria-hidden="true"></span>
+        <button class="tb" type="button" data-act="copy" aria-label="Copy to clipboard (Command Return)"><kbd>⌘⏎</kbd>Copy</button>
+        <button class="tb" type="button" data-act="save" aria-label="Save PNG (Option Return)"><kbd>⌥⏎</kbd>Save</button>
+        <button class="tb" type="button" data-act="upload" aria-label="Upload (Control Return)"><kbd>⌃⏎</kbd>Upload</button>
+      </div>
+      <div class="stage-cap below">
+        <span class="keys v-only" aria-hidden="true"><kbd>Esc</kbd><b>remove crop</b></span>
+        <button type="button" class="switch"></button>
+      </div>
     </section>
 
-    <section class="install">
-      <h2>Installation</h2>
-      <ol>
-        <li>Download <strong>Skryn.zip</strong> from the <a href="https://github.com/rsedykh/skryn/releases/latest"><strong>latest release</strong></a></li>
-        <li>Unzip and drag <strong>Skryn.app</strong> to Applications</li>
-        <li>Open it. macOS blocks the first launch because Skryn isn't notarized: go to <strong>System Settings &rarr; Privacy &amp; Security</strong> and click <strong>Open Anyway</strong></li>
-        <li>Grant <strong>Screen Recording permission</strong> when prompted</li>
-      </ol>
+    <!-- TOOLS -->
+    <section id="tools" class="wrap sec" aria-labelledby="tools-h">
+      <div class="sec-head">
+        <h2 id="tools-h">Hold a key. Pick a tool.</h2>
+        <p>Each tool is marked up with itself. The key you hold as you start dragging picks the tool.</p>
+      </div>
+      <div class="tools">
+        <article class="tool">
+          <div class="spec" data-ink>
+            <h3 class="w" id="w-arrow">Arrow</h3>
+            <i class="tail" data-mark="arrow" data-to="#w-arrow" data-gap="10"></i>
+          </div>
+          <div class="tool-foot"><p>Point at the thing. No modifier needed.</p><span class="keys"><kbd>Drag</kbd></span></div>
+        </article>
+        <article class="tool">
+          <div class="spec" data-ink><h3 class="w" data-mark="line" data-off="6">Line</h3></div>
+          <div class="tool-foot"><p>Underline a warning, cross something out.</p><span class="keys"><kbd>⇧</kbd><kbd>Drag</kbd></span></div>
+        </article>
+        <article class="tool">
+          <div class="spec" data-ink><h3 class="w" data-mark="rect" data-pad="0.2em 0.22em">Rectangle</h3></div>
+          <div class="tool-foot"><p>Box a button, a field, a row.</p><span class="keys"><kbd>⌘</kbd><kbd>Drag</kbd></span></div>
+        </article>
+        <article class="tool">
+          <div class="spec" data-ink><h3 class="w" data-mark="ellipse" data-pad="0.3em 0.2em" data-color="blue">Ellipse</h3></div>
+          <div class="tool-foot"><p>Circle it. This one's blue: press C.</p><span class="keys"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>Drag</kbd></span></div>
+        </article>
+        <article class="tool">
+          <div class="spec"><h3 class="w">Blur</h3><span class="secret" role="img" aria-label="A pixelated API key">ex_live_9fK2mQ7xL4pR8tZ1</span></div>
+          <div class="tool-foot"><p>Pixelates keys, emails and faces in blocks too big to read through.</p><span class="keys"><kbd>⌃</kbd><kbd>Drag</kbd></span></div>
+        </article>
+        <article class="tool">
+          <div class="spec"><span class="crop-demo" aria-hidden="true">keep<span class="crop-win">only this<i class="h tl"></i><i class="h tr"></i><i class="h bl"></i><i class="h br"></i></span>part</span><h3 class="sr">Crop</h3></div>
+          <div class="tool-foot"><p><strong>Crop.</strong> Only what's inside makes it into the image. Esc removes it.</p><span class="keys"><kbd>⌥</kbd><kbd>Drag</kbd></span></div>
+        </article>
+        <article class="tool">
+          <div class="spec" data-ink><h3 class="sr">Text</h3><p class="note" style="--delay:.1s">Typed at the cursor<span class="caret"></span></p></div>
+          <div class="tool-foot"><p><strong>Text.</strong> Enter or Esc finishes, ⇧⏎ adds a line, ⌘= and ⌘- resize. T over existing text edits it.</p><span class="keys"><kbd>T</kbd></span></div>
+        </article>
+        <article class="tool">
+          <div class="spec" data-ink><h3 class="w">Badges</h3><span class="badges" aria-hidden="true"><span class="badge" style="--delay:0s">3</span><span class="badge" style="--delay:.08s">1</span><span class="badge" style="--delay:.16s">33</span><span class="badge" style="--delay:.3s">7</span></span></div>
+          <div class="tool-foot"><p>A digit drops a numbered badge at the cursor. Two quick digits make one number: 3, 3 → 33.</p><span class="keys"><kbd>1</kbd><b>–</b><kbd>0</kbd></span></div>
+        </article>
+        <article class="tool">
+          <div class="spec" data-ink><h3 class="sr">Color</h3><span class="w" data-mark="line" data-off="4">Red</span><span class="w" style="color:var(--faint)">or</span><span class="w" data-mark="line" data-off="4" data-color="blue">blue</span></div>
+          <div class="tool-foot"><p><strong>Color.</strong> Flips the mark under the cursor, or the color you draw next.</p><span class="keys"><kbd>C</kbd></span></div>
+        </article>
+        <article class="tool">
+          <div class="spec" data-ink><h3 class="sr">Capture time</h3><p class="note stamp" id="stamp">2026-09-30 12:00:00 UTC</p></div>
+          <div class="tool-foot"><p><strong>Capture time.</strong> Stamps when the screenshot was taken, in UTC. Above: when you opened this page.</p><span class="keys"><kbd>U</kbd></span></div>
+        </article>
+      </div>
     </section>
 
-    <footer>
-      <a href="https://github.com/rsedykh/skryn">GitHub</a>
-    </footer>
-  </div>
+    <!-- EDITING -->
+    <section class="wrap sec" aria-labelledby="edit-h">
+      <div class="sec-head">
+        <h2 id="edit-h">Everything stays editable.</h2>
+        <p>Nothing is flattened until you send it. Hover a mark for its handles.</p>
+      </div>
+      <div class="edit">
+        <div class="mock" data-ink aria-hidden="true">
+          <div class="bar"><i></i><i></i><i></i></div>
+          <div class="warn">⚠︎ <span>Use test keys while you build. <span class="u" data-mark="line" data-off="7" data-handles>Never share the production key.</span></span></div>
+          <div class="rows"><i style="width:72%"></i><i style="width:54%"></i></div>
+          <span class="keybox" data-mark="rect" data-pad="7 7" data-color="blue" data-handles>ex_test_4hN8wC2vB6yD0sJ5</span>
+        </div>
+        <ul class="edit-list">
+          <li>Move a mark<span class="keys sm"><kbd>Drag</kbd></span></li>
+          <li>Resize it<span class="keys sm"><kbd>Drag</kbd><b>handle</b></span></li>
+          <li>Delete it<span class="keys sm"><kbd>⌫</kbd></span></li>
+          <li>Undo, redo<span class="keys sm"><kbd>⌘</kbd><kbd>Z</kbd><kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd></span></li>
+          <li>Edit text<span class="keys sm"><kbd>Click</kbd></span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- OUTPUT -->
+    <section class="wrap sec" aria-labelledby="send-h">
+      <div class="sec-head">
+        <h2 id="send-h">Crop, then ⌘⏎ to copy.</h2>
+        <p>Three ways out, one keystroke each. Pick the modifiers in Settings. <span class="keys sm"><kbd>⌘</kbd><kbd>W</kbd></span> closes without saving.</p>
+      </div>
+      <div class="send" data-ink>
+        <p class="note paste-note" data-mark="arrow" data-to="#shot" data-gap="10">This is what gets pasted</p>
+        <figure class="shot">
+          <div class="shot-img" id="shot"><img src="assets/exported.webp" alt="An annotated screenshot of an API keys page: numbered badges 1 to 3, the API keys tab circled, a warning underlined, the production key pixelated, the test key boxed in blue, and a red note with an arrow: Copy the test key." width="1744" height="1086" loading="lazy" decoding="async"></div>
+        </figure>
+        <ul class="outs">
+          <li><h3>Copy to clipboard <span class="keys sm"><kbd>⌘</kbd><kbd>⏎</kbd></span></h3><p>Paste it straight into a chat, a ticket, a doc.</p></li>
+          <li><h3>Save to a folder <span class="keys sm"><kbd>⌥</kbd><kbd>⏎</kbd></span></h3><p>A PNG on your Desktop, or in any folder you choose.</p></li>
+          <li><h3>Upload, copy the link <span class="keys sm"><kbd>⌃</kbd><kbd>⏎</kbd></span></h3><p>Uploads to Uploadcare with your public key and copies the link. If the upload fails, the PNG is saved locally.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- MENU BAR -->
+    <section class="wrap sec" aria-labelledby="mb-h">
+      <div class="sec-head">
+        <h2 id="mb-h">Out of the way until you need it.</h2>
+      </div>
+      <div class="mb">
+        <div class="desk" data-ink aria-hidden="true">
+          <div class="menubar">
+            <span class="cam" id="cam" data-mark="ellipse" data-pad="9 3"><svg viewBox="0 0 24 24"><path d="M4.5 7.5h3l1.6-2.2h5.8l1.6 2.2h3a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5V9a1.5 1.5 0 0 1 1.5-1.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span>
+            <svg viewBox="0 0 24 24"><rect x="2.5" y="8" width="17" height="8.5" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="4.4" y="9.9" width="11" height="4.7" rx="1" fill="currentColor"/><path d="M21 10.8v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M3 9.5a13 13 0 0 1 18 0M6 12.8a8.5 8.5 0 0 1 12 0M9 16a4 4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="19" r="1.3" fill="currentColor"/></svg>
+            <span>Tue 10:41</span>
+          </div>
+          <p class="note n-click" data-mark="arrow" data-to="#cam" data-gap="16">Click to capture</p>
+          <div class="file" data-mark="arrow" data-to="#cam" data-gap="16" data-color="blue"><i></i><i></i><i></i><span>shot.png</span></div>
+          <p class="note blue n-drop">Or drop an image on it</p>
+        </div>
+        <ul class="facts">
+          <li><b>One hotkey, your choice</b><span>⇧⌘5 by default. Record a different one in Settings.</span></li>
+          <li><b>The display you're on</b><span>With more than one screen, Skryn captures the one under your cursor.</span></li>
+          <li><b>Drop an image on the icon</b><span>Any image file opens for markup, like a screenshot.</span></li>
+          <li><b>Launch at login</b><span>One checkbox in Settings.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- INSTALL -->
+    <section id="install" class="wrap sec" aria-labelledby="inst-h">
+      <div class="sec-head">
+        <h2 id="inst-h">Installation</h2>
+      </div>
+      <div class="install">
+        <ol data-ink>
+          <li><span class="badge" style="--delay:0s">1</span><span>Download <strong>Skryn.zip</strong> from the <a href="https://github.com/rsedykh/skryn/releases/latest">latest release</a>.</span></li>
+          <li><span class="badge" style="--delay:.1s">2</span><span>Unzip it and drag <strong>Skryn.app</strong> to Applications.</span></li>
+          <li><span class="badge" style="--delay:.2s">3</span><span>Open it. macOS blocks the first launch because Skryn isn't notarized: go to <strong>System Settings → Privacy &amp; Security</strong> and click <strong>Open Anyway</strong>.<small>On macOS 14, right-click → Open works too.</small></span></li>
+          <li><span class="badge" style="--delay:.3s">4</span><span>Grant <strong>Screen Recording</strong> permission when asked.</span></li>
+        </ol>
+        <aside class="update" aria-labelledby="upd-h">
+          <h3 id="upd-h">Updating</h3>
+          <p>Since v0.1.6, Screen Recording permission carries over when you update.</p>
+          <p>Updating from v0.1.5 or earlier? If screenshots stop working, reset it once:</p>
+          <ol>
+            <li>System Settings → Privacy &amp; Security → Screen Recording</li>
+            <li>Remove Skryn from the list</li>
+            <li>Take a screenshot; Skryn asks for permission again</li>
+          </ol>
+        </aside>
+      </div>
+    </section>
+
+    <!-- CLOSING -->
+    <section class="wrap end" aria-labelledby="end-h">
+      <h2 id="end-h">Skryn</h2>
+      <p class="lede">Screenshot and annotate, from the menu bar.</p>
+      <div class="end-cta" data-ink>
+        <a id="dl-end" class="download" href="https://github.com/rsedykh/skryn/releases/latest" data-mark="rect" data-pad="9 9">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5v10m0 0-4-4m4 4 4-4M3.5 15.5h13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download for macOS
+        </a>
+        <p class="note" data-mark="arrow" data-to="#dl-end" data-gap="20">Your turn</p>
+      </div>
+      <p class="cta-meta">macOS 14 or later</p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Skryn · a macOS menu bar app</span>
+      <span><a href="https://github.com/rsedykh/skryn">GitHub</a> · <a href="https://github.com/rsedykh/skryn/releases">Releases</a></span>
+    </div>
+  </footer>
+
+  <script>
+  (() => {
+    // Laptops (mouse or trackpad) get the live playground; phones and tablets get the video
+    const FINE_POINTER = matchMedia('(hover: hover) and (pointer: fine)').matches;
+    const pixelCache = new WeakMap(); // for pixelsOf()
+
+    initNav();
+    initMarks();
+    initDemo();
+    initPlayground();
+
+    // Skryn's blur (the app's CIPhotoEffectMono + CIPixellate): square blocks colored from the pixel at each block's center,
+    // mixed toward gray. Returns the (sx, sy, sw, sh) region of src at one pixel per block: draw it back up with smoothing off.
+    function mosaic(src, sx, sy, sw, sh, block, gray = 1) {
+      const nx = Math.max(1, Math.ceil(sw / block)), ny = Math.max(1, Math.ceil(sh / block));
+      const canvas = document.createElement('canvas');
+      canvas.width = nx; canvas.height = ny;
+      const c = canvas.getContext('2d');
+      let px;
+      try { px = pixelsOf(src); } catch (e) {
+        // tainted canvas (file://): let the browser shrink it, in color
+        c.imageSmoothingEnabled = false;
+        c.drawImage(src, sx, sy, sw, sh, 0, 0, sw / block, sh / block);
+        return { canvas, nx, ny };
+      }
+      const out = c.createImageData(nx, ny), q = out.data, d = px.data;
+      const right = Math.min(sx + sw, px.width) - 1, bottom = Math.min(sy + sh, px.height) - 1;
+      for (let j = 0; j < ny; j++) {
+        const y = Math.min(bottom, Math.floor(sy + (j + .5) * block));
+        for (let i = 0; i < nx; i++) {
+          const x = Math.min(right, Math.floor(sx + (i + .5) * block));
+          const k = (y * px.width + x) * 4, o = (j * nx + i) * 4;
+          const l = .299 * d[k] + .587 * d[k + 1] + .114 * d[k + 2];
+          q[o] = d[k] + (l - d[k]) * gray; q[o + 1] = d[k + 1] + (l - d[k + 1]) * gray; q[o + 2] = d[k + 2] + (l - d[k + 2]) * gray;
+          q[o + 3] = 255;
+        }
+      }
+      c.putImageData(out, 0, 0);
+      return { canvas, nx, ny };
+    }
+
+    // An image's or canvas's pixels, read once: neither changes after it's drawn
+    function pixelsOf(src) {
+      let px = pixelCache.get(src);
+      if (!px) {
+        const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const x = c.getContext('2d', { willReadFrequently: true });
+        x.drawImage(src, 0, 0);
+        px = x.getImageData(0, 0, w, h);
+        pixelCache.set(src, px);
+      }
+      return px;
+    }
+
+    // Nav: a hairline under the pinned bar once the page scrolls
+    function initNav() {
+      const bar = document.querySelector('.top');
+      const onScroll = () => bar.classList.toggle('scrolled', scrollY > 8);
+      addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    }
+
+    // The page's own marks: an SVG layer per [data-ink] block, drawn from the [data-mark] elements in it
+    function initMarks() {
+      const NS = 'http://www.w3.org/2000/svg';
+      const HEAD = 18, HEAD_ANGLE = Math.PI / 6, STROKE = 3; // the app's arrowhead and stroke
+
+      // Capture-time stamp, in the app's format: yyyy-MM-dd HH:mm:ss 'UTC'
+      const stamp = document.getElementById('stamp');
+      if (stamp) stamp.textContent = new Date().toISOString().slice(0, 19).replace('T', ' ') + ' UTC';
+
+      const make = (name, attrs, parent) => {
+        const n = document.createElementNS(NS, name);
+        for (const k in attrs) n.setAttribute(k, attrs[k]);
+        parent.appendChild(n);
+        return n;
+      };
+      const rel = (el, b) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height };
+      };
+      // data-pad="x y" in px, or in em of the marked element ("0.16em 0.08em")
+      const pads = (el, dx, dy) => {
+        const fs = parseFloat(getComputedStyle(el).fontSize) || 16;
+        const v = (t, d) => !t ? d : t.endsWith('em') ? parseFloat(t) * fs : +t || d;
+        const [a, b] = (el.dataset.pad || '').trim().split(/\s+/);
+        return [v(a, dx), v(b, dy)];
+      };
+      // Point where the ray from the rect's center toward (px, py) leaves the rect grown by g
+      const edge = (r, px, py, g) => {
+        const cx = r.x + r.w / 2, cy = r.y + r.h / 2, dx = px - cx, dy = py - cy;
+        if (!dx && !dy) return [cx, cy];
+        const t = Math.min(dx ? (r.w / 2 + g) / Math.abs(dx) : Infinity, dy ? (r.h / 2 + g) / Math.abs(dy) : Infinity);
+        return [cx + dx * t, cy + dy * t];
+      };
+
+      function stroke(node, n) {
+        node.classList.add('s');
+        const len = node.getTotalLength ? node.getTotalLength() : 1000;
+        node.style.setProperty('--len', Math.ceil(len) + 1);
+        node.style.setProperty('--delay', (n * 0.14).toFixed(2) + 's');
+      }
+      function pop(node, delay) {
+        node.classList.add('pop');
+        node.style.setProperty('--delay', delay.toFixed(2) + 's');
+      }
+      function handle(svg, x, y, delay) {
+        pop(make('circle', { cx: x, cy: y, r: 6, class: 'handle' }, svg), delay);
+      }
+      function arrow(svg, cls, x1, y1, x2, y2, n) {
+        const a = Math.atan2(y2 - y1, x2 - x1);
+        // stop the shaft inside the head so its square end never pokes past the tip
+        const sx = x2 - Math.cos(a) * HEAD * 0.6, sy = y2 - Math.sin(a) * HEAD * 0.6;
+        stroke(make('line', { x1, y1, x2: sx, y2: sy, class: cls, 'stroke-width': STROKE }, svg), n);
+        const p1 = [x2 - HEAD * Math.cos(a - HEAD_ANGLE), y2 - HEAD * Math.sin(a - HEAD_ANGLE)];
+        const p2 = [x2 - HEAD * Math.cos(a + HEAD_ANGLE), y2 - HEAD * Math.sin(a + HEAD_ANGLE)];
+        pop(make('path', { d: `M${x2} ${y2}L${p1}L${p2}Z`, class: cls + ' head' }, svg), n * 0.14 + 0.42);
+      }
+
+      const scopes = [...document.querySelectorAll('[data-ink]')];
+      const layers = new Map();
+
+      function draw(scope) {
+        let svg = layers.get(scope);
+        if (!svg) {
+          svg = make('svg', { class: 'ink', 'aria-hidden': 'true', focusable: 'false' }, scope);
+          layers.set(scope, svg);
+        }
+        svg.replaceChildren();
+        const b = scope.getBoundingClientRect();
+        svg.setAttribute('viewBox', `0 0 ${b.width} ${b.height}`);
+        let n = 0;
+        for (const el of scope.querySelectorAll('[data-mark]')) {
+          if (el.closest('[data-ink]') !== scope) continue;
+          const r = rel(el, b), cls = el.dataset.color === 'blue' ? 'blue' : 'red';
+          const kind = el.dataset.mark, withHandles = 'handles' in el.dataset;
+          if (kind === 'rect') {
+            const [px, py] = pads(el, 8, 8);
+            const x = r.x - px, y = r.y - py, w = r.w + 2 * px, h = r.h + 2 * py;
+            stroke(make('rect', { x, y, width: w, height: h, class: cls, 'stroke-width': STROKE }, svg), n);
+            if (withHandles) [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([hx, hy]) => handle(svg, hx, hy, n * 0.14 + 0.5));
+          } else if (kind === 'ellipse') {
+            const [px, py] = pads(el, 16, 10);
+            stroke(make('ellipse', { cx: r.x + r.w / 2, cy: r.y + r.h / 2, rx: r.w / 2 + px, ry: r.h / 2 + py, class: cls, 'stroke-width': STROKE }, svg), n);
+          } else if (kind === 'line') {
+            const y = r.y + r.h + (+el.dataset.off || 2);
+            stroke(make('line', { x1: r.x, y1: y, x2: r.x + r.w, y2: y, class: cls, 'stroke-width': STROKE }, svg), n);
+            if (withHandles) { handle(svg, r.x, y, n * 0.14 + 0.5); handle(svg, r.x + r.w, y, n * 0.14 + 0.5); }
+          } else if (kind === 'arrow') {
+            const target = scope.querySelector(el.dataset.to);
+            if (!target) continue;
+            const t = rel(target, b), gap = +el.dataset.gap || 8;
+            const tc = [t.x + t.w / 2, t.y + t.h / 2], fc = [r.x + r.w / 2, r.y + r.h / 2];
+            const [x1, y1] = edge(r, tc[0], tc[1], 8);
+            const [x2, y2] = edge(t, fc[0], fc[1], gap);
+            arrow(svg, cls, x1, y1, x2, y2, n);
+          }
+          n++;
+        }
+      }
+
+      // The Blur cell's fake key: the text drawn to a canvas, then Skryn's blur with the app's block size (max(w, h) / 40, at least 10pt)
+      function pixelate(el) {
+        const w = el.offsetWidth, h = el.offsetHeight;
+        if (!w || !h) return;
+        const cs = getComputedStyle(el), dpr = Math.min(window.devicePixelRatio || 1, 3);
+        const W = Math.round(w * dpr), H = Math.round(h * dpr);
+        const src = document.createElement('canvas');
+        src.width = W; src.height = H;
+        const s = src.getContext('2d');
+        s.fillStyle = cs.backgroundColor; s.fillRect(0, 0, W, H);
+        s.fillStyle = cs.getPropertyValue('--secret-ink').trim() || '#333';
+        s.font = `${cs.fontWeight} ${parseFloat(cs.fontSize) * dpr}px ${cs.fontFamily}`;
+        s.textBaseline = 'middle';
+        s.fillText(el.textContent.trim(), parseFloat(cs.paddingLeft) * dpr, H / 2 + dpr);
+        const block = Math.max(Math.max(w, h) / 40, 10) * dpr;
+        const m = mosaic(src, 0, 0, W, H, block);
+        const c = el.querySelector('canvas') || el.appendChild(document.createElement('canvas'));
+        c.width = W; c.height = H;
+        const o = c.getContext('2d');
+        o.imageSmoothingEnabled = false;
+        o.drawImage(m.canvas, 0, 0, m.nx * block, m.ny * block);
+        el.classList.add('done');
+      }
+      const secrets = [...document.querySelectorAll('.secret')];
+
+      let queued = false;
+      const redraw = () => {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => { queued = false; scopes.forEach(draw); secrets.forEach(pixelate); });
+      };
+      scopes.forEach(draw);
+      secrets.forEach(pixelate);
+      const ro = new ResizeObserver(redraw);
+      scopes.forEach((s) => ro.observe(s));
+      secrets.forEach((s) => ro.observe(s));
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
+
+      // Draw marks on once, as they scroll into view
+      if (!('IntersectionObserver' in window)) { scopes.forEach((s) => s.classList.add('is-drawn')); return; }
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          e.target.classList.add('is-drawn');
+          io.unobserve(e.target);
+        }
+      }, { rootMargin: '0px 0px -12% 0px', threshold: 0.2 });
+      scopes.forEach((s) => io.observe(s));
+    }
+
+    // Demo: the playground behind Skryn's blur on a laptop, the video everywhere else
+    function initDemo() {
+      const demo = document.getElementById('demo');
+      const film = demo.querySelector('video'), playBtn = demo.querySelector('.play');
+      const pg = document.getElementById('pg'), gate = demo.querySelector('.gate'), gc = gate.querySelector('canvas');
+      const sw = demo.querySelector('.switch');
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // native controls only once the film plays (no-JS visitors keep them from the start)
+      film.controls = false;
+      const startFilm = () => { film.controls = true; playBtn.hidden = true; };
+      playBtn.addEventListener('click', () => { startFilm(); film.play().catch(() => {}); });
+      film.addEventListener('play', startFilm);
+      if (!FINE_POINTER) return;
+
+      let gateSrc = null, block0 = 0, opening = false; // gateSrc: the seeded playground, rendered once
+      demo.classList.add('pg-mode', 'gated', 'can-play');
+      document.getElementById('nav-demo').textContent = 'Try it';
+      const label = () => { sw.textContent = demo.classList.contains('pg-mode') ? 'Watch the video instead' : 'Try it yourself'; };
+      label();
+
+      // Skryn's blur over the whole frame, with the app's block size for an image this big: max(w, h) / 40
+      function drawGate(block, gray) {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        gc.width = Math.round(gc.clientWidth * dpr); gc.height = Math.round(gc.clientHeight * dpr);
+        const g = gc.getContext('2d');
+        if (block <= 2) { g.imageSmoothingEnabled = true; g.drawImage(gateSrc, 0, 0, gc.width, gc.height); return; }
+        const m = mosaic(gateSrc, 0, 0, gateSrc.width, gateSrc.height, block, gray);
+        g.imageSmoothingEnabled = false;
+        g.drawImage(m.canvas, 0, 0, m.nx * block * gc.width / gateSrc.width, m.ny * block * gc.height / gateSrc.height);
+      }
+      pg.addEventListener('pg-ready', (e) => {
+        gateSrc = e.detail.composite();
+        block0 = Math.max(gateSrc.width, gateSrc.height) / 40;
+        drawGate(block0, 1);
+      });
+      new ResizeObserver(() => { if (gateSrc && demo.classList.contains('gated') && !opening) drawGate(block0, 1); }).observe(gate);
+
+      function open() {
+        const done = () => {
+          opening = false; gate.classList.remove('opening'); gateSrc = null; // the blur is done with it
+          demo.classList.remove('gated'); pg.inert = false; pg.focus({ preventScroll: true });
+        };
+        if (reduce || !gateSrc) return done();
+        opening = true; gate.classList.add('opening');
+        const t0 = performance.now(), dur = 520;
+        const step = (now) => {
+          const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+          drawGate(block0 * Math.pow(2 / block0, e), 1 - e); // blocks shrink to 2px, color comes back
+          k < 1 ? requestAnimationFrame(step) : done();
+        };
+        requestAnimationFrame(step);
+      }
+      function toVideo() {
+        demo.classList.remove('pg-mode', 'gated'); pg.inert = true; label();
+        startFilm(); film.play().catch(() => {});
+      }
+      function toPlayground() {
+        film.pause(); demo.classList.add('pg-mode'); demo.classList.remove('gated'); label();
+        pg.inert = false; pg.focus({ preventScroll: true });
+      }
+      demo.querySelector('.gate-try').addEventListener('click', open);
+      demo.querySelector('.gate-watch').addEventListener('click', toVideo);
+      sw.addEventListener('click', () => (demo.classList.contains('pg-mode') ? toVideo() : toPlayground()));
+    }
+
+    // Playground: a browser replica of Skryn's AnnotationView.
+    // Annotations live in screenshot points (872×543); the image is 2× that.
+    function initPlayground() {
+      if (!FINE_POINTER) return;
+      const W = 872, H = 543, PX = 2;
+      const COLORS = { red: '#FF0000', blue: '#0091FF' };
+      const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", sans-serif';
+      const LH = 1.2;
+      const BADGE_R = 16;
+      const DIGITS = { Digit1: 1, Digit2: 2, Digit3: 3, Digit4: 4, Digit5: 5, Digit6: 6, Digit7: 7, Digit8: 8, Digit9: 9, Digit0: 0 };
+
+      const stage = document.getElementById('pg');
+      const bar = document.getElementById('pg-bar');
+      const img = stage.querySelector('img');
+      img.src = img.dataset.src;
+      const canvas = stage.querySelector('canvas');
+      const ctx = canvas.getContext('2d');
+      const toastEl = stage.querySelector('.pg-toast');
+      const mctx = document.createElement('canvas').getContext('2d');
+      const ta = document.createElement('textarea');
+      ta.setAttribute('aria-label', 'Annotation text');
+      ta.spellcheck = false;
+      ta.setAttribute('autocapitalize', 'off');
+      ta.setAttribute('autocomplete', 'off');
+
+      const captureDate = new Date();
+
+      // A finished example, like the end of the demo video
+      const seed = () => [
+        { type: 'blur', r: { x: 388, y: 320, w: 212, h: 31 } },
+        { type: 'rect', r: { x: 386, y: 377, w: 215, h: 35 }, color: 'blue' },
+        { type: 'badge', x: 205, y: 395, n: 1, color: 'red' },
+        { type: 'text', x: 322, y: 483, w: 230, text: 'Copy the test key', size: 24, color: 'red' },
+        { type: 'arrow', from: { x: 548, y: 497 }, to: { x: 766, y: 414 }, color: 'red' },
+      ];
+
+      let anns = seed();
+      let undoStack = [], redoStack = [];
+      let color = 'red';
+      let armed = null;
+      let hover = null;
+      let state = { mode: 'idle' };
+      let lastPt = { x: W / 2, y: H / 2 };
+      let pointerInside = false;
+      let lastBadge = null;
+      let textFont = 24;
+      let scale = 1, dpr = 1;
+      const blurCache = new Map();
+      let imgReady = false; // WebKit can report a cached image complete before it can be drawn
+
+      // ---------- geometry ----------
+      const snap = () => JSON.stringify(anns);
+      const clone = (a) => JSON.parse(JSON.stringify(a));
+      const rectFrom = (a, b) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) });
+      const clampRect = (r) => {
+        const x = Math.max(0, r.x), y = Math.max(0, r.y);
+        return { x, y, w: Math.max(0, Math.min(W, r.x + r.w) - x), h: Math.max(0, Math.min(H, r.y + r.h) - y) };
+      };
+      const inRect = (p, r, pad = 0) => p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
+      function segDist(p, a, b) {
+        const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+        if (!l2) return Math.hypot(p.x - a.x, p.y - a.y);
+        const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+        return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+      }
+      function inEllipse(r, inset, p) {
+        const hw = r.w / 2 - inset, hh = r.h / 2 - inset;
+        if (hw <= 0 || hh <= 0) return false;
+        const nx = (p.x - (r.x + r.w / 2)) / hw, ny = (p.y - (r.y + r.h / 2)) / hh;
+        return nx * nx + ny * ny <= 1;
+      }
+      const fontFor = (size) => `bold ${size}px ${FONT}`;
+      function wrapLines(text, width, size) {
+        mctx.font = fontFor(size);
+        const fits = (s) => mctx.measureText(s).width <= width;
+        const out = [];
+        for (const para of text.split('\n')) {
+          let line = '';
+          for (const word of para.split(/(\s+)/)) {
+            if (!word) continue;
+            const next = line + word;
+            if (fits(next) || !line.trim()) {
+              line = next;
+            } else {
+              out.push(line.replace(/\s+$/, ''));
+              line = word.replace(/^\s+/, '');
+            }
+            while (line.length > 1 && !fits(line)) {
+              let i = line.length - 1;
+              while (i > 1 && !fits(line.slice(0, i))) i--;
+              out.push(line.slice(0, i));
+              line = line.slice(i);
+            }
+          }
+          out.push(line);
+        }
+        return out;
+      }
+      function textRect(a) {
+        const n = wrapLines(a.text, a.w, a.size).length;
+        return { x: a.x, y: a.y, w: a.w, h: Math.max(n * a.size * LH, a.size * 1.5) };
+      }
+      function handlesOf(a) {
+        if (a.type === 'arrow' || a.type === 'line') return [['from', a.from], ['to', a.to]];
+        if (a.r) {
+          const r = a.r;
+          return [['tl', { x: r.x, y: r.y }], ['tr', { x: r.x + r.w, y: r.y }], ['bl', { x: r.x, y: r.y + r.h }], ['br', { x: r.x + r.w, y: r.y + r.h }]];
+        }
+        if (a.type === 'text') {
+          const r = textRect(a);
+          return [['left', { x: r.x, y: r.y + r.h / 2 }], ['right', { x: r.x + r.w, y: r.y + r.h / 2 }]];
+        }
+        return [];
+      }
+      function moveHandle(a, h, p) {
+        a = clone(a);
+        if (a.type === 'arrow' || a.type === 'line') { a[h] = p; return a; }
+        if (a.r) {
+          const r = a.r;
+          const opp = { tl: { x: r.x + r.w, y: r.y + r.h }, tr: { x: r.x, y: r.y + r.h }, bl: { x: r.x + r.w, y: r.y }, br: { x: r.x, y: r.y } }[h];
+          a.r = rectFrom(opp, p);
+          return a;
+        }
+        if (a.type === 'text') {
+          if (h === 'left') {
+            const right = a.x + a.w, nx = Math.min(p.x, right - 20);
+            a.w = Math.max(right - nx, 20); a.x = nx;
+          } else {
+            a.w = Math.max(p.x - a.x, 20);
+          }
+        }
+        return a;
+      }
+      function offset(a, dx, dy) {
+        a = clone(a);
+        if (a.from) { a.from.x += dx; a.from.y += dy; a.to.x += dx; a.to.y += dy; }
+        else if (a.r) { a.r.x += dx; a.r.y += dy; }
+        else { a.x += dx; a.y += dy; }
+        return a;
+      }
+      function bodyHit(a, p, hr) {
+        switch (a.type) {
+          case 'arrow': case 'line': return segDist(p, a.from, a.to) <= hr;
+          case 'rect': case 'crop': {
+            const r = a.r;
+            const inner = p.x > r.x + hr && p.x < r.x + r.w - hr && p.y > r.y + hr && p.y < r.y + r.h - hr;
+            return inRect(p, r, hr) && !inner;
+          }
+          case 'ellipse': return inEllipse(a.r, -hr, p) && !inEllipse(a.r, hr, p);
+          case 'blur': return inRect(p, a.r);
+          case 'text': return inRect(p, textRect(a));
+          case 'badge': return Math.hypot(p.x - a.x, p.y - a.y) <= BADGE_R + hr;
+        }
+        return false;
+      }
+      function hitTest(p, touch) {
+        const hh = (touch ? 20 : 10) / scale, bh = (touch ? 10 : 5) / scale;
+        for (let i = anns.length - 1; i >= 0; i--) {
+          if (state.mode === 'text' && state.idx === i) continue;
+          let best = null, bd = Infinity;
+          for (const [h, q] of handlesOf(anns[i])) {
+            const d = Math.hypot(p.x - q.x, p.y - q.y);
+            if (d <= hh && d < bd) { bd = d; best = h; }
+          }
+          if (best) return { i, handle: best };
+          if (bodyHit(anns[i], p, bh)) return { i };
+        }
+        return null;
+      }
+      function toolFor(m) {
+        if (m.meta && m.shift) return 'ellipse';
+        if (m.alt) return 'crop';
+        if (m.meta) return 'rect';
+        if (m.ctrl) return 'blur';
+        if (m.shift) return 'line';
+        return 'arrow';
+      }
+      function makeShape(tool, o, p) {
+        if (tool === 'arrow' || tool === 'line') return { type: tool, from: { ...o }, to: { ...p }, color };
+        if (tool === 'rect' || tool === 'ellipse') return { type: tool, r: rectFrom(o, p), color };
+        return { type: tool, r: rectFrom(o, p) };
+      }
+
+      // ---------- drawing ----------
+      function drawArrow(c, a) {
+        c.strokeStyle = c.fillStyle = COLORS[a.color];
+        c.lineWidth = 3; c.lineCap = 'butt';
+        c.beginPath(); c.moveTo(a.from.x, a.from.y); c.lineTo(a.to.x, a.to.y); c.stroke();
+        const ang = Math.atan2(a.to.y - a.from.y, a.to.x - a.from.x), L = 18, ha = Math.PI / 6;
+        c.beginPath();
+        c.moveTo(a.to.x, a.to.y);
+        c.lineTo(a.to.x - L * Math.cos(ang - ha), a.to.y - L * Math.sin(ang - ha));
+        c.lineTo(a.to.x - L * Math.cos(ang + ha), a.to.y - L * Math.sin(ang + ha));
+        c.closePath(); c.fill();
+      }
+      function drawLine(c, a) {
+        c.strokeStyle = COLORS[a.color]; c.lineWidth = 3; c.lineCap = 'butt';
+        c.beginPath(); c.moveTo(a.from.x, a.from.y); c.lineTo(a.to.x, a.to.y); c.stroke();
+      }
+      function drawBadge(c, a) {
+        c.fillStyle = COLORS[a.color];
+        c.beginPath(); c.arc(a.x, a.y, BADGE_R, 0, Math.PI * 2); c.fill();
+        const label = String(a.n);
+        c.font = fontFor(label.length > 2 ? 14 : 18);
+        c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+        const m = c.measureText(label);
+        c.fillText(label, a.x, a.y + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
+        c.textAlign = 'left';
+      }
+      function drawText(c, a) {
+        c.font = fontFor(a.size);
+        c.fillStyle = COLORS[a.color]; c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+        const m = c.measureText('Hg');
+        const asc = m.fontBoundingBoxAscent || a.size * .95, desc = m.fontBoundingBoxDescent || a.size * .24;
+        const lh = a.size * LH, off = (lh - (asc + desc)) / 2 + asc;
+        wrapLines(a.text, a.w, a.size).forEach((l, k) => c.fillText(l, a.x, a.y + k * lh + off));
+      }
+      function drawCrop(c, a) {
+        const r = a.r;
+        c.save();
+        c.fillStyle = 'rgba(0,0,0,.5)';
+        c.beginPath(); c.rect(0, 0, W, H); c.rect(r.x, r.y, r.w, r.h); c.fill('evenodd');
+        c.strokeStyle = '#fff'; c.lineWidth = 2; c.strokeRect(r.x, r.y, r.w, r.h);
+        c.restore();
+      }
+      // Skryn's blur with the app's block size: max(max(w, h) / 40, 10pt)
+      function blurTile(r, useCache) {
+        const key = [r.x, r.y, r.w, r.h].map((v) => v.toFixed(1)).join(',');
+        if (useCache && blurCache.has(key)) return blurCache.get(key);
+        const b = Math.max(Math.max(r.w, r.h) / 40, 10);
+        const { canvas, nx, ny } = mosaic(img, r.x * PX, r.y * PX, r.w * PX, r.h * PX, b * PX);
+        const tile = { canvas, b, nx, ny };
+        if (useCache) {
+          blurCache.set(key, tile);
+          if (blurCache.size > 48) blurCache.delete(blurCache.keys().next().value);
+        }
+        return tile;
+      }
+      function drawBlur(c, a, useCache = true) {
+        const r = clampRect(a.r);
+        if (r.w < 1 || r.h < 1 || !imgReady) return;
+        const t = blurTile(r, useCache);
+        c.save();
+        c.beginPath(); c.rect(r.x, r.y, r.w, r.h); c.clip();
+        c.imageSmoothingEnabled = false;
+        c.drawImage(t.canvas, r.x, r.y, t.nx * t.b, t.ny * t.b);
+        c.restore();
+      }
+      function drawAnn(c, a, view) {
+        switch (a.type) {
+          case 'arrow': return drawArrow(c, a);
+          case 'line': return drawLine(c, a);
+          case 'rect': c.strokeStyle = COLORS[a.color]; c.lineWidth = 3; return c.strokeRect(a.r.x, a.r.y, a.r.w, a.r.h);
+          case 'ellipse':
+            c.strokeStyle = COLORS[a.color]; c.lineWidth = 3; c.beginPath();
+            c.ellipse(a.r.x + a.r.w / 2, a.r.y + a.r.h / 2, a.r.w / 2, a.r.h / 2, 0, 0, Math.PI * 2);
+            return c.stroke();
+          case 'badge': return drawBadge(c, a);
+          case 'text': return drawText(c, a);
+          case 'crop': return view ? drawCrop(c, a) : undefined;
+        }
+      }
+      function drawHandles(c, a) {
+        const r = 6 / scale;
+        c.save();
+        c.lineWidth = 2 / scale; c.strokeStyle = '#FF0000'; c.fillStyle = '#fff';
+        for (const [, q] of handlesOf(a)) {
+          c.beginPath(); c.arc(q.x, q.y, r, 0, Math.PI * 2); c.fill(); c.stroke();
+        }
+        c.restore();
+      }
+      function render() {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+        const list = [];
+        anns.forEach((a, i) => { if (!(state.mode === 'text' && state.idx === i)) list.push([a, i]); });
+        if (state.mode === 'draw' && state.cur) list.push([state.cur, -1]);
+        const live = (state.mode === 'move' || state.mode === 'handle') ? state.idx : -2;
+        for (const [a, i] of list) if (a.type === 'blur') drawBlur(ctx, a, i !== -1 && i !== live);
+        for (const [a] of list) if (a.type !== 'blur') drawAnn(ctx, a, true);
+        const hi = (state.mode === 'move' || state.mode === 'handle') ? state.idx : (state.mode === 'idle' ? hover : null);
+        if (hi != null && anns[hi]) drawHandles(ctx, anns[hi]);
+      }
+      function composite() {
+        const crop = anns.find((a) => a.type === 'crop');
+        const r = crop ? clampRect(crop.r) : { x: 0, y: 0, w: W, h: H };
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(r.w * PX));
+        c.height = Math.max(1, Math.round(r.h * PX));
+        const x = c.getContext('2d');
+        x.setTransform(PX, 0, 0, PX, -r.x * PX, -r.y * PX);
+        x.drawImage(img, 0, 0, W, H);
+        for (const a of anns) if (a.type === 'blur') drawBlur(x, a);
+        for (const a of anns) if (a.type !== 'blur') drawAnn(x, a, false);
+        return c;
+      }
+
+      // ---------- model ----------
+      function commit(before) {
+        undoStack.push(typeof before === 'string' ? before : JSON.stringify(before));
+        if (undoStack.length > 200) undoStack.shift();
+        redoStack = [];
+      }
+      function add(a) {
+        commit(snap());
+        if (a.type === 'crop') anns = anns.filter((x) => x.type !== 'crop');
+        anns.push(a);
+      }
+      function removeAt(i) {
+        commit(snap());
+        anns.splice(i, 1);
+        hover = null;
+      }
+      function undo() {
+        if (!undoStack.length) return;
+        redoStack.push(snap());
+        anns = JSON.parse(undoStack.pop());
+        lastBadge = null; hover = null; render(); refreshHover();
+      }
+      function redo() {
+        if (!redoStack.length) return;
+        undoStack.push(snap());
+        anns = JSON.parse(redoStack.pop());
+        lastBadge = null; hover = null; render(); refreshHover();
+      }
+      function removeCrop() {
+        if (!anns.some((a) => a.type === 'crop')) return false;
+        commit(snap());
+        anns = anns.filter((a) => a.type !== 'crop');
+        render();
+        return true;
+      }
+      function badgeKey(d) {
+        const now = performance.now();
+        const last = lastBadge && anns[lastBadge.i];
+        if (last && last.type === 'badge' && now - lastBadge.t < 500 && last.n < 10) {
+          const before = snap();
+          anns[lastBadge.i] = { ...last, n: last.n * 10 + d };
+          commit(before);
+          lastBadge.t = now;
+        } else {
+          add({ type: 'badge', x: lastPt.x, y: lastPt.y, n: d, color });
+          lastBadge = { i: anns.length - 1, t: now };
+        }
+        render();
+      }
+      function nextBadgeNumber() {
+        const ns = anns.filter((a) => a.type === 'badge').map((a) => a.n);
+        const n = (ns.length ? Math.max(...ns) : 0) + 1;
+        return n > 99 ? 1 : n;
+      }
+      function toggleColor() {
+        const a = hover != null && anns[hover];
+        if (a && a.color) {
+          const before = snap();
+          color = a.color === 'red' ? 'blue' : 'red';
+          anns[hover] = { ...a, color };
+          commit(before);
+        } else {
+          color = color === 'red' ? 'blue' : 'red';
+        }
+        syncBar(); render();
+      }
+      const pad = (n) => String(n).padStart(2, '0');
+      function insertTimestamp() {
+        const d = captureDate;
+        const t = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
+        mctx.font = fontFor(textFont);
+        add({ type: 'text', x: lastPt.x, y: lastPt.y, w: mctx.measureText(t).width + 4, text: t, size: textFont, color });
+        render();
+      }
+
+      // ---------- text editing ----------
+      function startTextAt(p) {
+        const h = hitTest(p, false);
+        if (h && anns[h.i].type === 'text') return startEdit(h.i);
+        openText({ idx: null, x: p.x, y: p.y, w: 300, size: textFont, color, text: '' });
+      }
+      function startEdit(i) {
+        const a = anns[i];
+        color = a.color; textFont = a.size; syncBar();
+        openText({ idx: i, x: a.x, y: a.y, w: a.w, size: a.size, color: a.color, text: a.text });
+      }
+      function openText(s) {
+        state = { mode: 'text', ...s };
+        hover = null;
+        ta.value = s.text;
+        ta.style.color = ta.style.caretColor = COLORS[s.color];
+        stage.appendChild(ta);
+        placeText();
+        ta.focus({ preventScroll: true });
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+        stage.style.cursor = '';
+        render();
+      }
+      function placeText() {
+        if (state.mode !== 'text') return;
+        ta.style.left = state.x * scale + 'px';
+        ta.style.top = state.y * scale + 'px';
+        ta.style.width = state.w * scale + 'px';
+        ta.style.fontSize = state.size * scale + 'px';
+        ta.style.height = '0px';
+        ta.style.height = Math.max(ta.scrollHeight, state.size * 1.5 * scale) + 'px';
+      }
+      function finalizeText() {
+        if (state.mode !== 'text') return;
+        const s = state;
+        state = { mode: 'idle' };
+        const text = ta.value;
+        ta.remove();
+        const before = snap();
+        if (!text.trim()) {
+          if (s.idx != null) { anns.splice(s.idx, 1); commit(before); }
+        } else {
+          const a = { type: 'text', x: s.x, y: s.y, w: s.w, text, size: s.size, color: s.color };
+          if (s.idx == null) { anns.push(a); commit(before); }
+          else if (JSON.stringify(anns[s.idx]) !== JSON.stringify(a)) { anns[s.idx] = a; commit(before); }
+        }
+        render();
+      }
+      ta.addEventListener('input', placeText);
+      ta.addEventListener('blur', finalizeText);
+      ta.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.repeat && e.code === 'KeyT' && !ta.value) { e.preventDefault(); return; }
+        if ((e.key === 'Enter') && !e.shiftKey && !e.isComposing) {
+          e.preventDefault();
+          const act = e.metaKey ? 'copy' : e.altKey ? 'save' : e.ctrlKey ? 'upload' : null;
+          finalizeText();
+          stage.focus({ preventScroll: true });
+          if (act) output(act);
+          return;
+        }
+        if (e.key === 'Escape') { e.preventDefault(); finalizeText(); stage.focus({ preventScroll: true }); return; }
+        if (e.metaKey && (e.code === 'Equal' || e.code === 'Minus' || e.code === 'NumpadAdd' || e.code === 'NumpadSubtract')) {
+          e.preventDefault();
+          const up = e.code === 'Equal' || e.code === 'NumpadAdd';
+          state.size = Math.max(state.size + (up ? 2 : -2), 8);
+          textFont = state.size;
+          placeText();
+        }
+      });
+
+      // ---------- output ----------
+      let toastTimer = 0;
+      function toast(keys, msg) {
+        toastEl.textContent = '';
+        for (const k of keys) { const kb = document.createElement('kbd'); kb.textContent = k; toastEl.appendChild(kb); }
+        const s = document.createElement('span'); s.textContent = msg; toastEl.appendChild(s);
+        toastEl.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+      }
+      function stamp() {
+        const d = captureDate;
+        return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
+      }
+      function download(c) {
+        c.toBlob((b) => {
+          if (!b) return;
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(b);
+          a.download = `skryn-${stamp()}.png`;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        }, 'image/png');
+      }
+      async function output(kind) {
+        finalizeText();
+        if (kind === 'upload') {
+          toast(['⌃', '⏎'], 'In the app, this uploads to Uploadcare with your key and copies the link.');
+          return;
+        }
+        let c;
+        try { c = composite(); } catch (e) { toast([], 'This browser couldn’t render the image.'); return; }
+        if (kind === 'save') {
+          download(c);
+          toast(['⌥', '⏎'], 'Downloaded. The app saves to your folder, Desktop by default.');
+          return;
+        }
+        const blob = new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('toBlob'))), 'image/png'));
+        try {
+          if (!navigator.clipboard || !window.ClipboardItem) throw new Error('no clipboard');
+          try {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          } catch (e) {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': await blob })]);
+          }
+          toast(['⌘', '⏎'], 'Copied. Paste it anywhere.');
+        } catch (e) {
+          download(c);
+          toast(['⌘', '⏎'], 'The browser blocked the clipboard, so it downloaded instead.');
+        }
+      }
+
+      // ---------- toolbar ----------
+      const toolButtons = [...bar.querySelectorAll('[data-tool]')];
+      const dot = bar.querySelector('.dot'), cname = bar.querySelector('.cname');
+      let liveMods = { shift: false, meta: false, alt: false, ctrl: false };
+      function syncBar() {
+        const liveTool = armed ? null : toolFor(liveMods);
+        for (const b of toolButtons) {
+          b.setAttribute('aria-pressed', String(b.dataset.tool === armed));
+          b.classList.toggle('live', (pointerInside || stage === document.activeElement) && b.dataset.tool === liveTool);
+        }
+        dot.classList.toggle('blue', color === 'blue');
+        cname.textContent = color === 'blue' ? 'Blue' : 'Red';
+        stage.classList.toggle('armed', !!armed);
+        canvas.style.touchAction = armed ? 'none' : 'pan-y';
+      }
+      bar.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.tool) {
+          armed = armed === b.dataset.tool ? null : b.dataset.tool;
+          syncBar();
+          return;
+        }
+        switch (b.dataset.act) {
+          case 'color': color = color === 'red' ? 'blue' : 'red'; syncBar(); break;
+          case 'undo': undo(); break;
+          case 'redo': redo(); break;
+          case 'reset':
+            if (anns.length) { commit(snap()); anns = []; hover = null; render(); }
+            break;
+          default: output(b.dataset.act);
+        }
+      });
+
+      // ---------- pointer ----------
+      const toPt = (e) => {
+        const b = canvas.getBoundingClientRect();
+        return { x: (e.clientX - b.left) / b.width * W, y: (e.clientY - b.top) / b.height * H };
+      };
+      function setCursor(hit) {
+        let c = '';
+        if (state.mode === 'move') c = 'grabbing';
+        else if (state.mode === 'handle') c = (state.handle === 'left' || state.handle === 'right') ? 'ew-resize' : 'crosshair';
+        else if (hit && hit.handle) c = (hit.handle === 'left' || hit.handle === 'right') ? 'ew-resize' : 'crosshair';
+        else if (hit) c = 'grab';
+        canvas.style.cursor = c;
+      }
+      function updateHover(p) {
+        const h = hitTest(p, false);
+        const i = h ? h.i : null;
+        setCursor(h);
+        if (i !== hover) { hover = i; render(); }
+      }
+      function refreshHover() {
+        if (state.mode === 'idle' && pointerInside) updateHover(lastPt);
+      }
+      canvas.addEventListener('contextmenu', (e) => { if (e.ctrlKey || state.mode !== 'idle') e.preventDefault(); });
+      canvas.addEventListener('mousedown', (e) => e.preventDefault());
+      canvas.addEventListener('pointerdown', (e) => {
+        const touch = e.pointerType !== 'mouse';
+        if (e.button !== 0 && !(e.button === 2 && e.ctrlKey)) return;
+        if (touch && !armed) {
+          if (state.mode === 'text') finalizeText();
+          return;
+        }
+        e.preventDefault();
+        const p = toPt(e);
+        lastPt = p; lastBadge = null;
+        const m = { shift: e.shiftKey, meta: e.metaKey, alt: e.altKey, ctrl: e.ctrlKey };
+        const drawMods = armed ? armed !== 'arrow' : (m.shift || m.meta || m.alt || m.ctrl);
+
+        if (state.mode === 'text') {
+          // T, then click: a still-empty new box moves to the click
+          if (state.idx == null && !ta.value && !drawMods) {
+            state.x = p.x; state.y = p.y; placeText(); ta.focus({ preventScroll: true });
+            return;
+          }
+          finalizeText();
+        }
+        stage.focus({ preventScroll: true });
+
+        if (armed === 'badge') {
+          add({ type: 'badge', x: p.x, y: p.y, n: nextBadgeNumber(), color });
+          render();
+          return;
+        }
+        if (armed === 'text') { startTextAt(p); return; }
+
+        if (!drawMods) {
+          const h = hitTest(p, touch);
+          if (h) {
+            state = h.handle
+              ? { mode: 'handle', idx: h.i, handle: h.handle, orig: clone(anns[h.i]), before: snap() }
+              : { mode: 'move', idx: h.i, last: p, before: snap() };
+            canvas.setPointerCapture(e.pointerId);
+            setCursor(); render();
+            return;
+          }
+        }
+        state = { mode: 'draw', tool: armed || toolFor(m), origin: p, cur: null };
+        hover = null;
+        canvas.setPointerCapture(e.pointerId);
+        render();
+      });
+      canvas.addEventListener('pointermove', (e) => {
+        const p = toPt(e);
+        lastPt = p;
+        if (e.pointerType === 'mouse') {
+          liveMods = { shift: e.shiftKey, meta: e.metaKey, alt: e.altKey, ctrl: e.ctrlKey };
+        }
+        if (state.mode === 'draw') { state.cur = makeShape(state.tool, state.origin, p); render(); return; }
+        if (state.mode === 'move') {
+          anns[state.idx] = offset(anns[state.idx], p.x - state.last.x, p.y - state.last.y);
+          state.last = p; render(); return;
+        }
+        if (state.mode === 'handle') { anns[state.idx] = moveHandle(state.orig, state.handle, p); render(); return; }
+        if (state.mode === 'idle' && e.pointerType === 'mouse') { updateHover(p); syncBar(); }
+      });
+      function endPointer(e, cancelled) {
+        const p = toPt(e);
+        if (state.mode === 'draw') {
+          const s = state;
+          state = { mode: 'idle' };
+          if (!cancelled && s.cur && !(Math.abs(p.x - s.origin.x) < 2 && Math.abs(p.y - s.origin.y) < 2)) add(s.cur);
+          render();
+        } else if (state.mode === 'move') {
+          const s = state;
+          state = { mode: 'idle' };
+          if (snap() === s.before) {
+            if (!cancelled && anns[s.idx].type === 'text') { startEdit(s.idx); return; }
+          } else commit(s.before);
+          render();
+        } else if (state.mode === 'handle') {
+          const s = state;
+          state = { mode: 'idle' };
+          if (snap() !== s.before) commit(s.before);
+          render();
+        }
+        if (e.pointerType === 'mouse') updateHover(p);
+      }
+      canvas.addEventListener('pointerup', (e) => endPointer(e, false));
+      canvas.addEventListener('pointercancel', (e) => endPointer(e, true));
+      stage.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { pointerInside = true; syncBar(); } });
+      stage.addEventListener('pointerleave', (e) => {
+        if (e.pointerType !== 'mouse') return;
+        pointerInside = false;
+        if (state.mode === 'idle' && hover != null) { hover = null; render(); }
+        syncBar();
+      });
+      stage.addEventListener('focus', syncBar);
+      stage.addEventListener('blur', syncBar);
+
+      // ---------- keyboard (only while the playground is hovered or focused) ----------
+      const MOD_KEYS = { Shift: 1, Meta: 1, Alt: 1, Control: 1 };
+      const active = () => pointerInside || stage === document.activeElement;
+      function onMods(e) {
+        if (!MOD_KEYS[e.key]) return;
+        liveMods = { shift: e.shiftKey, meta: e.metaKey, alt: e.altKey, ctrl: e.ctrlKey };
+        syncBar();
+      }
+      window.addEventListener('keyup', onMods);
+      window.addEventListener('blur', () => { liveMods = { shift: false, meta: false, alt: false, ctrl: false }; syncBar(); });
+      window.addEventListener('keydown', (e) => {
+        if (e.target === ta) return;
+        onMods(e);
+        if (!active() || e.defaultPrevented || state.mode === 'text') return;
+        const k = e.code;
+        if (k === 'Escape') { if (removeCrop()) e.preventDefault(); return; }
+        if (k === 'Backspace' || k === 'Delete') {
+          if (hover != null && anns[hover]) { e.preventDefault(); removeAt(hover); render(); refreshHover(); }
+          return;
+        }
+        if (k === 'KeyZ' && e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault();
+          if (state.mode === 'idle') (e.shiftKey ? redo : undo)();
+          return;
+        }
+        if (k === 'Enter' || k === 'NumpadEnter') {
+          const act = e.metaKey ? 'copy' : e.altKey ? 'save' : e.ctrlKey ? 'upload' : null;
+          if (act) { e.preventDefault(); output(act); }
+          return;
+        }
+        if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.repeat || state.mode !== 'idle') return;
+        if (k in DIGITS) { e.preventDefault(); badgeKey(DIGITS[k]); return; }
+        if (k === 'KeyT') { e.preventDefault(); startTextAt(lastPt); return; }
+        if (k === 'KeyC') { e.preventDefault(); toggleColor(); return; }
+        if (k === 'KeyU') { e.preventDefault(); insertTimestamp(); return; }
+      });
+
+      // ---------- sizing ----------
+      function resize() {
+        const w = stage.clientWidth;
+        if (!w) return;
+        scale = w / W;
+        dpr = Math.min(window.devicePixelRatio || 1, 3);
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(w * H / W * dpr);
+        placeText();
+        render();
+      }
+      const ready = () => { blurCache.clear(); resize(); syncBar(); };
+      if ('ResizeObserver' in window) new ResizeObserver(resize).observe(stage);
+      else window.addEventListener('resize', resize);
+      (img.decode ? img.decode() : new Promise((ok) => img.complete ? ok() : img.addEventListener('load', ok, { once: true })))
+        .catch(() => {})
+        .then(() => { imgReady = true; ready(); stage.dispatchEvent(new CustomEvent('pg-ready', { detail: { composite } })); });
+
+    }
+  })();
+  </script>
 </body>
 </html>
