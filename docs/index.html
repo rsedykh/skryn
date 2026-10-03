@@ -242,8 +242,11 @@
     .stage.pg-mode video, .stage.pg-mode .play, .stage.pg-mode .v-only, .stage.pg-mode .crop-frame > .h { display: none; }
     .stage.pg-mode .pg-win { display: block; }
     .stage.pg-mode.gated .gate { display: grid; }
-    .stage.pg-mode:not(.gated) .pg-bar { display: flex; }
-    .stage.can-play:not(.gated) .switch { display: inline-block; }
+    .stage.pg-mode .pg-bar { display: flex; }
+    .stage.can-play .switch { display: inline-block; }
+    /* while gated, the bar and the link hold their space, so the section (and its backdrop) keeps its size when the blur opens */
+    .stage .pg-bar, .stage .switch { transition: opacity .3s ease; }
+    .stage.gated .pg-bar, .stage.gated .switch { visibility: hidden; opacity: 0; }
     .stage.pg-mode .crop-frame { outline: 0; border-radius: 12px; }
     .stage-cap.below .switch { order: -1; margin-right: auto; }
     .switch {
@@ -296,20 +299,29 @@
 
     /* the gate: the playground under Skryn's pixel blur, until you choose */
     .gate { position: absolute; inset: 0; z-index: 3; place-items: center; border-radius: 12px; overflow: hidden; }
-    .gate > canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
-    .gate::before { content: ""; position: absolute; inset: 0; z-index: 1; background: rgba(12, 12, 18, .42); transition: opacity .35s ease; }
+    /* inverted, so the white screenshot turns dark like the page; it un-inverts as the blur opens */
+    .gate > canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; filter: invert(1) brightness(.75); transition: filter .5s ease; }
+    .gate.opening > canvas { filter: invert(0) brightness(1); }
+    .gate::before { content: ""; position: absolute; inset: 0; z-index: 1; background: var(--paper); mix-blend-mode: lighten; transition: opacity .35s ease; } /* nothing darker than the page */
     .gate-ui { position: relative; z-index: 2; display: grid; justify-items: center; gap: 16px; padding: 24px; text-align: center; color: #fff; transition: opacity .25s ease; }
-    .gate-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+    .gate-btns { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px; }
     .gate-btns button {
       display: inline-flex; align-items: center; gap: 9px; border: 0; border-radius: 999px; cursor: pointer;
       padding: 15px 28px; font: 700 18px/1 var(--sans); letter-spacing: -.01em; transition: transform .15s ease;
     }
     .gate-btns button:hover { transform: translateY(-1px); }
     .gate-btns button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
-    .gate-try { background: var(--red); color: #fff; box-shadow: 0 8px 28px rgba(255, 40, 40, .35); }
-    .gate-watch { background: rgba(255, 255, 255, .94); color: #1d1d1f; }
-    .gate-watch svg { width: 15px; height: 15px; }
-    .gate-ui p { font-size: 15px; font-weight: 500; color: rgba(255, 255, 255, .88); text-shadow: 0 1px 8px rgba(0, 0, 0, .35); }
+    /* the page's main-button look (like Download); red stays for the marks */
+    .gate-try { background: var(--ink); color: var(--paper); box-shadow: 0 6px 20px rgba(0, 0, 0, .25); }
+    .gate-btns .gate-watch {
+      padding: 6px 2px; border-radius: 4px; background: none; color: #fff;
+      font-size: 16px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1.5px;
+      text-shadow: 0 1px 8px rgba(0, 0, 0, .35);
+    }
+    .gate-btns .gate-watch:hover { transform: none; opacity: .8; }
+    .gate-cap { max-width: 24em; text-wrap: balance; font-size: 15px; font-weight: 500; color: rgba(255, 255, 255, .88); text-shadow: 0 1px 8px rgba(0, 0, 0, .35); }
+    .gate-note { justify-self: start; margin: 0 0 64px -110px; font-size: 24px; }
+    @media (max-width: 760px) { .gate-note { margin: 0 0 48px; } }
     .gate-tag { position: absolute; z-index: 2; top: 14px; right: 14px; }
     .gate.opening::before, .gate.opening .gate-ui, .gate.opening .gate-tag { opacity: 0; }
 
@@ -526,8 +538,8 @@
       </div>
       <div class="crop-frame">
         <video controls playsinline preload="none" poster="assets/poster.webp" aria-label="Skryn demo video: capture, annotate, crop and paste">
-          <source src="https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7" type="video/mp4">
-          <a href="https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7">Watch the demo video</a>
+          <source src="https://github.com/user-attachments/assets/e71aa5b3-80e6-4399-9993-0efe7728c68f" type="video/mp4">
+          <a href="https://github.com/user-attachments/assets/e71aa5b3-80e6-4399-9993-0efe7728c68f">Watch the demo video</a>
         </video>
         <button class="play" type="button" aria-label="Play the demo video"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2Z" fill="currentColor"/></svg></span></button>
         <div class="pg-win" id="pg" tabindex="0" role="application" aria-roledescription="annotation playground" inert
@@ -538,12 +550,13 @@
         </div>
         <div class="gate">
           <canvas aria-hidden="true"></canvas>
-          <div class="gate-ui">
+          <div class="gate-ui" data-ink>
+            <p class="note gate-note" data-mark="arrow" data-to="#gate-try" data-gap="12">No install needed</p>
             <div class="gate-btns">
-              <button type="button" class="gate-try">Try it</button>
-              <button type="button" class="gate-watch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2Z" fill="currentColor"/></svg>Watch the video</button>
+              <button type="button" class="gate-try" id="gate-try">Try it</button>
+              <button type="button" class="gate-watch">or watch the video</button>
             </div>
-            <p>A browser replica of the annotation window, with the app's keys.</p>
+            <p class="gate-cap">A browser replica of the annotation window, with the app's keys.</p>
           </div>
           <span class="keys sm gate-tag" aria-hidden="true"><kbd>⌃</kbd><kbd>Drag</kbd><b>blur</b></span>
         </div>
@@ -698,7 +711,7 @@
     <!-- INSTALL -->
     <section id="install" class="wrap sec" aria-labelledby="inst-h">
       <div class="sec-head">
-        <h2 id="inst-h">Installation</h2>
+        <h2 id="inst-h">Installation.</h2>
       </div>
       <div class="install">
         <ol data-ink>
@@ -976,21 +989,54 @@
       label();
 
       // Skryn's blur over the whole frame, with the app's block size for an image this big: max(w, h) / 40
-      function drawGate(block, gray) {
+      // shiftK: how much of the text-clearing shift to apply (1 while gated, sliding to 0 as the blur opens)
+      function drawGate(block, gray, shiftK = 1) {
         const dpr = Math.min(devicePixelRatio || 1, 2);
         gc.width = Math.round(gc.clientWidth * dpr); gc.height = Math.round(gc.clientHeight * dpr);
         const g = gc.getContext('2d');
+        const kx = gc.width / gateSrc.width, ky = gc.height / gateSrc.height;
         if (block <= 2) { g.imageSmoothingEnabled = true; g.drawImage(gateSrc, 0, 0, gc.width, gc.height); return; }
         const m = mosaic(gateSrc, 0, 0, gateSrc.width, gateSrc.height, block, gray);
+        g.fillStyle = '#fff'; g.fillRect(0, 0, gc.width, gc.height); // what a shift uncovers inverts to page color
         g.imageSmoothingEnabled = false;
-        g.drawImage(m.canvas, 0, 0, m.nx * block * gc.width / gateSrc.width, m.ny * block * gc.height / gateSrc.height);
+        g.drawImage(m.canvas, shift.x * block0 * kx * shiftK, shift.y * block0 * ky * shiftK, m.nx * block * kx, m.ny * block * ky);
       }
+
+      // The shift, in whole blocks, that leaves the gate's caption on solid page color, and if possible the note and the link too.
+      // A block this light (or no block at all) inverts to the page color or darker.
+      let shift = { x: 0, y: 0 };
+      function findShift() {
+        shift = { x: 0, y: 0 };
+        try {
+          const m = mosaic(gateSrc, 0, 0, gateSrc.width, gateSrc.height, block0);
+          const px = m.canvas.getContext('2d').getImageData(0, 0, m.nx, m.ny).data;
+          const b = gate.getBoundingClientRect(), cw = b.width * block0 / gateSrc.width, ch = b.height * block0 / gateSrc.height;
+          const light = (i, j) => i < 0 || j < 0 || i >= m.nx || j >= m.ny || px[(j * m.nx + i) * 4] >= 227;
+          const blocksBehind = (el, dx, dy) => {
+            const r = el.getBoundingClientRect(), pad = .25;
+            let n = 0;
+            for (let j = Math.floor((r.top - b.top) / ch - pad); j < Math.ceil((r.bottom - b.top) / ch + pad); j++)
+              for (let i = Math.floor((r.left - b.left) / cw - pad); i < Math.ceil((r.right - b.left) / cw + pad); i++)
+                if (!light(i - dx, j - dy)) n++;
+            return n;
+          };
+          const cap = gate.querySelector('.gate-cap'), extras = [gate.querySelector('.gate-note'), gate.querySelector('.gate-watch')];
+          // fewest blocks behind the caption first, then the note and the link clear, then the smallest shift
+          let best = null;
+          for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) {
+            const score = -blocksBehind(cap, dx, dy) * 1e4 + extras.filter((el) => !blocksBehind(el, dx, dy)).length * 100 - Math.abs(dx) - Math.abs(dy);
+            if (!best || score > best.score) best = { x: dx, y: dy, score };
+          }
+          shift = { x: best.x, y: best.y };
+        } catch (e) { /* tainted canvas (file://): no shift */ }
+      }
+      const redrawGate = () => { findShift(); drawGate(block0, 1); };
       pg.addEventListener('pg-ready', (e) => {
         gateSrc = e.detail.composite();
         block0 = Math.max(gateSrc.width, gateSrc.height) / 40;
-        drawGate(block0, 1);
+        redrawGate();
       });
-      new ResizeObserver(() => { if (gateSrc && demo.classList.contains('gated') && !opening) drawGate(block0, 1); }).observe(gate);
+      new ResizeObserver(() => { if (gateSrc && demo.classList.contains('gated') && !opening) redrawGate(); }).observe(gate);
 
       function open() {
         const done = () => {
@@ -1002,7 +1048,7 @@
         const t0 = performance.now(), dur = 520;
         const step = (now) => {
           const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
-          drawGate(block0 * Math.pow(2 / block0, e), 1 - e); // blocks shrink to 2px, color comes back
+          drawGate(block0 * Math.pow(2 / block0, e), 1 - e, 1 - e); // blocks shrink to 2px, color and position come back
           k < 1 ? requestAnimationFrame(step) : done();
         };
         requestAnimationFrame(step);
