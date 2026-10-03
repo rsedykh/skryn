@@ -2,7 +2,7 @@
 
 A lightweight macOS menu bar app for taking screenshots and annotating them.
 
-https://github.com/user-attachments/assets/fad9d1f0-c079-474f-95c9-f9be2e1e02a7
+https://github.com/user-attachments/assets/e71aa5b3-80e6-4399-9993-0efe7728c68f
 
 ## Installation
 
