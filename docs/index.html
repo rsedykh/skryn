@@ -320,6 +320,13 @@
     .gate-cap { max-width: 24em; text-wrap: balance; font-size: 15px; font-weight: 500; color: rgba(255, 255, 255, .88); text-shadow: 0 1px 8px rgba(0, 0, 0, .35); }
     .gate-note { justify-self: start; margin: 0 0 64px -110px; font-size: 24px; }
     @media (max-width: 760px) { .gate-note { margin: 0 0 48px; } }
+    /* under the caption, in the gate's free space: an arrow down to the rest of the page, the note at its tip */
+    .gate-more { position: absolute; top: 100%; left: 50%; translate: -50% 0; height: 80px; padding-left: 48px; display: flex; align-items: flex-end; }
+    .gate-more i { position: absolute; left: 22px; width: 0; height: 0; }
+    .gate-more .tail { top: 0; }
+    .gate-more #gate-down { bottom: 0; }
+    .gate-more .note { font-size: 24px; white-space: nowrap; }
+    @media (max-width: 859px) { .gate-more { display: none; } } /* a shorter gate has no room under the caption */
     .gate-tag { position: absolute; z-index: 2; top: 14px; right: 14px; }
     .gate.opening::before, .gate.opening .gate-ui, .gate.opening .gate-tag { opacity: 0; }
 
@@ -553,6 +560,10 @@
               <button type="button" class="gate-watch">or watch the video</button>
             </div>
             <p class="gate-cap">A browser replica of the annotation window, with the app's keys.</p>
+            <div class="gate-more">
+              <i class="tail" data-mark="arrow" data-to="#gate-down" data-gap="0"></i><i id="gate-down"></i>
+              <p class="note" style="--delay:.14s">or keep scrolling</p>
+            </div>
           </div>
           <span class="keys sm gate-tag" aria-hidden="true"><kbd>⌃</kbd><kbd>Drag</kbd><b>blur</b></span>
         </div>
@@ -889,7 +900,7 @@
         svg.setAttribute('viewBox', `0 0 ${b.width} ${b.height}`);
         let n = 0;
         for (const el of scope.querySelectorAll('[data-mark]')) {
-          if (el.closest('[data-ink]') !== scope) continue;
+          if (el.closest('[data-ink]') !== scope || !el.getClientRects().length) continue; // not laid out: hidden
           const r = rel(el, b), cls = el.dataset.color === 'blue' ? 'blue' : 'red';
           const kind = el.dataset.mark, withHandles = 'handles' in el.dataset;
           if (kind === 'rect') {
