@@ -851,11 +851,12 @@
         return [cx + dx * t, cy + dy * t];
       };
 
-      function stroke(node, n) {
-        node.classList.add('s');
-        const len = node.getTotalLength ? node.getTotalLength() : 1000;
+      // len comes from the geometry, not getTotalLength(): measuring forces a style pass before --len is set,
+      // so the mark would start drawn and visibly un-draw itself
+      function stroke(node, n, len) {
         node.style.setProperty('--len', Math.ceil(len) + 1);
         node.style.setProperty('--delay', (n * 0.14).toFixed(2) + 's');
+        node.classList.add('s');
       }
       function pop(node, delay) {
         node.classList.add('pop');
@@ -868,7 +869,7 @@
         const a = Math.atan2(y2 - y1, x2 - x1);
         // stop the shaft inside the head so its square end never pokes past the tip
         const sx = x2 - Math.cos(a) * HEAD * 0.6, sy = y2 - Math.sin(a) * HEAD * 0.6;
-        stroke(make('line', { x1, y1, x2: sx, y2: sy, class: cls, 'stroke-width': STROKE }, svg), n);
+        stroke(make('line', { x1, y1, x2: sx, y2: sy, class: cls, 'stroke-width': STROKE }, svg), n, Math.hypot(sx - x1, sy - y1));
         const p1 = [x2 - HEAD * Math.cos(a - HEAD_ANGLE), y2 - HEAD * Math.sin(a - HEAD_ANGLE)];
         const p2 = [x2 - HEAD * Math.cos(a + HEAD_ANGLE), y2 - HEAD * Math.sin(a + HEAD_ANGLE)];
         pop(make('path', { d: `M${x2} ${y2}L${p1}L${p2}Z`, class: cls + ' head' }, svg), n * 0.14 + 0.42);
@@ -894,14 +895,16 @@
           if (kind === 'rect') {
             const [px, py] = pads(el, 8, 8);
             const x = r.x - px, y = r.y - py, w = r.w + 2 * px, h = r.h + 2 * py;
-            stroke(make('rect', { x, y, width: w, height: h, class: cls, 'stroke-width': STROKE }, svg), n);
+            stroke(make('rect', { x, y, width: w, height: h, class: cls, 'stroke-width': STROKE }, svg), n, 2 * (w + h));
             if (withHandles) [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([hx, hy]) => handle(svg, hx, hy, n * 0.14 + 0.5));
           } else if (kind === 'ellipse') {
             const [px, py] = pads(el, 16, 10);
-            stroke(make('ellipse', { cx: r.x + r.w / 2, cy: r.y + r.h / 2, rx: r.w / 2 + px, ry: r.h / 2 + py, class: cls, 'stroke-width': STROKE }, svg), n);
+            const rx = r.w / 2 + px, ry = r.h / 2 + py;
+            const perimeter = Math.PI * (3 * (rx + ry) - Math.sqrt((3 * rx + ry) * (rx + 3 * ry))); // Ramanujan
+            stroke(make('ellipse', { cx: r.x + r.w / 2, cy: r.y + r.h / 2, rx, ry, class: cls, 'stroke-width': STROKE }, svg), n, perimeter);
           } else if (kind === 'line') {
             const y = r.y + r.h + (+el.dataset.off || 2);
-            stroke(make('line', { x1: r.x, y1: y, x2: r.x + r.w, y2: y, class: cls, 'stroke-width': STROKE }, svg), n);
+            stroke(make('line', { x1: r.x, y1: y, x2: r.x + r.w, y2: y, class: cls, 'stroke-width': STROKE }, svg), n, r.w);
             if (withHandles) { handle(svg, r.x, y, n * 0.14 + 0.5); handle(svg, r.x + r.w, y, n * 0.14 + 0.5); }
           } else if (kind === 'arrow') {
             const target = scope.querySelector(el.dataset.to);
@@ -963,7 +966,12 @@
           io.unobserve(e.target);
         }
       }, { rootMargin: '0px 0px -12% 0px', threshold: 0.2 });
-      scopes.forEach((s) => io.observe(s));
+      // Start once the first layout passes have rebuilt the marks and the page has been on screen a beat:
+      // marks rebuilt after they're "drawn" appear finished, so the first screen would never animate
+      const settled = (document.fonts && document.fonts.ready) || Promise.resolve();
+      settled.then(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+        setTimeout(() => scopes.forEach((s) => io.observe(s)), 350);
+      })));
     }
 
     // Demo: the playground behind Skryn's blur on a laptop, the video everywhere else
