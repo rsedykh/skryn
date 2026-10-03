@@ -44,7 +44,7 @@
     }
 
     *, *::before, *::after { box-sizing: border-box; }
-    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: var(--nav-h, 65px); } /* anchors land right under the pinned nav */
     @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
     body {
       margin: 0;
@@ -146,7 +146,8 @@
     /* ---------- hero ---------- */
     .hero { padding: clamp(24px, 6vw, 72px) 0 clamp(48px, 8vw, 96px); }
     .hero h1 {
-      --fs: clamp(50px, 11.2vw, 160px);
+      /* by width, and by height so the whole hero fits a laptop screen: 3.12 lines of headline + ~410px of the rest */
+      --fs: clamp(50px, min(11.2vw, 32vh - 132px), 160px);
       font-size: var(--fs);
       line-height: 1.04; letter-spacing: -.045em;
     }
@@ -158,8 +159,7 @@
 
     .lede { max-width: 36em; margin-top: clamp(24px, 3vw, 36px); font-size: clamp(18px, 1.9vw, 21px); color: var(--muted); line-height: 1.5; }
     .lede strong { color: var(--ink); font-weight: 600; }
-    .cta-row { display: grid; grid-template-columns: auto auto; justify-content: start; justify-items: start; align-items: center; gap: 14px clamp(48px, 7.5vw, 110px); margin-top: 44px; }
-    .cta-row .cta-meta { grid-column: 1; grid-row: 2; }
+    .cta-row { display: grid; grid-template-columns: auto auto; justify-content: start; justify-items: start; align-items: center; gap: 14px clamp(48px, 7.5vw, 110px); margin-top: 68px; }
     .download {
       display: inline-flex; align-items: center; gap: 10px;
       padding: 15px 26px; border-radius: 12px;
@@ -169,10 +169,7 @@
     }
     .download:hover { transform: translateY(-1px); }
     .download svg { width: 18px; height: 18px; }
-    .cta-meta { font-size: 14px; color: var(--muted); }
-    .cta-meta a { color: var(--muted); text-underline-offset: 3px; }
-    /* zero height: centered on the button without making the row taller, so the meta line stays close */
-    .start { display: flex; align-items: center; gap: 22px; height: 0; }
+    .start { display: flex; align-items: center; gap: 22px; }
     .start .note { font-size: 24px; }
     .keys.legend { display: inline-grid; grid-template-columns: auto auto; gap: 5px 8px; padding: 6px 12px 6px 6px; }
     .keys.legend > span { display: flex; justify-content: flex-end; gap: 4px; }
@@ -180,9 +177,8 @@
     .keys.legend b + span { margin-left: 0; }
     @media (max-width: 719px) {
       .cta-row { grid-template-columns: 1fr; margin-top: 36px; }
-      .cta-row .start { grid-row: 1; height: auto; margin-bottom: 52px; gap: clamp(18px, 6vw, 40px); }
+      .cta-row .start { grid-row: 1; margin-bottom: 52px; gap: clamp(18px, 6vw, 40px); }
       .cta-row .download { grid-row: 2; }
-      .cta-row .cta-meta { grid-row: 3; }
       .start .note { margin-left: clamp(12px, 6vw, 48px); }
     }
 
@@ -236,7 +232,10 @@
       font-size: 15px;
     }
     .stage-cap.above { margin-bottom: 22px; }
-    .stage-cap.below { margin-top: 22px; }
+    /* below: the switch link centered under the frame, the video's Esc hint on the right */
+    .stage-cap.below { margin-top: 22px; display: grid; grid-template-columns: 1fr auto 1fr; }
+    .stage-cap.below .switch { grid-column: 2; }
+    .stage-cap.below .v-only { grid-column: 3; justify-self: end; }
     /* modes: the video by default; .pg-mode swaps in the playground, .gated puts Skryn's blur over it */
     .stage .pg-win, .stage .gate, .stage .pg-bar, .stage .switch { display: none; }
     .stage.pg-mode video, .stage.pg-mode .play, .stage.pg-mode .v-only, .stage.pg-mode .crop-frame > .h { display: none; }
@@ -248,7 +247,6 @@
     .stage .pg-bar, .stage .switch { transition: opacity .3s ease; }
     .stage.gated .pg-bar, .stage.gated .switch { visibility: hidden; opacity: 0; }
     .stage.pg-mode .crop-frame { outline: 0; border-radius: 12px; }
-    .stage-cap.below .switch { order: -1; margin-right: auto; }
     .switch {
       border: 0; padding: 6px 2px; background: none; cursor: pointer;
       font: 600 15px/1.2 var(--sans); color: #1d1d1f; text-decoration: underline; text-underline-offset: 3px;
@@ -326,7 +324,6 @@
     .gate.opening::before, .gate.opening .gate-ui, .gate.opening .gate-tag { opacity: 0; }
 
     /* ---------- sections ---------- */
-    section { scroll-margin-top: 76px; }
     .sec { padding: clamp(64px, 10vw, 128px) 0 0; }
     .sec-head { display: grid; gap: 14px; max-width: 760px; margin-bottom: clamp(32px, 5vw, 56px); }
     .sec-head h2 { font-size: clamp(36px, 5.6vw, 64px); }
@@ -507,7 +504,7 @@
     </div>
   </header>
 
-  <main id="top">
+  <main>
     <!-- HERO -->
     <section class="wrap hero" aria-labelledby="hero-h">
       <div data-ink>
@@ -526,7 +523,6 @@
             <p class="note" data-mark="arrow" data-to="#dl" data-gap="20">Start here</p>
             <span class="keys sm legend" aria-hidden="true"><span><kbd>T</kbd></span><b>text</b><span><kbd>Drag</kbd></span><b>arrow</b><span><kbd>⌘</kbd><kbd>Drag</kbd></span><b>rectangle</b></span>
           </div>
-          <p class="cta-meta">macOS 14 or later · <a href="https://github.com/rsedykh/skryn">Source on GitHub</a></p>
         </div>
       </div>
     </section>
@@ -712,6 +708,7 @@
     <section id="install" class="wrap sec" aria-labelledby="inst-h">
       <div class="sec-head">
         <h2 id="inst-h">Installation.</h2>
+        <p>Requires macOS 14 or later.</p>
       </div>
       <div class="install">
         <ol data-ink>
@@ -744,7 +741,6 @@
         </a>
         <p class="note" data-mark="arrow" data-to="#dl-end" data-gap="20">Your turn</p>
       </div>
-      <p class="cta-meta">macOS 14 or later</p>
     </section>
   </main>
 
@@ -811,9 +807,11 @@
       return px;
     }
 
-    // Nav: a hairline under the pinned bar once the page scrolls
+    // Nav: its height for anchor scrolling (--nav-h), and a hairline under it once the page scrolls
     function initNav() {
       const bar = document.querySelector('.top');
+      const setHeight = () => document.documentElement.style.setProperty('--nav-h', Math.floor(bar.getBoundingClientRect().height) + 'px');
+      new ResizeObserver(setHeight).observe(bar);
       const onScroll = () => bar.classList.toggle('scrolled', scrollY > 8);
       addEventListener('scroll', onScroll, { passive: true });
       onScroll();
