@@ -1,0 +1,508 @@
+You've made a kick ass video recently. But skryn.app  website is very old. It's functional, but can be better. Make 3 new versions of it. Should be light, fast to load, still Github Pages compatible, but that's obvious. If you feel like it, can can update icon too (it was a meme mostly, but maybe it's ok to let it go :-)).
+
+---
+
+[Image: original 2560x1440, displayed at 2000x1125. Multiply coordinates by 1.28 to map to original image.]
+
+---
+
+<task-notification>
+<task-id>af15ec7d03ab82803</task-id>
+<tool-use-id>toolu_01Y7QtoTZUFKyao4vrRkxr1d</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Build site v1 Storyboard" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>v1 "Storyboard" is built at `docs/v1/index.html`. It's one file, and it only loads media from `../assets/`.
+
+**Design:**
+- **Hero:** the new icon, a big "Skryn", the line "Screenshot and annotate, right from the menu bar.", a Download button and a "Watch the film" link. Below that, the full demo video sits in a macOS window frame.
+- **Five chapters:** one full-width band per chapter of the video, tinted with that chapter's background colour sampled from the stills (blue, peach, green, lavender, yellow). Dark mode gets deep, muted versions of the same colours.
+- **Each chapter** has the video's caption as its heading, one or two sentences, keycap pills styled like the video's dark bar, the chapter clip in a screen-like frame, and a "0:14 in the film" link. The link scrolls up and plays the main video from that point. Text and clip swap sides on desktop and stack on mobile.
+- **Clips** play once when half on screen and pause when you scroll away. They pick up where they stopped when you come back, hold the last frame, and then show a replay button. With reduced motion on, nothing autoplays: the page shows each clip's final frame with a play button.
+- **After the chapters:** four cards (drop an image on the menu bar icon, recent uploads, launch at login, native AppKit with no account), a shortcut reference grouped Draw / Mark / Edit / Output, the install steps with the updating note, a closing Download button, and a footer.
+
+**Page weight:** the first load is about 96 KB before compression: the page is 38.9 KB (about 9 KB gzipped), plus the icon, the video poster and the first chapter image. Everything further down loads as you scroll. The page has no web fonts and makes no requests besides the GitHub video.
+
+**Testing:** checked in WebKit at 1440×900 and 390×844, light and dark. No console errors, no failed requests, no horizontal scroll. I also tested play-once, replay, pausing and resuming on scroll, reduced motion, and the chapter jump links.
+
+**Things to know:**
+- In the test browser, a clip that paused off screen restarted from zero when it came back into view. I added a fix that remembers where it stopped. I don't know if real Safari does the same; the fix is harmless either way.
+- The tests blocked the external GitHub video, so the chapter links' jump to a specific time in the real video is untested. The scroll and the play call do work.
+- The window title says "the 40-second tour"; the video actually runs 41.5 seconds.
+- To make v1 the live page, move it to `docs/index.html` and replace `../assets/` with `assets/`. That's the only path change.</result>
+<usage><subagent_tokens>260766</subagent_tokens><tool_uses>36</tool_uses><duration_ms>627287</duration_ms></usage>
+</task-notification>
+
+---
+
+[Image: original 780x3400, displayed at 459x2000. Multiply coordinates by 1.70 to map to original image.]
+
+---
+
+<task-notification>
+<task-id>a7a76f83f68d6e9d0</task-id>
+<tool-use-id>toolu_0142rerJX313oBR1KKraMKhY</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Build site v2 Playground" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>v2 "Playground" is done: `docs/v2/index.html` is one self-contained file with everything inline, and it only references `../assets/`. Nothing else in the repo changed and nothing is committed. It passed every check I scripted in Chromium, plus a smaller set in WebKit. I haven't tried it in a real Safari or Firefox or on a real phone.
+
+**Design**
+- The theme follows the system's light or dark setting. Dark gets its own designed palette; light gets its own too, rather than an inverted copy.
+- The hero is kept short (icon, Skryn, a one-line pitch, Download / GitHub, "macOS 14+ · Capture with ⇧⌘5") so the playground starts above the fold at 1440×900.
+- The playground sits on the video's lavender-to-pink desktop background (a deep-indigo version in dark mode). The tool bar underneath is a dark pill with white keycaps, like the video's.
+- Below that: six feature cards, the full shortcut sheet as keycaps (Draw, Mark, Edit, Capture &amp; output), the video, the install steps with the app's red numbered badges plus the updating note, and a final call to action.
+- It works on phones: no horizontal scroll at 390px, and the tool bar wraps to three rows.
+
+**Weight**
+- First load is 106.7 KB across 3 files: the page is 59 KB (16 KB gzipped), `shot.webp` 45 KB, `icon.svg` 2 KB.
+- No console errors or failed requests at either size, in either theme.
+- The video poster only loads when you scroll near it, and the video itself doesn't preload.
+
+**What the playground does** (all tested)
+- **Starts pre-marked** with a copy of the video's final scene (blurred production key, blue box, badge 1, "Copy the test key" and an arrow), so there's something to move or delete straight away. Clear wipes it and can be undone.
+- **Drawing:** the key you hold when you press picks the tool, in the app's order: drag = arrow, ⇧ = line, ⌘ = rectangle, ⇧⌘ = ellipse, ⌥ = crop, ⌃ = blur. There's only ever one crop.
+- **Same drawing specs as the app:** stroke widths, arrowhead, colors, badge size, crop dimming and the grayscale pixel blur all match. I sampled the exact red and blue from the video's exported image.
+- **Keys:**
+  - 1–0 place badges, and two digits within half a second combine (1, 2 → 12).
+  - T types text at the cursor: Enter finishes, ⇧⏎ adds a line, Esc finishes, empty text is thrown away. Clicking text re-edits it; T over existing text edits it. "T, then click" moves an empty box. ⌘= / ⌘- change the size while typing.
+  - U stamps the time in UTC.
+  - C recolors the hovered mark, or switches the drawing color.
+- **Editing:** hovering a mark shows its handles. You can drag it to move, drag handles to resize (text only by its edges), press ⌫ to delete it, and use ⌘Z / ⇧⌘Z to undo and redo. Esc removes the crop.
+- **Output:**
+  - ⌘⏎ puts a full-resolution PNG, with the crop applied, on the clipboard. I read it back in the test: 1340×940, exactly the crop size.
+  - ⌥⏎ downloads `skryn-&lt;UTC time&gt;.png`, named the way the app names files.
+  - ⌃⏎ shows a note that the app would upload to Uploadcare and copy the link.
+- Keys only work while the pointer is over the playground or it has focus, and it never catches browser shortcuts like ⌘W.
+- **On touch screens** you pick a tool from the bar first; until then, dragging scrolls the page as normal. Badges count up automatically and Text opens the phone keyboard. I tested drawing and text on a simulated touch phone.
+
+**Known gaps**
+- In the app the arrow is the default tool when nothing is held, but in the playground the modifier keys (⇧, ⌘, ⌃, ⌥) only mean something on a Mac keyboard. On Windows, ⌘ is the Windows key, so people there will rely on the tool bar.
+- I tested ⌃-drag (blur) with scripted input in Chromium and WebKit, but not with a real Control-click in Safari.
+- Changing text size with ⌘= / ⌘- depends on the browser letting the page cancel its own zoom shortcut. If a browser doesn't, it will zoom the page too.
+- If the clipboard is blocked, ⌘⏎ downloads the image instead and says so. Opening the page straight from a file (`file://`) breaks the blur's grayscale and the export; it works when the page is served from a web address, as on GitHub Pages.
+- The text wraps a little differently from the app, because the browser and macOS measure fonts differently.
+- Marks are drawn at the app's 3-point width, so on a 390px phone lines are only about 1.2px thick on screen. They're still visible, and the exported image is full resolution.
+
+Test scripts and screenshots are in `scratchpad/v2/`.</result>
+<usage><subagent_tokens>331549</subagent_tokens><tool_uses>45</tool_uses><duration_ms>1057548</duration_ms></usage>
+</task-notification>
+
+---
+
+[Image: original 780x3400, displayed at 459x2000. Multiply coordinates by 1.70 to map to original image.]
+
+---
+
+I like #3. My comments are made with blue marks on the screenshots.[Image #1] [Image #2] [Image #3] [Image #4]
+
+---
+
+[Image: source: /Users/rsedykh/Desktop/skryn-20260930231304.png]
+
+[Image: source: /Users/rsedykh/Desktop/skryn-20260930231526.png]
+
+[Image: source: /Users/rsedykh/Desktop/skryn-20260930231227.png]
+
+[Image: source: /Users/rsedykh/Desktop/skryn-20260930231111.png]
+
+---
+
+[Image #5]
+
+---
+
+[Image: source: /Users/rsedykh/Desktop/Screenshot 2026-09-30 at 20.20.25.png]
+
+---
+
+Oops, my note was maybe text should be black, not white on this already light background? Or maybe remove these comments. Btw, some tink were nice. Also I think later at the end, when done with this page, we can remake a video a little bit to match the style if necessary.
+
+---
+
+I think removing "See it in action" and "Only what's inside the crop makes it into the image. One crop at a time." and returning to your red play button with some tint that you make will be the best
+
+---
+
+Do you maybe want to add hotkeys to "Screenshot it." and "Send it." too, and remove "How it works" section?
+
+---
+
+<task-notification>
+<task-id>bmluqckwm</task-id>
+<tool-use-id>toolu_01F8qBatCWkDDcXq98fuF9XM</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>killed</status>
+<summary>Background command "Serve docs/ locally for previewing the drafts" was stopped after reaching its background time limit</summary>
+<note>If the work in progress still needs it, start it again with `run_in_background` and a longer `timeout`. If it already had the longest `timeout` allowed, do not restart it. Either way, report that it was stopped.</note>
+</task-notification>
+
+---
+
+Let's try to see it on the phone too
+
+---
+
+Anything else you see to refine?
+
+---
+
+1 - what do you mean? Light mode, we have it? Didn't know. Let's get rid of light mode entirely tbh.
+2 - yes.
+3 - are  you sure? for me looks ok.
+4 - yeah, we can remove the last every shortcut section, it's already represented
+5 - where is menu bar? not sure what are you talking about
+6 - let's just not have light mode
+7 - can do
+
+---
+
+[Image: original 2880x1800, displayed at 2000x1250. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+[Image: original 2240x1010, displayed at 2000x902. Multiply coordinates by 1.12 to map to original image.]
+
+---
+
+<task-notification>
+<task-id>ba4szei3h</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>killed</status>
+<summary>Background command "Restart the local preview server for docs/" was stopped after reaching its background time limit</summary>
+<note>If the work in progress still needs it, start it again with `run_in_background` and a longer `timeout`. If it already had the longest `timeout` allowed, do not restart it. Either way, report that it was stopped.</note>
+</task-notification>
+
+---
+
+Restart the server please
+
+---
+
+Here I have a few suggestions how to move things over the layout a little bit [Image #6] [Image #7] [Image #8] [Image #9]
+
+---
+
+[Image: source: REDACTED.png]
+
+[Image: source: REDACTED.png]
+
+[Image: source: REDACTED.png]
+
+[Image: source: REDACTED.png]
+
+---
+
+[Image: original 2240x1616, displayed at 2000x1443. Multiply coordinates by 1.12 to map to original image.]
+
+---
+
+[Image: original 1840x2378, displayed at 1548x2000. Multiply coordinates by 1.19 to map to original image.]
+
+---
+
+[Image: original 2240x1190, displayed at 2000x1063. Multiply coordinates by 1.12 to map to original image.]
+
+---
+
+[Image #10] Сan you visually balance this heights?
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+[Image: original 2240x686, displayed at 2000x613. Multiply coordinates by 1.12 to map to original image.]
+
+---
+
+What do you think if instead of video we'll add live demo from v2?
+
+---
+
+And maybe video for the phone and live demo on the laptop? Also maybe blur the demo behind "try it" and unblur when actually trying it? Or maybe even have "try it" and "watch video" choice there?
+
+---
+
+[Image: original 2880x1860, displayed at 2000x1292. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+[Image: original 2880x2026, displayed at 2000x1407. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+Do we need updates to the menu in the header?
+
+Also, layout is a little bit off when page is narrow: [Image #11]
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+Do the code refactoring, we had many changes, I'm sure there is some housekeeping to do
+
+---
+
+[Image: original 2880x1800, displayed at 2000x1250. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+Yes, move it, make it live
+
+---
+
+Can we have a little bit accent on watch the video? It dominates over Try it.[Image #12]
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+I feel like red is to bright. Maybe "or watch the video"? I don't know, I get blinded by try it button..
+
+---
+
+Good, I like it more. How about still having a red button, just not that bright? Or maybe having an annotation red arrow pointing to that button? So people would be guided to click and try
+
+---
+
+[Image: original 2080x1294, displayed at 2000x1244. Multiply coordinates by 1.04 to map to original image.]
+
+---
+
+Great, but it lacks contrast because blur behind is very grey[Image #13] Otherwise amazing
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+[Image #14] i feel like you wanter to do the opposite, no?
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+No, undo last two steps, something is off
+
+---
+
+Maybe don't shadow that block that much in the first place?
+
+---
+
+[Image: original 2096x649, displayed at 2000x619. Multiply coordinates by 1.05 to map to original image.]
+
+---
+
+Hm.. Our website is dark, and this very white is painful. I guess undo my undo..
+
+---
+
+Why background shifts when I press "try it"?
+
+---
+
+Brightness wise let's go back to [Image #15], while keeping new changes like button and arrows
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+<task-notification>
+<task-id>adfde5ca4fa51246c</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Remake promo video v2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Promo video v2 is rendered in `promo/`: new icon, the site's dark colors, new synthesized music, and a fix for the app's new text-size steps. I checked every still, the transitions, loudness, frame count and A/V sync. I didn't touch `docs/`, the app code or git, and nothing was uploaded.
+
+**Files**
+- `promo/skryn-promo-v2.mp4`: 41.05 s, 1920×1080, 60 fps, all 2463 frames, AAC 192k.
+- `promo/skryn-promo-v2-web.mp4`: 4.2 MB (crf 24, AAC 128k).
+- `promo/skryn-promo-v2-silent.mp4` and `promo/skryn-promo-v2.meta.json`.
+- `promo/stills/v2/`: the 8 scene frames plus `exported.png`.
+- **Contact sheet:** `promo/skryn-promo-v2-contact-sheet.png`.
+- `promo/poster-v2.jpg`: the frame at 30.5 s, crop drawn with the `⌥ Drag crop` keycaps (same moment as v1's poster). No old icon.
+- `promo/v2-for-docs/assets/poster.webp`: 1600 px, q80, ready to drop in over `docs/assets/poster.webp`.
+- New scripts `promo/icon.mjs` and `promo/music2.py`. Edited `render/Stage.swift`, `render/main.swift`, `render.sh`, `icon.py`, and `README.md` (new v2 section).
+
+**What changed**
+- **Icon:** rendered from `docs/assets/icon.svg` to `assets/icon-v2.png` and drawn on both cards. `icon.py` is now v1-only and reads the kit's own copy of the old icon, so nothing points at the deleted `docs/icon.png`.
+- **Colors:** cards on the site's dark paper with ink/muted text. Each chapter keeps its v1 hue as a deep tint (navy, brown, forest, indigo, olive). Captions are heavy and light; keycaps match the site's style. Captions stay legible in every chapter and during the dimmed transitions.
+- **Copy:** the title card says "Screenshot it. Mark it up. Send it."; the end card says "Screenshot and annotate, from the menu bar." with skryn.app.
+- **App change:** the build needed no fix. But the app now steps text size 24 → 32 → 40 and its text box is a fixed 300pt wide, so the old note wrapped onto two lines. v2 types "Copy test key" with one ⌘= press (to 32pt), which fits on one line. The cut is 0.42 s shorter than v1 (41.05 s vs 41.47 s).
+- **Music:** soft lo-fi electronic at 81.5 bpm, a different style from v1's bossa. A filtered pad swells under the title card, the beat starts exactly on the first chapter cut, and 12 bars build up (chord stabs, then a pluck melody with an echo, then a bell arpeggio). It resolves to a held chord exactly on the end card. No chimes on topic changes.
+- **Loudness:** −32.0 LUFS integrated, the same level as v1.
+- **Sync:** the beat measures 14 ms after its cut, the end chord 10 ms after (both under one frame), and the audio and video end together.
+- **No clicks:** I found and fixed a click at the end of every kick, a flaw v1's kick also has. The file starts and ends at exact silence, and the loudest transients all sit on the drum grid.
+- **Kit:** `TAKE=v1|v2` switches palette, icon, copy, the note and the stills folder. `render.sh` defaults to v2 and now pads the audio, so the final mux no longer drops the last 3 video frames. The `TAKE=v1` path still renders its pastel cards with the cat icon.
+
+**Unsure or not done**
+- I couldn't listen to the music. The mix balance comes from per-track levels, a spectrogram and the click scan, so it needs a real listen.
+- A v1 re-render now uses today's app, so its two ⌘= presses land on 40pt and its note wraps. It won't match `skryn-promo-v1.mp4` exactly.
+- Five screenshots (`gatearrow-*.png` and `gatebtn.png`) sit untracked in the repo root. They're not from my work; they were most likely written by the parent session's test scripts.
+- To put v2 on the site, the web encode has to be uploaded to GitHub and the URL swapped in `docs/index.html` and the README, plus the poster replaced. The steps are in the promo README.</result>
+<usage><subagent_tokens>673816</subagent_tokens><tool_uses>46</tool_uses><duration_ms>748072</duration_ms></usage>
+</task-notification>
+
+---
+
+[Image: original 1920x2160, displayed at 1778x2000. Multiply coordinates by 1.08 to map to original image.]
+
+---
+
+Maybe make it way darker? For some reason my eyes can't stand this particular contrast[Image #16]
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+For video no brown/gold colors please, and try some other music, maybe more techno, but still chill (keep it in background process to save the context in the main session)
+
+---
+
+Make it maybe even inversed, so instead of making it darker it will be inversed. Makes sense?
+
+---
+
+[Image: original 2080x325, displayed at 2000x313. Multiply coordinates by 1.04 to map to original image.]
+
+---
+
+And now that black inversed a little bit brighter?
+
+---
+
+Can you make it the color of background of other pages?
+
+---
+
+Can you shift blurs until the bottom text has solid background below it?[Image #17]
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+<task-notification>
+<task-id>adfde5ca4fa51246c</task-id>
+<tool-use-id>toolu_01BKGSPp3ciiCSSRnfinptp5</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Remake promo video v2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>v3 is rendered: plum and teal chapters replace the brown and gold, and the music is a new chill techno track. I looked at every chapter still, the caption dims and the poster. v1 and v2 files are untouched, and nothing was written outside `promo/`.
+
+**Files**
+- `skryn-promo-v3.mp4`, `-web.mp4` (4.3 MB), `-silent.mp4` and `.meta.json`.
+- `stills/v3/`.
+- `skryn-promo-v3-contact-sheet.png`.
+- `poster-v3.jpg` (30.5 s, the crop, no old icon).
+- `v3-for-docs/assets/poster.webp` (1600 px, q80).
+- New `music3.py`. Edited `render/Stage.swift`, `render/main.swift`, `render.sh` and `README.md`, which has a v3 section. `TAKE` now accepts `v1|v2|v3` and defaults to v3.
+
+**Chapter colors** (deep base / glow / highlight)
+- Capture: navy `#121b29` / `#1f3a63` / `#182436` (as v2).
+- Tools: **plum** `#1d1022` / `#56245a` / `#281631` (was brown).
+- Marks: forest `#111c15` / `#21462c` / `#16251b` (as v2).
+- Edit: indigo `#18152a` / `#3b2f6b` / `#1f1b33` (as v2).
+- Output: **deep teal** `#0c1c1f` / `#1a525a` / `#12282c` (was olive/gold).
+- Title and end cards stay on the site's `#151517`.
+
+Each chapter is distinct from its neighbors, and captions and keycaps are legible on all of them.
+
+**Music:** chill deep minimal techno, 122.2 bpm, A minor, 18 bars.
+- **Title card:** a filtered Am9 pad swells, one dub stab echoes, and a soft riser leads in.
+- **Drop:** a soft, rounded four-on-the-floor kick starts on the first chapter cut, with offbeat hats and a rolling filtered bassline. Over it, dub chord stabs (Am9/Fmaj9) go through a dotted-eighth ping-pong delay with a light sidechain pump.
+- **Build:** 16 bars add layers every four: the bass fills in, then shakers, soft claps on 2 and 4, and the stab filter opens.
+- **Lift:** two bars of filter sweep and a riser on G6/9. The kick drops for the last two beats.
+- **End card:** an Am9 stab and one last kick land on it, then the echoes ring out.
+
+**Measurements**
+- **Loudness:** −32.1 LUFS integrated, LRA 2.4 LU.
+- **Sync:** the drop lands 8 ms after its cut and the end chord 11 ms after (both under one frame).
+- **Clean edges and no stray clicks:** the first and last samples are exactly silent, and every loud high-frequency burst sits on the 16th grid (hats and shakers).
+- **Duration:** 41.05 s, all 2463 frames, with audio and video ending together.
+
+**Unsure**
+- I couldn't listen to the music. The balance comes from per-track levels, a spectrogram and peak checks, so it needs a real listen.
+- The kick fundamental (~44 Hz) won't come through laptop speakers. The pulse should still read through the bass harmonics, hats and stab pump, but that's unverified.</result>
+<usage><subagent_tokens>647048</subagent_tokens><tool_uses>18</tool_uses><duration_ms>504553</duration_ms></usage>
+</task-notification>
+
+---
+
+[Image: original 1920x2160, displayed at 1778x2000. Multiply coordinates by 1.08 to map to original image.]
+
+---
+
+Video is perfect, just move text a little bit higher, so it's a little bit further from the gradient[Image #18]
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+The blur shift pattern is also good. Let's wait until you finish with the video and I upload it and get a new link, and release it.
+
+---
+
+<task-notification>
+<task-id>adfde5ca4fa51246c</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>REDACTED.output</output-file>
+<status>completed</status>
+<summary>Agent "Remake promo video v2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The v3 docked caption now sits 24 px higher, and v3 is re-rendered in place with that change.
+
+**What moved:** the docked caption's center went from y 84 to y 60 at 1080p (`dockY` in `render/Stage.swift`, v3 only; v1 and v2 keep 84). The fade itself is unchanged and still starts at y 118. In every docked still (capture, tools, marks, edit, crop and paste) the descenders used to end 6 px above the fade and now end 29 px above it. The text tops sit at y 40–43, so there's still room above. I checked frames mid-dock in the tools and output chapters: the big centered caption slides up smoothly to the new spot and clears the fade throughout.
+
+**Re-rendered and overwritten:**
+- `skryn-promo-v3.mp4` and `skryn-promo-v3-web.mp4`, each with 2463 frames, ending together with the audio at about 41.05 s.
+- `skryn-promo-v3-silent.mp4` and `skryn-promo-v3.meta.json`. The chapter timing is identical to before, so I reused the existing v3 music and remuxed it; it measures −32.1 LUFS as before.
+- `stills/v3/`, `poster-v3.jpg` and `v3-for-docs/assets/poster.webp`.
+- The promo README notes the change.
+
+Nothing outside `promo/` was touched, and colors, music and timing are unchanged.
+
+Contact sheet: `/Users/rsedykh/GitHub/skryn/promo/skryn-promo-v3-contact-sheet.png`</result>
+<usage><subagent_tokens>661264</subagent_tokens><tool_uses>7</tool_uses><duration_ms>207250</duration_ms></usage>
+</task-notification>
+
+---
+
+https://github.com/user-attachments/assets/e71aa5b3-80e6-4399-9993-0efe7728c68f
+
+---
+
+[Image #19] [Image #20] link works
+
+---
+
+[Image: source: REDACTED.png]
+
+[Image: source: REDACTED.png]
+
+---
+
+I've commited it
