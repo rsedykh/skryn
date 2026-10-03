@@ -1,0 +1,70 @@
+One more though about website, maybe add something like this (in red) [Image #1] ? So people who want to briefly see what is it, wouldn't stop and just read about it fastly? Or it might be a bad idea?
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+[Image: original 2880x1800, displayed at 2000x1250. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+[Image: original 2880x1800, displayed at 2000x1250. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+You've changed blur pattern there - don't
+
+---
+
+Hm, I still see colorful blur objects.. [Image #2] compare to whats on skryn.app right now
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+[Image: original 2880x1800, displayed at 2000x1250. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+<bash-input> cd docs && python3 -m http.server 8765</bash-input>
+
+---
+
+<bash-stdout>Command did not complete within its 120s timeout and was moved to the background (ID: bvofq03v6). Output is being written to: REDACTED.output. You will be notified when it completes. To check interim output, use Read on that file path.
+Session cwd remains /Users/rsedykh/GitHub/skryn; directory changes made by the backgrounded command do not apply to subsequent commands.</bash-stdout><bash-stderr></bash-stderr>
+
+---
+
+Ah, ok. Just move "scrolling" a little bit to the right [Image #3]
+
+---
+
+[Image: source: REDACTED.png]
+
+---
+
+[Image: original 2880x1800, displayed at 2000x1250. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+I meant to move with the arrow. You can move it like you like it, I just wanted to balance it design wise a little bit
+
+---
+
+[Image: original 2880x1800, displayed at 2000x1250. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+[Image: original 2880x1800, displayed at 2000x1250. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+[Image: original 2880x1800, displayed at 2000x1250. Multiply coordinates by 1.44 to map to original image.]
+
+---
+
+Yeah good, push to prod
