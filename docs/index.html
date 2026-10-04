@@ -133,6 +133,11 @@
       border-bottom: 1px solid transparent; transition: border-color .2s ease;
     }
     .top.scrolled { border-bottom-color: var(--rule); }
+    /* touch devices (the same split as the demo): the nav scrolls away, since there's nothing to download there and it eats a small screen */
+    @media not all and (hover: hover) and (pointer: fine) {
+      html { scroll-padding-top: 0; }
+      .top { position: relative; }
+    }
     .top-in { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; }
     .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -.02em; text-decoration: none; }
     .brand img { width: 34px; height: 34px; }
