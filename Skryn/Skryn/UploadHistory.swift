@@ -50,6 +50,20 @@ enum UploadHistory {
         return FileManager.default.createFile(atPath: filePath, contents: data) ? filePath : nil
     }
 
+    /// Copies a finished file (e.g. a recording) into the cache, without loading it into memory.
+    static func cacheFile(copyingFrom source: URL, filename: String) -> String? {
+        let dir = cacheDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let destination = dir.appendingPathComponent(filename)
+        do {
+            try FileManager.default.copyItem(at: source, to: destination)
+            return destination.path
+        } catch {
+            print("UploadHistory: failed to cache \(filename) — \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     static func cachedData(at path: String) -> Data? {
         FileManager.default.contents(atPath: path)
     }

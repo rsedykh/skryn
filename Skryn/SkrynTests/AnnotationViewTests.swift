@@ -639,3 +639,47 @@ final class AnnotationViewTests: XCTestCase {
         }
     }
 }
+
+// MARK: - Screen recording geometry
+
+@MainActor
+final class ScreenRecordingGeometryTests: XCTestCase {
+    private let screen = CGSize(width: 1000, height: 800)
+
+    func testSelectionRect_flipsToTopLeftOrigin() {
+        let rect = SelectionOverlay.selectionRect(
+            from: NSPoint(x: 10, y: 790), to: NSPoint(x: 110, y: 690), in: screen
+        )
+        XCTAssertEqual(rect, CGRect(x: 10, y: 10, width: 100, height: 100))
+    }
+
+    func testSelectionRect_reversedDrag_sameRect() {
+        let rect = SelectionOverlay.selectionRect(
+            from: NSPoint(x: 110, y: 690), to: NSPoint(x: 10, y: 790), in: screen
+        )
+        XCTAssertEqual(rect, CGRect(x: 10, y: 10, width: 100, height: 100))
+    }
+
+    func testSelectionRect_tinyDrag_selectsWholeScreen() {
+        let rect = SelectionOverlay.selectionRect(from: NSPoint(x: 5, y: 5), to: NSPoint(x: 7, y: 7), in: screen)
+        XCTAssertEqual(rect, CGRect(origin: .zero, size: screen))
+    }
+
+    func testSelectionRect_clampsToScreen() {
+        let rect = SelectionOverlay.selectionRect(
+            from: NSPoint(x: -50, y: -50), to: NSPoint(x: 100, y: 100), in: screen
+        )
+        XCTAssertEqual(rect, CGRect(x: 0, y: 700, width: 100, height: 100))
+    }
+
+    @available(macOS 15.0, *)
+    func testOutputPixelSize_scalesAndRoundsToEven() throws {
+        let size = ScreenRecorder.outputPixelSize(for: CGRect(x: 0, y: 0, width: 101.5, height: 51), scale: 2)
+        XCTAssertEqual(size.width, 202)
+        XCTAssertEqual(size.height, 102)
+
+        let odd = ScreenRecorder.outputPixelSize(for: CGRect(x: 0, y: 0, width: 101, height: 51), scale: 1)
+        XCTAssertEqual(odd.width, 100)
+        XCTAssertEqual(odd.height, 50)
+    }
+}

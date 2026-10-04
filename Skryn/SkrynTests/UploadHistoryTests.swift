@@ -86,6 +86,25 @@ final class UploadHistoryTests: XCTestCase {
         XCTAssertNil(uploads[0].cdnURL)
     }
 
+    // MARK: - cacheFile
+
+    func testCacheFile_copiesFileIntoCache() throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("skryn-test-\(UUID()).mp4")
+        try Data("video".utf8).write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+        let filename = "skryn-test-\(UUID()).mp4"
+
+        let path = try XCTUnwrap(UploadHistory.cacheFile(copyingFrom: source, filename: filename))
+        defer { UploadHistory.removeCacheFile(at: path) }
+
+        XCTAssertEqual(UploadHistory.cachedData(at: path), Data("video".utf8))
+    }
+
+    func testCacheFile_missingSource_returnsNil() {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("missing-\(UUID()).mp4")
+        XCTAssertNil(UploadHistory.cacheFile(copyingFrom: source, filename: "missing.mp4"))
+    }
+
     // MARK: - Helper
 
     private func makeUpload(filename: String) -> RecentUpload {

@@ -19,6 +19,9 @@
 		AA000010 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000013 /* SettingsPanel.swift */; };
 		AA000011 /* HotkeyRecorderButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000014 /* HotkeyRecorderButton.swift */; };
 		AA000012 /* AboutPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000015 /* AboutPanel.swift */; };
+		AA000013 /* SelectionOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000017 /* SelectionOverlay.swift */; };
+		AA000014 /* ScreenRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000018 /* ScreenRecorder.swift */; };
+		AA000015 /* RecordingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000019 /* RecordingPanel.swift */; };
 		AA100001 /* AnnotationViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100001 /* AnnotationViewTests.swift */; };
 		AA100002 /* UploadcareServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100003 /* UploadcareServiceTests.swift */; };
 		AA100003 /* UploadHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100004 /* UploadHistoryTests.swift */; };
@@ -52,6 +55,9 @@
 		AB000014 /* HotkeyRecorderButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderButton.swift; sourceTree = "<group>"; };
 		AB000015 /* AboutPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutPanel.swift; sourceTree = "<group>"; };
 		AB000016 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		AB000017 /* SelectionOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionOverlay.swift; sourceTree = "<group>"; };
+		AB000018 /* ScreenRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecorder.swift; sourceTree = "<group>"; };
+		AB000019 /* RecordingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPanel.swift; sourceTree = "<group>"; };
 		AB100001 /* AnnotationViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationViewTests.swift; sourceTree = "<group>"; };
 		AB100002 /* SkrynTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SkrynTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB100003 /* UploadcareServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadcareServiceTests.swift; sourceTree = "<group>"; };
@@ -101,6 +107,9 @@
 				AB000013 /* SettingsPanel.swift */,
 				AB000014 /* HotkeyRecorderButton.swift */,
 				AB000015 /* AboutPanel.swift */,
+				AB000017 /* SelectionOverlay.swift */,
+				AB000018 /* ScreenRecorder.swift */,
+				AB000019 /* RecordingPanel.swift */,
 				AB000007 /* Assets.xcassets */,
 				AB000008 /* Skryn.entitlements */,
 				AB000009 /* Info.plist */,
@@ -238,6 +247,9 @@
 				AA000010 /* SettingsPanel.swift in Sources */,
 				AA000011 /* HotkeyRecorderButton.swift in Sources */,
 				AA000012 /* AboutPanel.swift in Sources */,
+				AA000013 /* SelectionOverlay.swift in Sources */,
+				AA000014 /* ScreenRecorder.swift in Sources */,
+				AA000015 /* RecordingPanel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

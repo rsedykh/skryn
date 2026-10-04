@@ -16,7 +16,7 @@ enum UploadcareError: LocalizedError {
 }
 
 enum UploadcareService {
-    private static let uploadURL = URL(string: "https://upload.uploadcare.com/base/")!
+    private static let uploadBaseURL = URL(string: "https://upload.uploadcare.com/")!
 
     /// Computes the 10-char CNAME prefix from a public key.
     /// Algorithm: SHA-256 → big-endian integer → base-36 → first 10 chars.
@@ -46,45 +46,134 @@ enum UploadcareService {
     /// Uploads PNG data to Uploadcare and returns the CDN URL.
     static func upload(pngData: Data, filename: String, publicKey: String,
                        cdnBase: String, session: URLSession = .shared) async throws -> String {
-        let boundary = UUID().uuidString
+        let fileID = try await directUpload(data: pngData, filename: filename, contentType: "image/png",
+                                            publicKey: publicKey, session: session)
+        return "\(cdnBase)/\(fileID)/"
+    }
 
-        var request = URLRequest(url: uploadURL)
+    /// Smallest file /multipart/ accepts (docs: "Multipart uploads support files larger than 10 megabytes only";
+    /// the Swift SDK uses 10485760 and goes direct below it).
+    static let multipartMinFileSize = 10_485_760
+    /// Part size /multipart/start/ assumes by default (5 MiB, the S3 minimum for every part but the last).
+    static let multipartPartSize = 5_242_880
+
+    /// Uploads the file at `fileURL` and returns the CDN URL ("<cdnBase>/<uuid>/").
+    /// Files smaller than the multipart minimum go through /base/; larger ones through /multipart/.
+    /// `multipartThreshold` and `partSize` exist for tests; keep the defaults in production.
+    static func upload(fileURL: URL, filename: String, contentType: String, publicKey: String,
+                       cdnBase: String, session: URLSession = .shared,
+                       multipartThreshold: Int = multipartMinFileSize,
+                       partSize: Int = multipartPartSize) async throws -> String {
+        let size = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        let fileID: String
+        if size < multipartThreshold {
+            fileID = try await directUpload(data: Data(contentsOf: fileURL), filename: filename,
+                                            contentType: contentType, publicKey: publicKey, session: session)
+        } else {
+            fileID = try await multipartUpload(fileURL: fileURL, filename: filename,
+                                               contentType: contentType, publicKey: publicKey,
+                                               partSize: partSize, session: session)
+        }
+        return "\(cdnBase)/\(fileID)/"
+    }
+
+    /// POST /base/; returns the file UUID.
+    private static func directUpload(data: Data, filename: String, contentType: String,
+                                     publicKey: String, session: URLSession) async throws -> String {
+        let json = try await postForm(
+            path: "base/",
+            fields: [("UPLOADCARE_PUB_KEY", publicKey), ("UPLOADCARE_STORE", "1")],
+            file: FormFile(filename: filename, contentType: contentType, data: data), session: session)
+        guard let fileID = json["file"] as? String else { throw UploadcareError.missingFileID }
+        return fileID
+    }
+
+    /// /multipart/start/ → PUT each part to its presigned URL → /multipart/complete/; returns the file UUID.
+    private static func multipartUpload(fileURL: URL, filename: String, contentType: String,
+                                        publicKey: String, partSize: Int,
+                                        session: URLSession) async throws -> String {
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? handle.close() }
+        let size = try handle.seekToEnd()
+        try handle.seek(toOffset: 0)
+
+        let start = try await postForm(
+            path: "multipart/start/",
+            fields: [("UPLOADCARE_PUB_KEY", publicKey), ("UPLOADCARE_STORE", "1"),
+                     ("filename", filename), ("size", "\(size)"),
+                     ("part_size", "\(partSize)"), ("content_type", contentType)],
+            session: session)
+        guard let uuid = start["uuid"] as? String,
+              let parts = start["parts"] as? [String] else { throw UploadcareError.invalidResponse }
+
+        // ponytail: sequential parts, no retry; add bounded concurrency if long recordings upload too slowly
+        for part in parts {
+            guard let url = URL(string: part),
+                  let chunk = try handle.read(upToCount: partSize), !chunk.isEmpty else {
+                throw UploadcareError.invalidResponse
+            }
+            var request = URLRequest(url: url)
+            request.httpMethod = "PUT"
+            request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+            request.httpBody = chunk
+            let (data, response) = try await session.data(for: request)
+            try checkStatus(data, response)
+        }
+
+        let complete = try await postForm(
+            path: "multipart/complete/",
+            fields: [("UPLOADCARE_PUB_KEY", publicKey), ("uuid", uuid)],
+            session: session)
+        guard let fileID = complete["uuid"] as? String else { throw UploadcareError.missingFileID }
+        return fileID
+    }
+
+    private struct FormFile {
+        let filename: String
+        let contentType: String
+        let data: Data
+    }
+
+    /// POSTs a multipart/form-data request to the Upload API and returns the decoded JSON object.
+    private static func postForm(path: String, fields: [(String, String)],
+                                 file: FormFile? = nil,
+                                 session: URLSession) async throws -> [String: Any] {
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: uploadBaseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()
-
-        body.appendMultipart(boundary: boundary, name: "UPLOADCARE_PUB_KEY", value: publicKey)
-        body.appendMultipart(boundary: boundary, name: "UPLOADCARE_STORE", value: "1")
-
-        body.append(Data("--\(boundary)\r\n".utf8))
-        let safeFilename = filename.replacingOccurrences(of: "\"", with: "\\\"")
-        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(safeFilename)\"\r\n".utf8))
-        body.append(Data("Content-Type: image/png\r\n\r\n".utf8))
-        body.append(pngData)
-        body.append(Data("\r\n".utf8))
-
+        for (name, value) in fields {
+            body.appendMultipart(boundary: boundary, name: name, value: value)
+        }
+        if let file {
+            body.append(Data("--\(boundary)\r\n".utf8))
+            let safeFilename = file.filename.replacingOccurrences(of: "\"", with: "\\\"")
+            body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(safeFilename)\"\r\n".utf8))
+            body.append(Data("Content-Type: \(file.contentType)\r\n\r\n".utf8))
+            body.append(file.data)
+            body.append(Data("\r\n".utf8))
+        }
         body.append(Data("--\(boundary)--\r\n".utf8))
-
         request.httpBody = body
 
         let (data, response) = try await session.data(for: request)
+        try checkStatus(data, response)
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw UploadcareError.missingFileID
+        }
+        return json
+    }
 
+    private static func checkStatus(_ data: Data, _ response: URLResponse) throws {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw UploadcareError.invalidResponse
         }
-
         guard (200...299).contains(httpResponse.statusCode) else {
             let message = String(data: data, encoding: .utf8) ?? "HTTP \(httpResponse.statusCode)"
             throw UploadcareError.serverError(message)
         }
-
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let fileID = json["file"] as? String else {
-            throw UploadcareError.missingFileID
-        }
-
-        return "\(cdnBase)/\(fileID)/"
     }
 }
 

@@ -10,6 +10,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKeyRef: EventHotKeyRef?
     private var settingsPanel: SettingsPanel?
     private var aboutPanel: AboutPanel?
+    private var recordingPanel: RecordingPanel?
+    /// The temp file shown in `recordingPanel`; deleted when the panel closes.
+    private var recordingURL: URL?
+    /// Stops the screen recording in progress and returns the finished file. Nil when not recording.
+    /// A closure because `ScreenRecorder` is macOS 15+ and stored properties can't be availability-gated.
+    private var stopActiveRecording: (() async throws -> URL)?
     private var uploadTasks: [UUID: Task<Void, Never>] = [:]
     private var iconTimer: Timer?
     private var animationFrameIndex = 0
@@ -58,7 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         guard let event = NSApp.currentEvent else { return }
 
-        if event.type == .rightMouseUp {
+        if stopActiveRecording != nil {
+            stopRecording()
+        } else if event.type == .rightMouseUp {
             showQuitMenu()
         } else {
             captureScreen()
@@ -116,7 +124,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Borderless windows don't support `performClose(_:)`, so Close calls `close()` directly
     @objc private func closeKeyWindow() {
-        (NSApp.keyWindow ?? annotationWindow)?.close()
+        // While a sheet is up the sheet is key; close its parent so its own close() logic runs
+        let keyWindow = NSApp.keyWindow.map { $0.sheetParent ?? $0 }
+        (keyWindow ?? annotationWindow)?.close()
     }
 
     // MARK: - Right-Click Menu
@@ -152,6 +162,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 menu.addItem(hint)
             }
+            menu.addItem(.separator())
+        }
+
+        if #available(macOS 15.0, *) {
+            let recordItem = NSMenuItem(
+                title: "Record Screen…", action: #selector(startRecording), keyEquivalent: ""
+            )
+            recordItem.target = self
+            recordItem.image = NSImage(systemSymbolName: "record.circle", accessibilityDescription: "Record")
+            menu.addItem(recordItem)
             menu.addItem(.separator())
         }
 
@@ -291,6 +311,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Copies a finished file (a cached upload or a recording) into the save folder.
+    @discardableResult
+    private func saveLocally(copyingFrom source: URL, filename: String) -> Bool {
+        let saveFolder = Defaults.saveFolder
+        do {
+            try FileManager.default.createDirectory(at: saveFolder, withIntermediateDirectories: true)
+            let destination = saveFolder.appendingPathComponent(filename)
+            try? FileManager.default.removeItem(at: destination)  // overwrite, like Data.write
+            try FileManager.default.copyItem(at: source, to: destination)
+            return true
+        } catch {
+            reportSaveFailure("Save failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private static func mimeType(forFilename filename: String) -> String {
+        UTType(filenameExtension: (filename as NSString).pathExtension)?.preferredMIMEType
+            ?? "application/octet-stream"
+    }
+
     private func reportSaveFailure(_ message: String) {
         lastError = message
         NSSound.beep()
@@ -303,11 +344,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return saveLocally(pngData: pngData, filename: filename)
         }
 
+        startCloudUpload(cachePath: cachePath, filename: filename, publicKey: publicKey)
+        return true
+    }
+
+    /// Records the cached file in Recent Uploads and uploads it, saving locally if the upload fails.
+    private func startCloudUpload(cachePath: String, filename: String, publicKey: String) {
         let upload = RecentUpload(filename: filename, cdnURL: nil, date: Date(), cacheFilePath: cachePath)
         UploadHistory.add(upload)
-
-        performUpload(pngData: pngData, filename: filename, publicKey: publicKey, fallbackSave: true)
-        return true
+        performUpload(cachePath: cachePath, filename: filename, publicKey: publicKey, fallbackSave: true)
     }
 
     func openDroppedImage(_ url: URL) {
@@ -328,14 +373,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func retryUpload(_ sender: NSMenuItem) {
         guard let box = sender.representedObject as? RecentUploadBox,
               let publicKey = Defaults.publicKey,
-              let pngData = UploadHistory.cachedData(at: box.value.cacheFilePath) else { return }
+              FileManager.default.fileExists(atPath: box.value.cacheFilePath) else { return }
 
-        performUpload(pngData: pngData, filename: box.value.filename, publicKey: publicKey, fallbackSave: false)
+        performUpload(
+            cachePath: box.value.cacheFilePath, filename: box.value.filename,
+            publicKey: publicKey, fallbackSave: false
+        )
     }
 
     /// Shared upload logic: animates icon, runs async upload, updates history, handles errors.
     /// If `fallbackSave` is true, saves locally on upload failure.
-    private func performUpload(pngData: Data, filename: String, publicKey: String, fallbackSave: Bool) {
+    private func performUpload(cachePath: String, filename: String, publicKey: String, fallbackSave: Bool) {
         let uploadID = UUID()
         let cdnBase = UploadcareService.cdnBase(forPublicKey: publicKey)
         if uploadTasks.isEmpty {
@@ -349,7 +397,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let task = Task {
             do {
                 let cdnURL = try await UploadcareService.upload(
-                    pngData: pngData, filename: filename, publicKey: publicKey, cdnBase: cdnBase
+                    fileURL: URL(fileURLWithPath: cachePath), filename: filename,
+                    contentType: Self.mimeType(forFilename: filename), publicKey: publicKey, cdnBase: cdnBase
                 )
                 UploadHistory.updateCDNURL(for: filename, url: cdnURL)
                 copyToClipboard(cdnURL)
@@ -361,7 +410,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 lastError = "Upload failed: \(error.localizedDescription)"
                 if fallbackSave {
-                    saveLocally(pngData: pngData, filename: filename)
+                    saveLocally(copyingFrom: URL(fileURLWithPath: cachePath), filename: filename)
                 }
                 finishUpload(id: uploadID, failed: true)
                 print("Upload failed: \(error.localizedDescription)")
@@ -376,13 +425,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func saveUploadToDesktop(_ sender: NSMenuItem) {
-        guard let box = sender.representedObject as? RecentUploadBox,
-              let data = UploadHistory.cachedData(at: box.value.cacheFilePath) else { return }
+        guard let box = sender.representedObject as? RecentUploadBox else { return }
         let upload = box.value
 
         let fileURL = Defaults.desktopFolder.appendingPathComponent(upload.filename)
         do {
-            try data.write(to: fileURL)
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: upload.cacheFilePath), to: fileURL)
             print("Saved to desktop: \(fileURL.path)")
         } catch {
             NSSound.beep()
@@ -404,7 +452,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Scheduled on the main run loop, so the callback is already on the main actor
         iconTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, !self.spinnerImages.isEmpty else { return }
+                guard let self, !self.spinnerImages.isEmpty, self.stopActiveRecording == nil else { return }
                 self.statusItem.button?.image = self.spinnerImages[
                     self.animationFrameIndex % self.spinnerImages.count
                 ]
@@ -425,9 +473,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Shows the resting icon: red when the last upload or capture failed, normal otherwise.
-    /// No-op while the upload spinner is running.
+    /// Shows the resting icon: a red stop button while recording (it wins over the upload spinner),
+    /// red when the last upload or capture failed, normal otherwise. No-op while the upload spinner is running.
     private func updateIdleIcon() {
+        if stopActiveRecording != nil {
+            let stopIcon = NSImage(systemSymbolName: "stop.circle.fill", accessibilityDescription: "Stop Recording")
+            statusItem.button?.image = stopIcon?.withSymbolConfiguration(.init(paletteColors: [.red]))
+            return
+        }
         guard iconTimer == nil else { return }
         let icon = NSImage(systemSymbolName: "camera", accessibilityDescription: "Skryn")
         statusItem.button?.image = (uploadFailed || captureFailed)
@@ -592,6 +645,117 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    // MARK: - Screen Recording
+
+    /// Lets the user pick an area on the screen under the cursor, then records it until the
+    /// menu bar icon is clicked. `isCapturing` covers the area-picking step.
+    @available(macOS 15.0, *)
+    @objc private func startRecording() {
+        guard stopActiveRecording == nil, recordingPanel == nil, annotationWindow == nil,
+              !isCapturing, let screen = screenWithMouse() else { return }
+        isCapturing = true
+        Task {
+            defer { isCapturing = false }
+            guard let rect = await SelectionOverlay.pickArea(on: screen) else { return }
+
+            let recorder = ScreenRecorder(
+                displayID: ScreenCapture.displayID(for: screen), sourceRect: rect,
+                scale: max(screen.backingScaleFactor, 1)
+            )
+            // The recorder keeps what it captured so far; stopping collects it
+            recorder.onUnexpectedStop = { error in
+                self.lastError = "Recording stopped: \(error.localizedDescription)"
+                self.stopRecording()
+            }
+            do {
+                try await recorder.start()
+            } catch {
+                captureFailed = true
+                lastError = error.localizedDescription
+                NSSound.beep()
+                updateIdleIcon()
+                return
+            }
+            stopActiveRecording = { try await recorder.stop() }
+            if captureFailed {
+                captureFailed = false
+                lastError = nil
+            }
+            updateIdleIcon()
+        }
+    }
+
+    private func stopRecording() {
+        guard let stop = stopActiveRecording else { return }
+        stopActiveRecording = nil
+        isCapturing = true  // until the panel shows, so a new capture can't start mid-finalize
+        updateIdleIcon()
+        Task {
+            defer { isCapturing = false }
+            do {
+                showRecordingPanel(for: try await stop())
+            } catch {
+                captureFailed = true
+                lastError = "Recording failed: \(error.localizedDescription)"
+                NSSound.beep()
+                updateIdleIcon()
+            }
+        }
+    }
+
+    private func showRecordingPanel(for videoURL: URL) {
+        let filename = "skryn-\(Self.filenameFormatter.string(from: Date())).mp4"
+        let panel = RecordingPanel(
+            videoURL: videoURL,
+            onAction: { [weak self] action in
+                self?.handleRecordingAction(action, videoURL: videoURL, filename: filename) ?? false
+            },
+            onDiscard: {}  // the temp file is deleted when the panel closes
+        )
+        panel.delegate = self
+        recordingPanel = panel
+        recordingURL = videoURL
+        NSApp.setActivationPolicy(.regular)
+        installMainMenu()
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Same contract as `handleAction`: returns false to keep the panel open.
+    private func handleRecordingAction(_ action: SaveAction, videoURL: URL, filename: String) -> Bool {
+        switch action {
+        case .local:
+            return saveLocally(copyingFrom: videoURL, filename: filename)
+
+        case .clipboard:
+            // A video can't go on the pasteboard as data; copy it as a file, like Finder does.
+            // The temp folder outlives the clipboard in practice and the system cleans it up.
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("Skryn", isDirectory: true)
+            let fileURL = dir.appendingPathComponent(filename)
+            do {
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                try FileManager.default.copyItem(at: videoURL, to: fileURL)
+            } catch {
+                reportSaveFailure("Copy failed: \(error.localizedDescription)")
+                return false
+            }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.writeObjects([fileURL as NSURL])
+            return true
+
+        case .cloud:
+            guard let publicKey = Defaults.publicKey else {
+                NSSound.beep()
+                return false
+            }
+            guard let cachePath = UploadHistory.cacheFile(copyingFrom: videoURL, filename: filename) else {
+                return saveLocally(copyingFrom: videoURL, filename: filename)
+            }
+            startCloudUpload(cachePath: cachePath, filename: filename, publicKey: publicKey)
+            return true
+        }
+    }
+
     // MARK: - Helpers
 
     private func imageData(from cgImage: CGImage, type: UTType) -> Data? {
@@ -613,9 +777,13 @@ extension AppDelegate: NSWindowDelegate {
             settingsPanel = nil
         } else if window === aboutPanel {
             aboutPanel = nil
+        } else if window === recordingPanel {
+            recordingPanel = nil
+            if let url = recordingURL { try? FileManager.default.removeItem(at: url) }
+            recordingURL = nil
         }
 
-        if annotationWindow == nil && settingsPanel == nil && aboutPanel == nil {
+        if annotationWindow == nil && settingsPanel == nil && aboutPanel == nil && recordingPanel == nil {
             NSApp.mainMenu = nil
             NSApp.hide(nil)
             NSApp.setActivationPolicy(.accessory)
