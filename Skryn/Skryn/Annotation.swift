@@ -6,18 +6,33 @@ enum AnnotationHitTestResult {
     case none
 }
 
-enum AnnotationColor: String, Equatable {
-    case red
-    case blue
+/// The drawing palette, in toolbar order. C cycles through it.
+enum AnnotationColor: String, CaseIterable, Equatable {
+    case red, orange, yellow, green, blue, purple, black, white
 
     var nsColor: NSColor {
         switch self {
         case .red: return .red
+        case .orange: return .systemOrange
+        case .yellow: return .systemYellow
+        case .green: return .systemGreen
         case .blue: return .systemBlue
+        case .purple: return .systemPurple
+        case .black: return .black
+        case .white: return .white
         }
     }
 
-    var toggled: AnnotationColor { self == .red ? .blue : .red }
+    var title: String { rawValue.capitalized }
+
+    /// The next palette color, wrapping around (the C key)
+    var next: AnnotationColor {
+        let all = Self.allCases
+        return all[(all.firstIndex(of: self)! + 1) % all.count]
+    }
+
+    /// Readable text on a fill of this color (badge numbers)
+    var contrastingTextColor: NSColor { self == .yellow || self == .white ? .black : .white }
 }
 
 enum Annotation: Equatable {

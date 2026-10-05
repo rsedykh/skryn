@@ -100,6 +100,10 @@ final class HotkeyRecorderButton: NSButton {
     private(set) var recordedKeyCode = Defaults.defaultHotkeyKeyCode
     private(set) var recordedCarbonModifiers = Defaults.defaultHotkeyModifiers
     private(set) var isRecording = false
+    /// Called after the user records a new shortcut (not on `setHotkey`)
+    var onChange: (() -> Void)?
+    /// Vetoes a recorded shortcut (keyCode, Carbon modifiers); a vetoed press beeps and keeps listening
+    var shouldAccept: ((UInt32, UInt32) -> Bool)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -133,6 +137,12 @@ final class HotkeyRecorderButton: NSButton {
 
     override var acceptsFirstResponder: Bool { true }
 
+    /// Clicking elsewhere (e.g. the other recorder) stops listening
+    override func resignFirstResponder() -> Bool {
+        if isRecording { cancelRecording() }
+        return super.resignFirstResponder()
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard isRecording else { return super.performKeyEquivalent(with: event) }
         handleRecordingKey(event)
@@ -159,10 +169,19 @@ final class HotkeyRecorderButton: NSButton {
             return
         }
 
-        recordedKeyCode = UInt32(event.keyCode)
-        recordedCarbonModifiers = carbonModifiers(from: mods)
+        let keyCode = UInt32(event.keyCode)
+        let modifiers = carbonModifiers(from: mods)
+        if let shouldAccept, !shouldAccept(keyCode, modifiers) {
+            NSSound.beep()
+            title = "Already in use"
+            return
+        }
+
+        recordedKeyCode = keyCode
+        recordedCarbonModifiers = modifiers
         isRecording = false
         updateTitle()
+        onChange?()
     }
 
     func cancelRecording() {

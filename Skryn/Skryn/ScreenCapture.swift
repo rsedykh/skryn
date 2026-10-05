@@ -58,4 +58,16 @@ struct ScreenCapture {
         let pointSize = NSSize(width: display.width, height: display.height)
         return NSImage(cgImage: cgImage, size: pointSize)
     }
+
+    /// Cuts `rect` (points, top-left origin, as `SelectionOverlay.pickArea` returns) out of a full-display capture.
+    static func crop(_ image: NSImage, to rect: CGRect) -> NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              image.size.width > 0 else { return nil }
+        let scale = CGFloat(cgImage.width) / image.size.width
+        let pixelRect = CGRect(
+            x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale
+        ).integral
+        guard let cropped = cgImage.cropping(to: pixelRect) else { return nil }
+        return NSImage(cgImage: cropped, size: rect.size)
+    }
 }
