@@ -1,502 +1,107 @@
 import AppKit
-import Carbon.HIToolbox
-import ServiceManagement
 
-/// UserDefaults keys and default values shared across the app
-enum Defaults {
-    static let uploadcarePublicKey = "uploadcarePublicKey"
-    static let saveFolderPath = "saveFolderPath"
-    static let hotkeyKeyCode = "hotkeyKeyCode"
-    static let hotkeyModifiers = "hotkeyModifiers"
-    static let hasLaunchedBefore = "hasLaunchedBefore"
+/// Settings window: a column of sections (`SettingsSections.swift`, `CaptureSettingsSections.swift`,
+/// `MenuBarSettingsSection`), each applying its controls as soon as they change. Grouped cards under titled
+/// sections; the window resizes with an animation, its top edge fixed.
+final class SettingsPanel: AnimatedPanel {
+    /// The column of sections, pinned to the top: the window grows and shrinks below it
+    private let sections = NSStackView()
+    /// Titlebar height plus breathing room (the content runs under the transparent titlebar)
+    private var topInset: CGFloat = 40
 
-    static let defaultHotkeyKeyCode = UInt32(kVK_ANSI_5)
-    static let defaultHotkeyModifiers = UInt32(cmdKey | shiftKey)
+    private let shortcuts = ShortcutsSection()
+    private var recording: RecordingSection?
+    /// Every section's controller: they're the targets of their controls
+    private var controllers: [AnyObject] = []
 
-    /// The configured global hotkey, falling back to ⌘⇧5
-    static var hotkey: (keyCode: UInt32, modifiers: UInt32) {
-        let defaults = UserDefaults.standard
-        return (
-            defaults.object(forKey: hotkeyKeyCode) as? UInt32 ?? defaultHotkeyKeyCode,
-            defaults.object(forKey: hotkeyModifiers) as? UInt32 ?? defaultHotkeyModifiers
-        )
-    }
+    var isRecordingHotkey: Bool { shortcuts.isRecording }
 
-    /// The Uploadcare public key, or nil when none is configured
-    static var publicKey: String? {
-        guard let key = UserDefaults.standard.string(forKey: uploadcarePublicKey), !key.isEmpty
-        else { return nil }
-        return key
-    }
-
-    static var desktopFolder: URL {
-        FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-    }
-
-    /// Where local saves go: the custom folder if one is set, otherwise the Desktop
-    static var saveFolder: URL {
-        guard let path = UserDefaults.standard.string(forKey: saveFolderPath) else { return desktopFolder }
-        return URL(fileURLWithPath: path)
-    }
-}
-
-enum SaveModifier: String, CaseIterable {
-    case cmd
-    case opt
-    case ctrl
-
-    var label: String {
-        switch self {
-        case .cmd: return "\u{2318}\u{23CE}"
-        case .opt: return "\u{2325}\u{23CE}"
-        case .ctrl: return "\u{2303}\u{23CE}"
-        }
-    }
-
-    var flags: NSEvent.ModifierFlags {
-        switch self {
-        case .cmd: return .command
-        case .opt: return .option
-        case .ctrl: return .control
-        }
-    }
-
-    /// Reads a configured modifier from UserDefaults, falling back to the given default.
-    static func configured(forKey key: String, default fallback: SaveModifier) -> SaveModifier {
-        guard let raw = UserDefaults.standard.string(forKey: key) else { return fallback }
-        return SaveModifier(rawValue: raw) ?? fallback
-    }
-}
-
-enum SaveAction: CaseIterable {
-    case local, clipboard, cloud
-
-    var defaultsKey: String {
-        switch self {
-        case .local: return "modifierLocal"
-        case .clipboard: return "modifierClipboard"
-        case .cloud: return "modifierCloud"
-        }
-    }
-
-    var defaultModifier: SaveModifier {
-        switch self {
-        case .local: return .opt
-        case .clipboard: return .cmd
-        case .cloud: return .ctrl
-        }
-    }
-
-    var configuredModifier: SaveModifier {
-        SaveModifier.configured(forKey: defaultsKey, default: defaultModifier)
-    }
-
-    static func action(for flags: NSEvent.ModifierFlags) -> SaveAction? {
-        let relevant = flags.intersection([.command, .option, .control])
-        return allCases.first { $0.configuredModifier.flags == relevant }
-    }
-}
-
-final class SettingsPanel: NSPanel {
-    private let folderLabel = NSTextField(labelWithString: "")
-    private var selectedFolderPath: String = ""
-    private let chooseButton = NSButton(title: "Change", target: nil, action: nil)
-    private let keyField = NSTextField(frame: .zero)
-    private let hotkeyLabel = NSTextField(labelWithString: "App shortcut:")
-    private let hotkeyRecorder = HotkeyRecorderButton(frame: .zero)
-    private let launchAtLoginCheckbox = NSButton(
-        checkboxWithTitle: "Launch at login", target: nil, action: nil
-    )
-
-    private let localPopup = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let clipboardPopup = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let cloudPopup = NSPopUpButton(frame: .zero, pullsDown: false)
-
-    private var modifierLocal: SaveModifier = .opt
-    private var modifierClipboard: SaveModifier = .cmd
-    private var modifierCloud: SaveModifier = .ctrl
-
-    var onSettingsChanged: (() -> Void)?
-
-    var isRecordingHotkey: Bool { hotkeyRecorder.isRecording }
-
+    /// Called when a registered global hotkey fires while a recorder is listening:
+    /// the press never reaches the recorder, so keep that recorder's current shortcut.
     func confirmCurrentHotkey() {
-        hotkeyRecorder.cancelRecording()
+        shortcuts.cancelRecording()
     }
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 325, height: 340),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: SettingsStyle.windowWidth, height: 400),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-
-        title = "Settings"
+        title = "Skryn Settings"
+        titlebarAppearsTransparent = true
         isReleasedWhenClosed = false
-        center()
-        setupControls()
         setupLayout()
-        loadSettings()
+        relayout(animated: false)
+        center()
         initialFirstResponder = contentView
     }
 
-    private func setupControls() {
-        chooseButton.target = self
-        chooseButton.action = #selector(chooseFolderClicked)
-        chooseButton.bezelStyle = .rounded
-
-        keyField.placeholderString = "Public key"
-        keyField.lineBreakMode = .byTruncatingTail
-        keyField.cell?.usesSingleLineMode = true
-        folderLabel.lineBreakMode = .byTruncatingMiddle
-        folderLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        keyField.setContentHuggingPriority(.defaultLow, for: .horizontal)
-
-        for popup in [localPopup, clipboardPopup, cloudPopup] {
-            for mod in SaveModifier.allCases {
-                popup.addItem(withTitle: mod.label)
-            }
-            popup.target = self
-            popup.action = #selector(modifierPopupChanged(_:))
-            popup.setContentHuggingPriority(.required, for: .horizontal)
-        }
-    }
-
-    private func makeActionRow(
-        label: String, popup: NSPopUpButton, linkText: String? = nil
-    ) -> NSStackView {
-        var views: [NSView]
-        if let linkText {
-            let prefix = NSTextField(labelWithString: "Upload to ")
-            let linkField = NSTextField(labelWithString: "")
-            let suffix = NSTextField(labelWithString: "")
-            let fontSize = prefix.font?.pointSize ?? NSFont.systemFontSize
-            let boldFont = NSFont.boldSystemFont(ofSize: fontSize)
-            let linkString = NSMutableAttributedString(
-                string: linkText,
-                attributes: [
-                    .link: "https://uploadcare.com",
-                    .font: boldFont,
-                    .underlineStyle: NSUnderlineStyle.single.rawValue,
-                    .underlineColor: NSColor.linkColor
-                ]
-            )
-            linkField.attributedStringValue = linkString
-            linkField.allowsEditingTextAttributes = true
-            linkField.isSelectable = true
-            suffix.font = NSFont.systemFont(ofSize: fontSize)
-
-            let textRow = NSStackView(views: [prefix, linkField, suffix])
-            textRow.orientation = .horizontal
-            textRow.spacing = 0
-            textRow.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            views = [textRow]
-        } else {
-            let textLabel = NSTextField(labelWithString: label)
-            textLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            views = [textLabel]
-        }
-        views.append(popup)
-
-        let row = NSStackView(views: views)
-        row.orientation = .horizontal
-        row.spacing = 8
-        row.distribution = .fill
-        return row
+    override func becomeKey() {
+        super.becomeKey()
+        // The user may have granted Accessibility in System Settings meanwhile
+        recording?.refreshAccessibility()
     }
 
     private func setupLayout() {
-        let clipboardRow = makeActionRow(label: "Copy to clipboard", popup: clipboardPopup)
+        let titlebar = frame.height - contentLayoutRect.height
+        topInset = (titlebar > 0 ? titlebar : 28) + 8
+        let relayout: SettingsRelayout = { [weak self] animated, alongside, completion in
+            self?.relayout(animated: animated, alongside: alongside, completion: completion)
+        }
+        let afterCapture = AfterCaptureSection()
+        let output = OutputSection(relayout: relayout)
+        let upload = UploadSection(relayout: relayout)
+        let menuBar = MenuBarSettingsSection()
+        let general = GeneralSection()
+        controllers = [afterCapture, output, upload, menuBar, general]
+        var views = [shortcuts.makeView(), afterCapture.makeView(), output.makeView(), upload.makeView()]
+        if MenuBarAction.available.contains(.record) {
+            let recording = RecordingSection(relayout: relayout)
+            self.recording = recording
+            views.append(recording.makeView())
+        }
+        views += [menuBar.makeView(), general.makeView()]
 
-        let localRow = makeActionRow(label: "Save to local folder", popup: localPopup)
-        let folderRow = NSStackView(views: [folderLabel, chooseButton])
-        folderRow.orientation = .horizontal
-        folderRow.spacing = 8
-
-        let localSection = NSStackView(views: [localRow, folderRow])
-        localSection.orientation = .vertical
-        localSection.alignment = .leading
-        localSection.spacing = 6
-        folderRow.leadingAnchor.constraint(equalTo: localSection.leadingAnchor).isActive = true
-
-        let cloudRow = makeActionRow(label: "", popup: cloudPopup, linkText: "Uploadcare")
-        let keyLink = makeSmallLinkButton(
-            title: "Get API key \u{2197}", url: "https://app.uploadcare.com/projects/-/api-keys/"
+        sections.orientation = .vertical
+        sections.alignment = .leading
+        sections.spacing = 24
+        views.forEach { sections.addArrangedSubview($0) }
+        // In a scroll view: on a short screen (a 13" laptop) the window stops at the visible height and scrolls
+        let scroll = SettingsStyle.scrollingDocument(
+            sections, insets: NSEdgeInsets(top: topInset, left: 0, bottom: 20, right: 0),
+            width: SettingsStyle.cardWidth, adjustsInsets: false  // topInset already clears the titlebar
         )
-        let keyRow = NSStackView(views: [keyField, keyLink])
-        keyRow.orientation = .horizontal
-        keyRow.spacing = 6
-        let cloudSection = NSStackView(views: [cloudRow, keyRow])
-        cloudSection.orientation = .vertical
-        cloudSection.alignment = .leading
-        cloudSection.spacing = 6
+        scroll.documentView?.wantsLayer = true
+        contentView = scroll
+        NSLayoutConstraint.activate(views.map { $0.widthAnchor.constraint(equalTo: sections.widthAnchor) })
+    }
 
-        let separator = makeSeparator()
-        let hotkeyRow = makeHotkeyRow()
-        let buttonRow = makeButtonRow()
-
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
-
-        let separator2 = makeSeparator()
-        let mainStack = NSStackView(
-            views: [hotkeyRow, separator, clipboardRow, localSection, cloudSection,
-                    separator2, launchAtLoginCheckbox, spacer, buttonRow]
-        )
-        mainStack.orientation = .vertical
-        mainStack.alignment = .leading
-        mainStack.spacing = 16
-        mainStack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-
-        mainStack.translatesAutoresizingMaskIntoConstraints = false
-        contentView?.addSubview(mainStack)
-        if let cv = contentView {
-            NSLayoutConstraint.activate([
-                mainStack.topAnchor.constraint(equalTo: cv.topAnchor),
-                mainStack.bottomAnchor.constraint(equalTo: cv.bottomAnchor),
-                mainStack.leadingAnchor.constraint(equalTo: cv.leadingAnchor),
-                mainStack.trailingAnchor.constraint(equalTo: cv.trailingAnchor)
-            ])
+    /// Sizes the window to its sections, keeping the top edge put. Animated, the sections' frames move
+    /// (rows sliding open or shut, a provider view crossfading in `alongside`) together with the window.
+    private func relayout(animated: Bool, alongside: (() -> Void)? = nil, completion: (() -> Void)? = nil) {
+        let width = SettingsStyle.windowWidth
+        let contentHeight = (topInset + sections.fittingSize.height + 20).rounded()
+        // Never taller than the screen's usable area; the rest scrolls
+        let maxHeight = (screen ?? NSScreen.main)?.visibleFrame.height ?? contentHeight
+        let height = min(contentHeight, maxHeight)
+        let visible = (screen ?? NSScreen.main)?.visibleFrame
+        var target = NSRect(x: (frame.midX - width / 2).rounded(), y: frame.maxY - height, width: width, height: height)
+        if let visible {  // growing downward must not run past the Dock or off the bottom
+            target.origin.y = max(target.origin.y, visible.minY)
+            target.origin.y = min(target.origin.y, visible.maxY - height)
         }
-
-        pinTrailingToStack(
-            views: [buttonRow, folderRow, localRow, clipboardRow, cloudRow, keyRow],
-            stack: mainStack
-        )
-        for sep in [separator, separator2] {
-            sep.leadingAnchor.constraint(
-                equalTo: mainStack.leadingAnchor, constant: 20
-            ).isActive = true
-            sep.trailingAnchor.constraint(
-                equalTo: mainStack.trailingAnchor, constant: -20
-            ).isActive = true
-        }
-    }
-
-    private func makeSmallLinkButton(title: String, url: String) -> NSTextField {
-        let field = NSTextField(labelWithString: "")
-        let linkString = NSMutableAttributedString(
-            string: title,
-            attributes: [
-                .link: url,
-                .font: NSFont.boldSystemFont(ofSize: NSFont.smallSystemFontSize),
-                .underlineStyle: NSUnderlineStyle.single.rawValue,
-                .underlineColor: NSColor.linkColor
-            ]
-        )
-        field.attributedStringValue = linkString
-        field.allowsEditingTextAttributes = true
-        field.isSelectable = true
-        field.setContentHuggingPriority(.required, for: .horizontal)
-        return field
-    }
-
-    private func makeHotkeyRow() -> NSStackView {
-        let defaultButton = NSButton(
-            title: "Reset to default", target: self, action: #selector(resetHotkeyClicked)
-        )
-        defaultButton.bezelStyle = .rounded
-        defaultButton.toolTip = "Reset to " + hotkeyDisplayString(
-            keyCode: Defaults.defaultHotkeyKeyCode, carbonModifiers: Defaults.defaultHotkeyModifiers
-        )
-        let row = NSStackView(views: [hotkeyLabel, hotkeyRecorder, defaultButton])
-        row.orientation = .horizontal
-        row.spacing = 8
-        return row
-    }
-
-    private func makeButtonRow() -> NSStackView {
-        let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelClicked))
-        cancelButton.bezelStyle = .rounded
-        cancelButton.keyEquivalent = "\u{1b}"
-        let saveButton = NSButton(title: "Save", target: self, action: #selector(saveClicked))
-        saveButton.bezelStyle = .rounded
-        saveButton.keyEquivalent = "\r"
-        let row = NSStackView(views: [saveButton, cancelButton])
-        row.orientation = .horizontal
-        row.spacing = 8
-        return row
-    }
-
-    private func makeSeparator() -> NSBox {
-        let sep = NSBox()
-        sep.boxType = .separator
-        return sep
-    }
-
-    private func pinTrailingToStack(views: [NSView], stack: NSStackView) {
-        for view in views {
-            view.trailingAnchor.constraint(equalTo: stack.trailingAnchor, constant: -20).isActive = true
-        }
-    }
-
-    private func loadSettings() {
-        keyField.stringValue = Defaults.publicKey ?? ""
-
-        let folderPath = Defaults.saveFolder.path
-        selectedFolderPath = folderPath
-        folderLabel.stringValue = abbreviatePath(folderPath)
-        folderLabel.toolTip = folderPath
-
-        modifierLocal = SaveAction.local.configuredModifier
-        modifierClipboard = SaveAction.clipboard.configuredModifier
-        modifierCloud = SaveAction.cloud.configuredModifier
-        syncPopups()
-
-        let hotkey = Defaults.hotkey
-        hotkeyRecorder.setHotkey(keyCode: hotkey.keyCode, carbonModifiers: hotkey.modifiers)
-
-        let status = SMAppService.mainApp.status
-        launchAtLoginCheckbox.state = (status == .enabled || status == .requiresApproval) ? .on : .off
-    }
-
-    private func syncPopups() {
-        localPopup.selectItem(at: SaveModifier.allCases.firstIndex(of: modifierLocal) ?? 0)
-        clipboardPopup.selectItem(at: SaveModifier.allCases.firstIndex(of: modifierClipboard) ?? 1)
-        cloudPopup.selectItem(at: SaveModifier.allCases.firstIndex(of: modifierCloud) ?? 2)
-    }
-
-    private func modifierFor(popup: NSPopUpButton) -> SaveModifier {
-        let index = popup.indexOfSelectedItem
-        guard index >= 0, index < SaveModifier.allCases.count else { return .opt }
-        return SaveModifier.allCases[index]
-    }
-
-    @objc private func modifierPopupChanged(_ sender: NSPopUpButton) {
-        let newValue = modifierFor(popup: sender)
-
-        // Find which property this popup controls and its previous value
-        let previous: SaveModifier
-        if sender === localPopup {
-            previous = modifierLocal
-            modifierLocal = newValue
-        } else if sender === clipboardPopup {
-            previous = modifierClipboard
-            modifierClipboard = newValue
-        } else {
-            previous = modifierCloud
-            modifierCloud = newValue
-        }
-
-        // Auto-swap: if another popup has the same value, give it our previous value
-        if sender !== localPopup && modifierLocal == newValue {
-            modifierLocal = previous
-        } else if sender !== clipboardPopup && modifierClipboard == newValue {
-            modifierClipboard = previous
-        } else if sender !== cloudPopup && modifierCloud == newValue {
-            modifierCloud = previous
-        }
-
-        syncPopups()
-    }
-
-    private func abbreviatePath(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        if path.hasPrefix(home) {
-            return "~" + path.dropFirst(home.count)
-        }
-        return path
-    }
-
-    @objc private func chooseFolderClicked() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Select"
-        panel.message = "Choose where to save screenshots"
-
-        panel.beginSheetModal(for: self) { [weak self] response in
-            guard let self, response == .OK, let url = panel.url else { return }
-            self.selectedFolderPath = url.path
-            self.folderLabel.stringValue = self.abbreviatePath(url.path)
-            self.folderLabel.toolTip = url.path
-        }
-    }
-
-    @objc private func resetHotkeyClicked() {
-        hotkeyRecorder.setHotkey(
-            keyCode: Defaults.defaultHotkeyKeyCode, carbonModifiers: Defaults.defaultHotkeyModifiers
-        )
-    }
-
-    @objc private func cancelClicked() {
-        close()
-    }
-
-    @objc private func saveClicked() {
-        let defaults = UserDefaults.standard
-        let key = keyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // Persist Uploadcare key
-        if key.isEmpty {
-            defaults.removeObject(forKey: Defaults.uploadcarePublicKey)
-        } else {
-            defaults.set(key, forKey: Defaults.uploadcarePublicKey)
-        }
-
-        // Clean up legacy CDN base key (now auto-computed from public key)
-        defaults.removeObject(forKey: "uploadcareCdnBase")
-
-        // Persist folder path
-        if selectedFolderPath == Defaults.desktopFolder.path {
-            defaults.removeObject(forKey: Defaults.saveFolderPath)
-        } else {
-            defaults.set(selectedFolderPath, forKey: Defaults.saveFolderPath)
-        }
-
-        // Persist modifier assignments
-        defaults.set(modifierLocal.rawValue, forKey: SaveAction.local.defaultsKey)
-        defaults.set(modifierClipboard.rawValue, forKey: SaveAction.clipboard.defaultsKey)
-        defaults.set(modifierCloud.rawValue, forKey: SaveAction.cloud.defaultsKey)
-
-        // Remove legacy key
-        defaults.removeObject(forKey: "saveMode")
-
-        // Persist hotkey
-        defaults.set(hotkeyRecorder.recordedKeyCode, forKey: Defaults.hotkeyKeyCode)
-        defaults.set(hotkeyRecorder.recordedCarbonModifiers, forKey: Defaults.hotkeyModifiers)
-
-        applyLaunchAtLogin(launchAtLoginCheckbox.state == .on)
-
-        onSettingsChanged?()
-        close()
-    }
-
-    /// Registers or unregisters the login item, telling the user when it fails or
-    /// when macOS needs them to approve it in System Settings.
-    private func applyLaunchAtLogin(_ enabled: Bool) {
-        let service = SMAppService.mainApp
-        let isRegistered = service.status == .enabled || service.status == .requiresApproval
-        if enabled != isRegistered {
-            do {
-                if enabled {
-                    try service.register()
-                } else {
-                    try service.unregister()
-                }
-            } catch {
-                let alert = NSAlert()
-                alert.messageText = enabled
-                    ? "Couldn't enable launch at login"
-                    : "Couldn't disable launch at login"
-                alert.informativeText = error.localizedDescription
-                alert.runModal()
-                return
-            }
-        }
-
-        if enabled && service.status == .requiresApproval {
-            let alert = NSAlert()
-            alert.messageText = "Approve Skryn in Login Items"
-            alert.informativeText = "macOS needs your approval before Skryn can launch at login."
-            alert.addButton(withTitle: "Open Login Items")
-            alert.addButton(withTitle: "Later")
-            if alert.runModal() == .alertFirstButtonReturn {
-                SMAppService.openSystemSettingsLoginItems()
-            }
-        }
+        let animate = animated && isVisible && !HUDMotion.reduceMotion
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = animate ? HUDMotion.enterDuration : 0
+            context.timingFunction = HUDMotion.enterTiming
+            context.allowsImplicitAnimation = animate
+            alongside?()
+            if animate { animator().setFrame(target, display: true) } else { setFrame(target, display: true) }
+            contentView?.layoutSubtreeIfNeeded()
+        }, completionHandler: {
+            MainActor.assumeIsolated { completion?() }
+        })
     }
 }

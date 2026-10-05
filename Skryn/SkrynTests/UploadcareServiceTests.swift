@@ -4,6 +4,7 @@ import XCTest
 final class UploadcareServiceTests: XCTestCase {
 
     private var session: URLSession!
+    private var tempFiles: [URL] = []
 
     override func setUp() {
         super.setUp()
@@ -16,6 +17,9 @@ final class UploadcareServiceTests: XCTestCase {
         session = nil
         MockURLProtocol.requestHandler = nil
         MockURLProtocol.lastRequestBody = nil
+        MockURLProtocol.requests = []
+        for url in tempFiles { try? FileManager.default.removeItem(at: url) }
+        tempFiles = []
         super.tearDown()
     }
 
@@ -33,14 +37,11 @@ final class UploadcareServiceTests: XCTestCase {
         }
 
         let url = try await UploadcareService.upload(
-            pngData: Data("fake-png".utf8),
-            filename: "test.png",
-            publicKey: "test-key",
-            cdnBase: "https://abc.ucarecd.net",
-            session: session
+            fileURL: try makeTempFile(Data("fake-png".utf8)), filename: "test.png", contentType: "image/png",
+            publicKey: "test-key", session: session
         )
 
-        XCTAssertEqual(url, "https://abc.ucarecd.net/abc-123-def/")
+        XCTAssertEqual(url, UploadcareService.cdnBase(forPublicKey: "test-key") + "/abc-123-def/")
     }
 
     // MARK: - Multipart body
@@ -59,11 +60,8 @@ final class UploadcareServiceTests: XCTestCase {
         }
 
         _ = try await UploadcareService.upload(
-            pngData: Data("png-bytes".utf8),
-            filename: "shot.png",
-            publicKey: "my-pub-key",
-            cdnBase: "https://abc.ucarecd.net",
-            session: session
+            fileURL: try makeTempFile(Data("png-bytes".utf8)), filename: "shot.png", contentType: "image/png",
+            publicKey: "my-pub-key", session: session
         )
 
         let contentType = try XCTUnwrap(capturedContentType)
@@ -92,9 +90,9 @@ final class UploadcareServiceTests: XCTestCase {
 
         do {
             _ = try await UploadcareService.upload(
-                pngData: Data(), filename: "t.png", publicKey: "k",
-                cdnBase: "https://abc.ucarecd.net", session: session
-            )
+            fileURL: try makeTempFile(Data()), filename: "t.png", contentType: "image/png",
+            publicKey: "k", session: session
+        )
             XCTFail("Expected serverError")
         } catch let error as UploadcareError {
             guard case .serverError(let msg) = error else {
@@ -104,28 +102,6 @@ final class UploadcareServiceTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
-    }
-
-    func testUpload_withCustomCdnBase_returnsCDNURL() async throws {
-        let fileID = "custom-uuid"
-        MockURLProtocol.requestHandler = { request in
-            let json = Data("{\"file\":\"\(fileID)\"}".utf8)
-            let response = HTTPURLResponse(
-                url: request.url!, statusCode: 200,
-                httpVersion: nil, headerFields: nil
-            )!
-            return (response, json)
-        }
-
-        let url = try await UploadcareService.upload(
-            pngData: Data("fake-png".utf8),
-            filename: "test.png",
-            publicKey: "test-key",
-            cdnBase: "https://mycdn.ucarecd.net",
-            session: session
-        )
-
-        XCTAssertEqual(url, "https://mycdn.ucarecd.net/custom-uuid/")
     }
 
     // MARK: - CNAME Prefix
@@ -186,15 +162,114 @@ final class UploadcareServiceTests: XCTestCase {
 
         do {
             _ = try await UploadcareService.upload(
-                pngData: Data(), filename: "t.png", publicKey: "k",
-                cdnBase: "https://abc.ucarecd.net", session: session
-            )
+            fileURL: try makeTempFile(Data()), filename: "t.png", contentType: "image/png",
+            publicKey: "k", session: session
+        )
             XCTFail("Expected missingFileID")
         } catch is UploadcareError {
             // expected
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
+    }
+
+    // MARK: - File upload
+
+    private func makeTempFile(bytes: Int) throws -> URL {
+        try makeTempFile(Data((0..<bytes).map { UInt8($0 % 251) }))
+    }
+
+    private func makeTempFile(_ data: Data) throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+        try data.write(to: url)
+        tempFiles.append(url)
+        return url
+    }
+
+    private static func ok(_ request: URLRequest, _ json: String) -> (HTTPURLResponse, Data) {
+        (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
+    }
+
+    private static func multipartHandler(partStatus: Int) -> (URLRequest) -> (HTTPURLResponse, Data) {
+        { request in
+            switch request.url!.absoluteString {
+            case "https://upload.uploadcare.com/multipart/start/":
+                return ok(request, """
+                    {"uuid":"mp-uuid","parts":["https://s3.test/p1","https://s3.test/p2","https://s3.test/p3"]}
+                    """)
+            case "https://upload.uploadcare.com/multipart/complete/":
+                return ok(request, "{\"uuid\":\"mp-uuid\",\"file_id\":\"mp-uuid\"}")
+            default:
+                let response = HTTPURLResponse(url: request.url!, statusCode: partStatus,
+                                               httpVersion: nil, headerFields: nil)!
+                return (response, Data())
+            }
+        }
+    }
+
+    func testUploadFile_large_usesMultipart() async throws {
+        let fileURL = try makeTempFile(bytes: 25)
+        MockURLProtocol.requestHandler = Self.multipartHandler(partStatus: 200)
+
+        let url = try await UploadcareService.upload(
+            fileURL: fileURL, filename: "rec.mp4", contentType: "video/mp4", publicKey: "k",
+            session: session, multipartThreshold: 20, partSize: 10
+        )
+
+        XCTAssertEqual(url, UploadcareService.cdnBase(forPublicKey: "k") + "/mp-uuid/")
+        let requests = MockURLProtocol.requests
+        XCTAssertEqual(requests.map { $0.request.url!.absoluteString }, [
+            "https://upload.uploadcare.com/multipart/start/",
+            "https://s3.test/p1", "https://s3.test/p2", "https://s3.test/p3",
+            "https://upload.uploadcare.com/multipart/complete/"
+        ])
+        let start = try XCTUnwrap(String(data: requests[0].body, encoding: .utf8))
+        for field in ["name=\"size\"\r\n\r\n25\r\n", "name=\"part_size\"\r\n\r\n10\r\n",
+                      "name=\"content_type\"\r\n\r\nvideo/mp4\r\n", "name=\"filename\"\r\n\r\nrec.mp4\r\n"] {
+            XCTAssertTrue(start.contains(field), field)
+        }
+        let puts = requests[1...3]
+        XCTAssertEqual(puts.map { $0.request.httpMethod }, ["PUT", "PUT", "PUT"])
+        XCTAssertEqual(puts.map { $0.body.count }, [10, 10, 5])
+        XCTAssertEqual(puts.map { $0.request.value(forHTTPHeaderField: "Content-Type") },
+                       ["video/mp4", "video/mp4", "video/mp4"])
+        XCTAssertEqual(puts.reduce(Data()) { $0 + $1.body }, try Data(contentsOf: fileURL))
+        let complete = try XCTUnwrap(String(data: requests[4].body, encoding: .utf8))
+        XCTAssertTrue(complete.contains("name=\"uuid\"\r\n\r\nmp-uuid\r\n"))
+    }
+
+    func testUploadFile_partFailure_throws() async throws {
+        let fileURL = try makeTempFile(bytes: 25)
+        MockURLProtocol.requestHandler = Self.multipartHandler(partStatus: 403)
+
+        do {
+            _ = try await UploadcareService.upload(
+                fileURL: fileURL, filename: "rec.mp4", contentType: "video/mp4", publicKey: "k",
+                session: session, multipartThreshold: 20, partSize: 10
+            )
+            XCTFail("Expected serverError")
+        } catch UploadcareError.serverError {
+            XCTAssertFalse(MockURLProtocol.requests.contains {
+                $0.request.url!.path == "/multipart/complete/"
+            })
+        }
+    }
+
+    func testUploadFile_small_usesBaseWithContentType() async throws {
+        let fileURL = try makeTempFile(bytes: 19)
+        MockURLProtocol.requestHandler = { Self.ok($0, "{\"file\":\"small-id\"}") }
+
+        let url = try await UploadcareService.upload(
+            fileURL: fileURL, filename: "rec.mp4", contentType: "video/mp4", publicKey: "k",
+            session: session, multipartThreshold: 20, partSize: 10
+        )
+
+        XCTAssertEqual(url, UploadcareService.cdnBase(forPublicKey: "k") + "/small-id/")
+        let requests = MockURLProtocol.requests
+        XCTAssertEqual(requests.map { $0.request.url!.absoluteString }, ["https://upload.uploadcare.com/base/"])
+        let body = try XCTUnwrap(String(data: requests[0].body, encoding: .isoLatin1))
+        XCTAssertTrue(body.contains("Content-Type: video/mp4\r\n"))
+        XCTAssertFalse(body.contains("image/png"))
     }
 
 }
@@ -204,11 +279,13 @@ final class UploadcareServiceTests: XCTestCase {
 private final class MockURLProtocol: URLProtocol {
     static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
     static var lastRequestBody: Data?
+    static var requests: [(request: URLRequest, body: Data)] = []
 
     override static func canInit(with request: URLRequest) -> Bool { true }
     override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        MockURLProtocol.lastRequestBody = nil
         // Capture body — URLSession may deliver it via stream instead of httpBody
         if let body = request.httpBody {
             MockURLProtocol.lastRequestBody = body
@@ -224,6 +301,7 @@ private final class MockURLProtocol: URLProtocol {
             stream.close()
             MockURLProtocol.lastRequestBody = data
         }
+        MockURLProtocol.requests.append((request, MockURLProtocol.lastRequestBody ?? Data()))
 
         guard let handler = MockURLProtocol.requestHandler else {
             client?.urlProtocol(self, didFailWithError: URLError(.unknown))

@@ -44,6 +44,25 @@ Click the camera icon in the menu bar or press **Cmd+Shift+5** (configurable in 
 
 You can also hover over the annotation and change its size or drag it.
 
+## Uploading to Dropbox
+
+Skryn uploads with a Dropbox app that you create, so your files and access stay under your account. It takes about two minutes. The same steps are in Skryn under **Settings → Upload → Dropbox → Setup guide**.
+
+1. **Create a Dropbox app.** Open the [Dropbox App Console](https://www.dropbox.com/developers/apps), sign in, and click **Create app**.
+2. **Choose its access.** Choose **Scoped access**, then **App folder**: Skryn can only see its own folder, `Apps/<app name>`, never the rest of your Dropbox. Give the app any unique name and click **Create app**.
+3. **Turn on the permissions.** Open the **Permissions** tab and check `files.content.write`, `sharing.write`, `sharing.read` and `account_info.read`. Then click **Submit** at the bottom of the page — the changes don't apply until you do.
+4. **Copy the App key.** Open the **Settings** tab and copy the **App key**. In Skryn, open **Settings → Upload**, choose **Dropbox** as the Service, and paste it into **App key**. Skryn never needs the App secret.
+5. **Connect.** Click **Connect Dropbox…**. Your browser opens Dropbox; click **Allow**. Dropbox shows a code: copy it, paste it into the **Code** field, and click **Finish**. Settings then shows "Connected as" your name.
+6. **Upload.** Files go to `Dropbox/Apps/<app name>/`, and Skryn copies a public link to the file itself (`https://dl.dropboxusercontent.com/…`): it opens directly in a browser and embeds in Markdown, GitHub and chat. Anyone with the link can view the file.
+
+**Troubleshooting**
+
+- *"The Dropbox app lacks the … permission"* — turn it on in the **Permissions** tab and click **Submit**, then **Disconnect** and **Connect** again in Skryn. Dropbox grants permissions when you connect.
+- *"The code is invalid or expired"* — codes work once and expire quickly. Click **Connect Dropbox…** again and paste the new code.
+- *A link stopped working* — deleting the file, or its shared link in Dropbox, revokes it.
+- New apps stay in **Development** status. That's fine for your own account; there's no need to apply for production.
+- **Disconnect** revokes Skryn's access and removes the sign-in token from your Keychain.
+
 ## Build
 
 Requires Xcode and macOS.

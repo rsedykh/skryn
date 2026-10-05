@@ -1,9 +1,8 @@
+import CoreMedia
 import XCTest
 @testable import Skryn
 
 final class AnnotationViewTests: XCTestCase {
-
-    // MARK: - rectFromDrag
 
     private func makeView(imageSize: NSSize = NSSize(width: 200, height: 100)) -> AnnotationView {
         let image = NSImage(size: imageSize)
@@ -36,30 +35,18 @@ final class AnnotationViewTests: XCTestCase {
         body()
     }
 
-    func testRectFromDrag_topLeftToBottomRight() {
-        let view = makeView()
-        let rect = view.rectFromDrag(
-            origin: CGPoint(x: 10, y: 20),
-            current: CGPoint(x: 50, y: 60)
-        )
+    func testRectSpanning_topLeftToBottomRight() {
+        let rect = CGRect(spanning: CGPoint(x: 10, y: 20), CGPoint(x: 50, y: 60))
         XCTAssertEqual(rect, CGRect(x: 10, y: 20, width: 40, height: 40))
     }
 
-    func testRectFromDrag_bottomRightToTopLeft() {
-        let view = makeView()
-        let rect = view.rectFromDrag(
-            origin: CGPoint(x: 50, y: 60),
-            current: CGPoint(x: 10, y: 20)
-        )
+    func testRectSpanning_bottomRightToTopLeft() {
+        let rect = CGRect(spanning: CGPoint(x: 50, y: 60), CGPoint(x: 10, y: 20))
         XCTAssertEqual(rect, CGRect(x: 10, y: 20, width: 40, height: 40))
     }
 
-    func testRectFromDrag_zeroSize() {
-        let view = makeView()
-        let rect = view.rectFromDrag(
-            origin: CGPoint(x: 30, y: 30),
-            current: CGPoint(x: 30, y: 30)
-        )
+    func testRectSpanning_zeroSize() {
+        let rect = CGRect(spanning: CGPoint(x: 30, y: 30), CGPoint(x: 30, y: 30))
         XCTAssertEqual(rect, CGRect(x: 30, y: 30, width: 0, height: 0))
     }
 
@@ -101,7 +88,7 @@ final class AnnotationViewTests: XCTestCase {
     func testMoving_rectangleTopLeft() {
         let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         let moved = annotation.moving(.topLeft, to: CGPoint(x: 5, y: 10))
-        if case .rectangle(let rect, _) = moved {
+        if case .rectangle(let rect, _, _) = moved {
             XCTAssertEqual(rect.origin.x, 5, accuracy: 0.001)
             XCTAssertEqual(rect.origin.y, 10, accuracy: 0.001)
             XCTAssertEqual(rect.width, 85, accuracy: 0.001)
@@ -115,7 +102,7 @@ final class AnnotationViewTests: XCTestCase {
         let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         // Anchor is bottomLeft (10, 80)
         let moved = annotation.moving(.topRight, to: CGPoint(x: 100, y: 15))
-        if case .rectangle(let rect, _) = moved {
+        if case .rectangle(let rect, _, _) = moved {
             XCTAssertEqual(rect.origin.x, 10, accuracy: 0.001)
             XCTAssertEqual(rect.origin.y, 15, accuracy: 0.001)
             XCTAssertEqual(rect.width, 90, accuracy: 0.001)
@@ -129,7 +116,7 @@ final class AnnotationViewTests: XCTestCase {
         let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         // Anchor is topRight (90, 20)
         let moved = annotation.moving(.bottomLeft, to: CGPoint(x: 0, y: 90))
-        if case .rectangle(let rect, _) = moved {
+        if case .rectangle(let rect, _, _) = moved {
             XCTAssertEqual(rect.origin.x, 0, accuracy: 0.001)
             XCTAssertEqual(rect.origin.y, 20, accuracy: 0.001)
             XCTAssertEqual(rect.width, 90, accuracy: 0.001)
@@ -143,7 +130,7 @@ final class AnnotationViewTests: XCTestCase {
         let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         // Anchor is topLeft (10, 20)
         let moved = annotation.moving(.bottomRight, to: CGPoint(x: 95, y: 85))
-        if case .rectangle(let rect, _) = moved {
+        if case .rectangle(let rect, _, _) = moved {
             XCTAssertEqual(rect.origin.x, 10, accuracy: 0.001)
             XCTAssertEqual(rect.origin.y, 20, accuracy: 0.001)
             XCTAssertEqual(rect.width, 85, accuracy: 0.001)
@@ -157,7 +144,7 @@ final class AnnotationViewTests: XCTestCase {
         let annotation = Annotation.rectangle(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         // Drag topLeft past bottomRight — rect should flip correctly
         let moved = annotation.moving(.topLeft, to: CGPoint(x: 100, y: 90))
-        if case .rectangle(let rect, _) = moved {
+        if case .rectangle(let rect, _, _) = moved {
             XCTAssertEqual(rect.origin.x, 90, accuracy: 0.001)
             XCTAssertEqual(rect.origin.y, 80, accuracy: 0.001)
             XCTAssertEqual(rect.width, 10, accuracy: 0.001)
@@ -263,13 +250,13 @@ final class AnnotationViewTests: XCTestCase {
 
     func testHandles_textReturnsTwoMidpoints() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red
         )
         let handles = annotation.handles
         XCTAssertEqual(handles.count, 2)
 
         let rect = Annotation.textBoundingRect(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", style: TextStyle()
         )
         XCTAssertEqual(handles[0].point.x, rect.minX, accuracy: 0.001)
         XCTAssertEqual(handles[0].point.y, rect.midY, accuracy: 0.001)
@@ -282,7 +269,7 @@ final class AnnotationViewTests: XCTestCase {
 
     func testMoving_textRightHandle() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red
         )
         let moved = annotation.moving(.right, to: CGPoint(x: 400, y: 120))
         if case .text(let origin, let width, _, _, _) = moved {
@@ -295,7 +282,7 @@ final class AnnotationViewTests: XCTestCase {
 
     func testMoving_textLeftHandle() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red
         )
         // Right edge is at 350. Move left handle to x=100
         let moved = annotation.moving(.left, to: CGPoint(x: 100, y: 120))
@@ -309,7 +296,7 @@ final class AnnotationViewTests: XCTestCase {
 
     func testMoving_textMinimumWidth() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red
         )
         // Move right handle very close to origin
         let moved = annotation.moving(.right, to: CGPoint(x: 55, y: 120))
@@ -325,7 +312,7 @@ final class AnnotationViewTests: XCTestCase {
     func testAnnotationBodyAt_text_hitsTextBounds() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red)
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red)
         ])
         let result = view.annotationBodyAt(CGPoint(x: 150, y: 110))
         XCTAssertEqual(result, 0)
@@ -334,7 +321,7 @@ final class AnnotationViewTests: XCTestCase {
     func testAnnotationBodyAt_text_missesOutsideBounds() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red)
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red)
         ])
         let result = view.annotationBodyAt(CGPoint(x: 50, y: 50))
         XCTAssertNil(result)
@@ -343,8 +330,8 @@ final class AnnotationViewTests: XCTestCase {
     func testAnnotationBodyAt_text_prefersTopmostText() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "First", fontSize: 24, color: .red),
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Second", fontSize: 24, color: .red)
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "First", style: TextStyle(), color: .red),
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Second", style: TextStyle(), color: .red)
         ])
         // Both overlap at (150, 110) — topmost (index 1) should win
         let result = view.annotationBodyAt(CGPoint(x: 150, y: 110))
@@ -355,7 +342,7 @@ final class AnnotationViewTests: XCTestCase {
 
     func testTextBoundingRect_nonEmpty() {
         let rect = Annotation.textBoundingRect(
-            origin: CGPoint(x: 10, y: 20), width: 200, content: "Hello World", fontSize: 24
+            origin: CGPoint(x: 10, y: 20), width: 200, content: "Hello World", style: TextStyle()
         )
         XCTAssertGreaterThan(rect.height, 0)
         XCTAssertEqual(rect.origin.x, 10, accuracy: 0.001)
@@ -365,9 +352,9 @@ final class AnnotationViewTests: XCTestCase {
 
     func testTextBoundingRect_empty() {
         let rect = Annotation.textBoundingRect(
-            origin: CGPoint(x: 10, y: 20), width: 200, content: "", fontSize: 24
+            origin: CGPoint(x: 10, y: 20), width: 200, content: "", style: TextStyle()
         )
-        // Minimum height = fontSize * 1.5 = 36
+        // Minimum height = size * 1.5 = 36
         XCTAssertGreaterThanOrEqual(rect.height, 36)
     }
 
@@ -513,7 +500,7 @@ final class AnnotationViewTests: XCTestCase {
     func testMoving_ellipseBottomRight() {
         let annotation = Annotation.ellipse(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .red)
         let moved = annotation.moving(.bottomRight, to: CGPoint(x: 100, y: 90))
-        if case .ellipse(let rect, let color) = moved {
+        if case .ellipse(let rect, let color, _) = moved {
             XCTAssertEqual(rect, CGRect(x: 10, y: 20, width: 90, height: 70))
             XCTAssertEqual(color, .red)
         } else {
@@ -548,7 +535,7 @@ final class AnnotationViewTests: XCTestCase {
     func testOffsetBy_ellipse() {
         let annotation = Annotation.ellipse(rect: CGRect(x: 10, y: 20, width: 80, height: 60), color: .blue)
         let moved = annotation.offsetBy(dx: 5, dy: -10)
-        if case .ellipse(let rect, let color) = moved {
+        if case .ellipse(let rect, let color, _) = moved {
             XCTAssertEqual(rect, CGRect(x: 15, y: 10, width: 80, height: 60))
             XCTAssertEqual(color, .blue)
         } else {
@@ -584,9 +571,10 @@ final class AnnotationViewTests: XCTestCase {
 
     // MARK: - Color
 
-    func testAnnotationColor_toggled() {
-        XCTAssertEqual(AnnotationColor.red.toggled, .blue)
-        XCTAssertEqual(AnnotationColor.blue.toggled, .red)
+    func testAnnotationColor_nextCyclesThePalette() {
+        XCTAssertEqual(AnnotationColor.red.next, .orange)
+        XCTAssertEqual(AnnotationColor.white.next, .red, "wraps around")
+        XCTAssertEqual(Set(AnnotationColor.allCases.map(\.next)).count, AnnotationColor.allCases.count)
     }
 
     func testWithColor_changesColorBearingTypes() {
@@ -596,7 +584,7 @@ final class AnnotationViewTests: XCTestCase {
         let badge = Annotation.badge(center: .zero, number: 1, color: .red)
         XCTAssertEqual(badge.withColor(.blue).color, .blue)
 
-        let text = Annotation.text(origin: .zero, width: 100, content: "Hi", fontSize: 24, color: .red)
+        let text = Annotation.text(origin: .zero, width: 100, content: "Hi", style: TextStyle(), color: .red)
         XCTAssertEqual(text.withColor(.blue).color, .blue)
     }
 
@@ -637,5 +625,279 @@ final class AnnotationViewTests: XCTestCase {
             let combined: NSEvent.ModifierFlags = [.command, .option]
             XCTAssertNil(SaveAction.action(for: combined))
         }
+    }
+}
+
+// MARK: - Screen recording geometry
+
+@MainActor
+final class ScreenRecordingGeometryTests: XCTestCase {
+    private let screen = CGSize(width: 1000, height: 800)
+
+    func testSelectionRect_flipsToTopLeftOrigin() {
+        let rect = SelectionOverlay.selectionRect(
+            from: NSPoint(x: 10, y: 790), to: NSPoint(x: 110, y: 690), in: screen
+        )
+        XCTAssertEqual(rect, CGRect(x: 10, y: 10, width: 100, height: 100))
+    }
+
+    func testSelectionRect_reversedDrag_sameRect() {
+        let rect = SelectionOverlay.selectionRect(
+            from: NSPoint(x: 110, y: 690), to: NSPoint(x: 10, y: 790), in: screen
+        )
+        XCTAssertEqual(rect, CGRect(x: 10, y: 10, width: 100, height: 100))
+    }
+
+    func testSelectionRect_tinyDrag_selectsWholeScreen() {
+        let rect = SelectionOverlay.selectionRect(from: NSPoint(x: 5, y: 5), to: NSPoint(x: 7, y: 7), in: screen)
+        XCTAssertEqual(rect, CGRect(origin: .zero, size: screen))
+    }
+
+    func testSelectionRect_clampsToScreen() {
+        let rect = SelectionOverlay.selectionRect(
+            from: NSPoint(x: -50, y: -50), to: NSPoint(x: 100, y: 100), in: screen
+        )
+        XCTAssertEqual(rect, CGRect(x: 0, y: 700, width: 100, height: 100))
+    }
+
+    func testRecordingPixelSize_scalesAndRoundsToEven() {
+        let size = VideoExporter.evenPixelSize(CGSize(width: 101.5, height: 51), scale: 2, rounding: .toNearestOrAwayFromZero)
+        XCTAssertEqual(size, CGSize(width: 202, height: 102))
+
+        let odd = VideoExporter.evenPixelSize(CGSize(width: 101, height: 51), scale: 1, rounding: .toNearestOrAwayFromZero)
+        XCTAssertEqual(odd, CGSize(width: 100, height: 50))
+
+        // The recorder rounds to the nearest pixel (103.5 → 104); scaling a video rounds down (103 → 102)
+        let fraction = CGSize(width: 51.75, height: 2)
+        XCTAssertEqual(VideoExporter.evenPixelSize(fraction, scale: 2, rounding: .toNearestOrAwayFromZero).width, 104)
+        XCTAssertEqual(VideoExporter.evenPixelSize(fraction, scale: 2, rounding: .down).width, 102)
+    }
+}
+
+@MainActor
+final class RecordingElapsedTimeTests: XCTestCase {
+    func testElapsedString() {
+        XCTAssertEqual(MenuBarController.elapsedString(0), "0:00")
+        XCTAssertEqual(MenuBarController.elapsedString(7.9), "0:07")
+        XCTAssertEqual(MenuBarController.elapsedString(754), "12:34")
+        XCTAssertEqual(MenuBarController.elapsedString(3723), "1:02:03")
+        XCTAssertEqual(MenuBarController.elapsedString(-3), "0:00")
+    }
+}
+
+@MainActor
+final class RecordingPanelInfoTests: XCTestCase {
+    func testInfoText_allParts() {
+        let text = RecordingPanel.infoText(
+            duration: CMTime(seconds: 72.4, preferredTimescale: 600), bytes: 4_300_000,
+            pixelSize: CGSize(width: 1920, height: 1080)
+        )
+        XCTAssertTrue(text.hasPrefix("1:12 · "), text)
+        XCTAssertTrue(text.hasSuffix(" · 1920×1080"), text)
+    }
+
+    func testPreviewSize_smallVideo_growsToMinimumWidth() {
+        let size = RecordingPanel.previewSize(
+            pixelSize: CGSize(width: 800, height: 600), backingScale: 2, available: CGSize(width: 2000, height: 1000)
+        )
+        XCTAssertEqual(size, CGSize(width: 640, height: 480))
+    }
+
+    func testPreviewSize_fitsActualSizeWhenRoomy() {
+        let size = RecordingPanel.previewSize(
+            pixelSize: CGSize(width: 2400, height: 1350), backingScale: 2, available: CGSize(width: 2000, height: 1000)
+        )
+        XCTAssertEqual(size, CGSize(width: 1200, height: 675))
+    }
+
+    func testPreviewSize_tallVideo_cappedByHeight() {
+        let size = RecordingPanel.previewSize(
+            pixelSize: CGSize(width: 1000, height: 3000), backingScale: 1, available: CGSize(width: 2000, height: 900)
+        )
+        XCTAssertEqual(size, CGSize(width: 300, height: 900))
+    }
+
+    func testPreviewSize_unreadable_nil() {
+        XCTAssertNil(RecordingPanel.previewSize(pixelSize: .zero, backingScale: 2, available: CGSize(width: 100, height: 100)))
+    }
+
+    func testInfoText_skipsUnknownParts() {
+        XCTAssertEqual(RecordingPanel.infoText(duration: .indefinite, bytes: nil, pixelSize: nil), "")
+    }
+}
+
+@MainActor
+final class AnnotationToolTests: XCTestCase {
+    func testModifierDrags_pickTheirTool() {
+        XCTAssertNil(AnnotationTool(modifiers: []))
+        XCTAssertEqual(AnnotationTool(modifiers: .shift), .line)
+        XCTAssertEqual(AnnotationTool(modifiers: .command), .rectangle)
+        XCTAssertEqual(AnnotationTool(modifiers: [.command, .shift]), .ellipse)
+        XCTAssertEqual(AnnotationTool(modifiers: .option), .crop)
+        XCTAssertEqual(AnnotationTool(modifiers: .control), .blur)
+    }
+
+    func testModifierPrecedence_matchesTheOldLadder() {
+        XCTAssertEqual(AnnotationTool(modifiers: [.option, .command]), .crop)
+        XCTAssertEqual(AnnotationTool(modifiers: [.command, .control]), .rectangle)
+        XCTAssertEqual(AnnotationTool(modifiers: [.control, .shift]), .blur)
+        XCTAssertEqual(AnnotationTool(modifiers: [.option, .shift, .command]), .ellipse)
+    }
+
+    func testEachDragModifierPicksItsOwnTool() {
+        for tool in AnnotationTool.allCases {
+            guard let modifiers = tool.dragModifiers else { continue }
+            XCTAssertEqual(AnnotationTool(modifiers: modifiers), tool)
+        }
+    }
+
+    func testSelectionKeys_roundTripAndLabelHints() {
+        for tool in AnnotationTool.allCases {
+            guard let key = tool.selectionKey else { continue }
+            XCTAssertEqual(AnnotationTool(keyCode: UInt16(key.keyCode)), tool)
+        }
+        XCTAssertNil(AnnotationTool(keyCode: 17))  // T types text at the cursor
+        XCTAssertEqual(AnnotationToolbar.toolTip(for: .rectangle), "Rectangle \u{2014} R, or \u{2318} Drag")
+        XCTAssertEqual(AnnotationToolbar.toolTip(for: .ellipse), "Ellipse \u{2014} O, or \u{21E7}\u{2318} Drag")
+        XCTAssertEqual(AnnotationToolbar.toolTip(for: .arrow), "Arrow \u{2014} A, or just drag")
+        XCTAssertEqual(AnnotationToolbar.toolTip(for: .badge), "Number \u{2014} 1\u{2013}0")
+    }
+
+    func testOnlyTextAndNumberArePlacedByClicking() {
+        XCTAssertEqual(AnnotationTool.allCases.filter(\.isClickTool), [.text, .badge])
+    }
+}
+
+final class StrokeWidthAndHighlightTests: XCTestCase {
+    func testWidthStepsClampAtTheEnds() {
+        XCTAssertEqual(StrokeWidth.medium.stepped(thicker: true), .thick)
+        XCTAssertEqual(StrokeWidth.thick.stepped(thicker: true), .thick)
+        XCTAssertEqual(StrokeWidth.medium.stepped(thicker: false), .thin)
+        XCTAssertEqual(StrokeWidth.thin.stepped(thicker: false), .thin)
+        XCTAssertEqual(StrokeWidth.medium.points, 3)
+        XCTAssertEqual(StrokeWidth.medium.arrowHeadLength, 18)
+    }
+
+    func testWidthDefaultsToMediumAndSurvivesEdits() {
+        let arrow = Annotation.arrow(from: .zero, to: CGPoint(x: 40, y: 0), color: .red)
+        XCTAssertEqual(arrow.strokeWidth, .medium)
+        let thick = arrow.withStrokeWidth(.thick)
+        XCTAssertEqual(thick.strokeWidth, .thick)
+        XCTAssertEqual(thick.withColor(.blue).strokeWidth, .thick)
+        XCTAssertEqual(thick.offsetBy(dx: 5, dy: 5).strokeWidth, .thick)
+        XCTAssertEqual(thick.moving(.to, to: CGPoint(x: 9, y: 9)).strokeWidth, .thick)
+        XCTAssertNil(Annotation.badge(center: .zero, number: 1, color: .red).strokeWidth)
+        XCTAssertEqual(AnnotationTool.rectangle.annotation(from: .zero, to: CGPoint(x: 5, y: 5), color: .red,
+                                                           width: .thin)?.strokeWidth, .thin)
+    }
+
+    func testHighlightIsHitAnywhereInsideAndResizesByItsCorners() {
+        let highlight = Annotation.highlight(rect: CGRect(x: 10, y: 10, width: 80, height: 40), color: .yellow)
+        XCTAssertTrue(highlight.bodyContains(CGPoint(x: 50, y: 30), hitRadius: 5))
+        XCTAssertFalse(highlight.bodyContains(CGPoint(x: 150, y: 30), hitRadius: 5))
+        XCTAssertEqual(highlight.handles.map(\.handle), [.topLeft, .topRight, .bottomLeft, .bottomRight])
+        XCTAssertEqual(highlight.moving(.bottomRight, to: CGPoint(x: 100, y: 100)),
+                       .highlight(rect: CGRect(x: 10, y: 10, width: 90, height: 90), color: .yellow))
+        XCTAssertEqual(highlight.withColor(.green).color, .green)
+        XCTAssertNil(highlight.strokeWidth)
+    }
+
+    @MainActor
+    func testHighlightTool() {
+        XCTAssertEqual(AnnotationTool(keyCode: 4), .highlight)  // kVK_ANSI_H
+        XCTAssertEqual(AnnotationToolbar.toolTip(for: .highlight), "Highlight \u{2014} H")
+        XCTAssertEqual(
+            AnnotationTool.highlight.annotation(from: CGPoint(x: 30, y: 30), to: CGPoint(x: 10, y: 20), color: .yellow),
+            .highlight(rect: CGRect(x: 10, y: 20, width: 20, height: 10), color: .yellow)
+        )
+    }
+}
+
+final class ScreenCaptureCropTests: XCTestCase {
+    /// A 200×100pt image at 2x: the crop rect is in points with a top-left origin
+    func testCrop_usesPointsTopLeftAndBackingScale() throws {
+        let width = 400, height = 200
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        // Paint the top-left 100×50 pixels red (CGContext's origin is bottom-left)
+        context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(x: 0, y: height - 50, width: 100, height: 50))
+        let image = NSImage(cgImage: try XCTUnwrap(context.makeImage()), size: NSSize(width: 200, height: 100))
+
+        let cropped = try XCTUnwrap(ScreenCapture.crop(image, to: CGRect(x: 0, y: 0, width: 50, height: 25)))
+        XCTAssertEqual(cropped.size, NSSize(width: 50, height: 25))
+        let cgImage = try XCTUnwrap(cropped.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        XCTAssertEqual(cgImage.width, 100)
+        XCTAssertEqual(cgImage.height, 50)
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        XCTAssertEqual(rep.colorAt(x: 50, y: 25)?.redComponent ?? 0, 1, accuracy: 0.01)
+    }
+}
+
+@MainActor
+final class MenuBarSettingsTests: XCTestCase {
+    private let keys = ["menuBarIcons", "menuBarClickOpensMenu", "menuBarTiles"]
+    private var saved: [String: Any] = [:]
+
+    override func setUp() {
+        super.setUp()
+        for key in keys { saved[key] = UserDefaults.standard.object(forKey: key) }
+        keys.forEach(UserDefaults.standard.removeObject)
+    }
+
+    override func tearDown() {
+        for key in keys { UserDefaults.standard.set(saved[key], forKey: key) }
+        super.tearDown()
+    }
+
+    func testDefaults_oneScreenshotIconAndAllTiles() {
+        let settings = MenuBarSettings.current
+        XCTAssertEqual(settings.icons, [.screenshot])
+        XCTAssertFalse(settings.clickOpensMenu)
+        XCTAssertEqual(settings.menuTiles, MenuBarAction.available)
+    }
+
+    func testNormalized_neverWithoutAnIcon_andInFixedOrder() {
+        var settings = MenuBarSettings()
+        settings.icons = []
+        XCTAssertEqual(settings.normalized.icons, [.screenshot])
+        settings.icons = [.area, .screenshot]
+        XCTAssertEqual(settings.normalized.icons, [.screenshot, .area])
+    }
+
+    func testRoundTrip() {
+        var settings = MenuBarSettings()
+        settings.icons = [.area]
+        settings.clickOpensMenu = true
+        settings.menuTiles = [.screenshot]
+        MenuBarSettings.current = settings
+        XCTAssertEqual(MenuBarSettings.current, settings)
+    }
+}
+
+final class PreferencesTests: XCTestCase {
+    func testAssigningModifier_swapsWithTheActionThatHadIt() {
+        let defaults = SaveModifiers()  // local ⌥, clipboard ⌘, cloud ⌃
+        let swapped = defaults.assigning(.cmd, to: .local)
+        XCTAssertEqual([swapped.local, swapped.clipboard, swapped.cloud], [.cmd, .opt, .ctrl])
+        XCTAssertEqual(defaults.assigning(.opt, to: .local), defaults, "assigning its own key changes nothing")
+    }
+
+    func testStoredSettings_missingKeysFallBack_andValuesAreNormalized() {
+        let keys = ["outputImageFormat", "outputImageLossless", "outputImageQuality", "outputVideoFormat",
+                    "outputRetina", "outputFrameRate", "outputStripMetadata"]
+        let saved = keys.map { ($0, UserDefaults.standard.object(forKey: $0)) }
+        defer { for (key, value) in saved { UserDefaults.standard.set(value, forKey: key) } }
+        keys.forEach(UserDefaults.standard.removeObject)
+
+        UserDefaults.standard.set("webp", forKey: "outputImageFormat")
+        UserDefaults.standard.set(5.0, forKey: "outputImageQuality")
+        UserDefaults.standard.set(45, forKey: "outputFrameRate")  // not a choice: falls back
+        var expected = OutputSettings()
+        expected.imageFormat = .webp
+        expected.imageQuality = 1
+        XCTAssertEqual(OutputSettings.current, expected)
     }
 }
