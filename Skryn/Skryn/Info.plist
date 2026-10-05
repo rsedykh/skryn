@@ -4,7 +4,9 @@
 <dict>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Skryn shows your camera in a bubble when you record the screen with the camera on.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Skryn records your microphone when you record the screen.</string>
+	<string>Skryn records your microphone when you record the screen with the microphone on.</string>
 </dict>
 </plist>
