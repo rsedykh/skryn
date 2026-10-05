@@ -7,13 +7,6 @@ struct RecentUpload: Codable {
     let cacheFilePath: String
 }
 
-/// Wraps RecentUpload for use as NSMenuItem.representedObject.
-/// Swift structs bridged to ObjC `id` may fail `as?` casts — NSObject wrapper ensures reliable casting.
-final class RecentUploadBox: NSObject {
-    let value: RecentUpload
-    init(_ value: RecentUpload) { self.value = value }
-}
-
 enum UploadHistory {
     private static let defaultsKey = "recentUploads"
     private static let maxEntries = 10
@@ -43,7 +36,7 @@ enum UploadHistory {
         save(uploads)
     }
 
-    static func cachePNGData(_ data: Data, filename: String) -> String? {
+    static func cacheData(_ data: Data, filename: String) -> String? {
         let dir = cacheDirectory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let filePath = dir.appendingPathComponent(filename).path

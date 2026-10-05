@@ -70,9 +70,8 @@ enum UploadcareService {
             fileID = try await directUpload(data: Data(contentsOf: fileURL), filename: filename,
                                             contentType: contentType, publicKey: publicKey, session: session)
         } else {
-            fileID = try await multipartUpload(fileURL: fileURL, filename: filename,
-                                               contentType: contentType, publicKey: publicKey,
-                                               partSize: partSize, session: session)
+            let file = DiskFile(url: fileURL, filename: filename, contentType: contentType)
+            fileID = try await multipartUpload(file, publicKey: publicKey, partSize: partSize, session: session)
         }
         return "\(cdnBase)/\(fileID)/"
     }
@@ -89,10 +88,11 @@ enum UploadcareService {
     }
 
     /// /multipart/start/ → PUT each part to its presigned URL → /multipart/complete/; returns the file UUID.
-    private static func multipartUpload(fileURL: URL, filename: String, contentType: String,
-                                        publicKey: String, partSize: Int,
-                                        session: URLSession) async throws -> String {
-        let handle = try FileHandle(forReadingFrom: fileURL)
+    private static func multipartUpload(
+        _ file: DiskFile, publicKey: String, partSize: Int, session: URLSession
+    ) async throws -> String {
+        let (filename, contentType) = (file.filename, file.contentType)
+        let handle = try FileHandle(forReadingFrom: file.url)
         defer { try? handle.close() }
         let size = try handle.seekToEnd()
         try handle.seek(toOffset: 0)
@@ -126,6 +126,13 @@ enum UploadcareService {
             session: session)
         guard let fileID = complete["uuid"] as? String else { throw UploadcareError.missingFileID }
         return fileID
+    }
+
+    /// A file on disk to upload in parts
+    private struct DiskFile {
+        let url: URL
+        let filename: String
+        let contentType: String
     }
 
     private struct FormFile {
