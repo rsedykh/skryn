@@ -183,18 +183,22 @@ final class HUDButton: HUDHintButton {
         }
     }
     var isEmphasized = false { didSet { refresh() } }
+    /// Icon and title side by side (Save / Copy / Upload). Drawn by hand: NSButton's own layout puts a
+    /// borderless title a little low and off-center, so the pair is laid out here, the icon centered
+    /// on the title's cap height and the group centered in the button.
     var showsTitle = false {
         didSet {
-            imagePosition = showsTitle ? .imageLeading : .imageOnly
-            imageHugsTitle = true  // keep icon and title together, centered, when the button is wider
             let size = showsTitle ? HUDStyle.titledIconPointSize : HUDStyle.iconPointSize
             image = image?.withSymbolConfiguration(.init(pointSize: size, weight: .regular))
             invalidateIntrinsicContentSize()
+            needsDisplay = true
         }
     }
 
-    /// The plain title; `attributedTitle` adds spacing and color on top of it
+    /// The plain title, drawn next to the icon when `showsTitle`
     private let label: String
+    private static let titlePadding: CGFloat = 12
+    private static let iconTitleGap: CGFloat = 6
 
     init(title: String, symbol: String) {
         label = title
@@ -217,11 +221,38 @@ final class HUDButton: HUDHintButton {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override var isEnabled: Bool { didSet { refresh() } }
+    override var isHighlighted: Bool { didSet { if showsTitle { needsDisplay = true } } }
 
     override var intrinsicContentSize: NSSize {
-        var size = super.intrinsicContentSize
-        if showsTitle { size.width += 24 }  // 12pt padding each side, plus the icon-title gap below
-        return size
+        guard showsTitle else { return super.intrinsicContentSize }
+        let width = Self.titlePadding * 2 + (image?.size.width ?? 0) + Self.iconTitleGap + titleText.size().width
+        return NSSize(width: ceil(width), height: HUDStyle.buttonSize)
+    }
+
+    private var titleText: NSAttributedString {
+        NSAttributedString(string: label, attributes: [
+            .font: font ?? .systemFont(ofSize: 12, weight: .medium), .foregroundColor: contentTintColor ?? .white,
+        ])
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard showsTitle, let font else { return super.draw(dirtyRect) }
+        let color = (contentTintColor ?? .white).withAlphaComponent(isHighlighted ? 0.7 : 1)
+        let text = NSAttributedString(string: label, attributes: [.font: font, .foregroundColor: color])
+        let icon = image?.withSymbolConfiguration(.init(paletteColors: [color]))
+        let iconSize = icon?.size ?? .zero
+        let textWidth = ceil(text.size().width)
+        var x = round((bounds.width - iconSize.width - Self.iconTitleGap - textWidth) / 2)
+        // Center the caps (not the line box, which includes descender room) on the button's middle
+        let capMiddle = bounds.midY
+        if let icon {
+            let iconRect = NSRect(x: x, y: round(capMiddle - iconSize.height / 2), width: iconSize.width, height: iconSize.height)
+            icon.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            x += iconSize.width + Self.iconTitleGap
+        }
+        // Flipped: the line's top sits ascender above the baseline, which is capHeight / 2 below the middle
+        let baseline = capMiddle + font.capHeight / 2
+        text.draw(at: NSPoint(x: x, y: round(baseline - font.ascender)))
     }
 
     private func refresh() {
@@ -229,11 +260,7 @@ final class HUDButton: HUDHintButton {
         contentTintColor = !isEnabled ? HUDStyle.disabled : bright ? .white : HUDStyle.dimmed
         let background: NSColor? = isEmphasized ? .controlAccentColor : isSelectedTool ? HUDStyle.selectedFill : nil
         layer?.backgroundColor = background?.cgColor
-        guard showsTitle, let font else { return }
-        // A leading thin space separates the icon from the title
-        attributedTitle = NSAttributedString(string: "\u{2009}" + label, attributes: [
-            .font: font, .foregroundColor: contentTintColor ?? .white,
-        ])
+        if showsTitle { needsDisplay = true }
     }
 }
 

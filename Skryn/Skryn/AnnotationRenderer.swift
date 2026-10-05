@@ -138,15 +138,16 @@ final class AnnotationRenderer {
 
     // MARK: - Editing chrome (on screen only)
 
-    /// Handles of the hovered annotation; text also gets a dotted border, with its edge handles pushed
-    /// out by `textPadding` (in screenshot points).
-    func drawHandles(for annotation: Annotation, textPadding: CGFloat) {
+    /// Editing chrome for the selected or hovered annotation: a thin accent outline traced over the mark
+    /// (so it's clear which one a click takes, even among overlapping marks) and its handles: full size
+    /// when selected, smaller and lighter when only hovered. Text also gets a dotted border, with its edge
+    /// handles pushed out by `textPadding` (in screenshot points); badges a dashed ring.
+    func drawHandles(for annotation: Annotation, textPadding: CGFloat, selected: Bool = true) {
+        drawOutline(of: annotation)
         var padding: CGFloat = 0
-        if case .text(let origin, let width, let content, let fontSize, _) = annotation {
+        if case .text(let origin, let width, let content, let style, _) = annotation {
             padding = textPadding
-            let baseRect = Annotation.textBoundingRect(
-                origin: origin, width: width, content: content, fontSize: fontSize
-            )
+            let baseRect = Annotation.textFrame(origin: origin, width: width, content: content, style: style)
             drawDashedBorder(baseRect.insetBy(dx: -padding, dy: 0))
         }
         // Badges have no handles: a dashed ring shows they're selected / grabbable
@@ -162,8 +163,27 @@ final class AnnotationRenderer {
             if padding > 0 {
                 drawPoint.x += (handle == .left ? -padding : padding)
             }
-            drawHandle(at: drawPoint)
+            drawHandle(at: drawPoint, small: !selected)
         }
+    }
+
+    private func drawOutline(of annotation: Annotation) {
+        let path: NSBezierPath
+        switch annotation {
+        case .arrow(let from, let to, _, _), .line(let from, let to, _, _):
+            path = NSBezierPath()
+            path.move(to: from)
+            path.line(to: to)
+        case .rectangle(let rect, _, _), .crop(let rect), .blur(let rect), .highlight(let rect, _):
+            path = NSBezierPath(rect: rect)
+        case .ellipse(let rect, _, _):
+            path = NSBezierPath(ovalIn: rect)
+        case .text, .badge:
+            return  // they get dashed borders
+        }
+        path.lineWidth = 1.5 * chromeScale
+        NSColor.controlAccentColor.setStroke()
+        path.stroke()
     }
 
     /// Live border around the text view being edited, with its two width handles
@@ -186,8 +206,8 @@ final class AnnotationRenderer {
         borderPath.stroke()
     }
 
-    private func drawHandle(at point: CGPoint) {
-        let handleRadius = 6.0 * chromeScale
+    private func drawHandle(at point: CGPoint, small: Bool = false) {
+        let handleRadius = (small ? 4.5 : 6.0) * chromeScale
         let path = NSBezierPath(ovalIn: CGRect(
             x: point.x - handleRadius, y: point.y - handleRadius,
             width: handleRadius * 2, height: handleRadius * 2
@@ -243,9 +263,8 @@ final class AnnotationRenderer {
             drawHighlight(rect, color: color)
         case .crop(let rect):
             drawCrop(rect)
-        case .text(let origin, let width, let content, let fontSize, let color):
-            drawText(origin: origin, width: width, content: content,
-                     fontSize: fontSize, color: color.nsColor)
+        case .text(let origin, let width, let content, let style, let color):
+            drawText(origin: origin, width: width, content: content, style: style, color: color)
         case .blur(let rect):
             drawBlur(rect)
         case .badge(let center, let number, let color):
@@ -391,18 +410,22 @@ final class AnnotationRenderer {
         blurredNSImage.draw(in: rect)
     }
 
-    private func drawText(origin: CGPoint, width: CGFloat, content: String,
-                          fontSize: CGFloat, color: NSColor) {
-        let font = NSFont.boldSystemFont(ofSize: fontSize)
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: color
-        ]
-        let rect = Annotation.textBoundingRect(
-            origin: origin, width: width, content: content, fontSize: fontSize
-        )
+    private func drawText(origin: CGPoint, width: CGFloat, content: String, style: TextStyle,
+                          color: AnnotationColor) {
+        if style.background {
+            drawTextLabel(Annotation.textFrame(origin: origin, width: width, content: content, style: style),
+                          style: style, color: color)
+        }
+        let attrs: [NSAttributedString.Key: Any] = [.font: style.font, .foregroundColor: style.textColor(on: color)]
+        let rect = Annotation.textBoundingRect(origin: origin, width: width, content: content, style: style)
         (content as NSString).draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading],
                                    attributes: attrs)
+    }
+
+    /// The filled rounded label behind text with a background (also behind the live text view)
+    func drawTextLabel(_ frame: CGRect, style: TextStyle, color: AnnotationColor) {
+        color.nsColor.setFill()
+        NSBezierPath(roundedRect: frame, xRadius: style.labelRadius, yRadius: style.labelRadius).fill()
     }
 }
 

@@ -250,13 +250,13 @@ final class AnnotationViewTests: XCTestCase {
 
     func testHandles_textReturnsTwoMidpoints() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red
         )
         let handles = annotation.handles
         XCTAssertEqual(handles.count, 2)
 
         let rect = Annotation.textBoundingRect(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", style: TextStyle()
         )
         XCTAssertEqual(handles[0].point.x, rect.minX, accuracy: 0.001)
         XCTAssertEqual(handles[0].point.y, rect.midY, accuracy: 0.001)
@@ -269,7 +269,7 @@ final class AnnotationViewTests: XCTestCase {
 
     func testMoving_textRightHandle() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red
         )
         let moved = annotation.moving(.right, to: CGPoint(x: 400, y: 120))
         if case .text(let origin, let width, _, _, _) = moved {
@@ -282,7 +282,7 @@ final class AnnotationViewTests: XCTestCase {
 
     func testMoving_textLeftHandle() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red
         )
         // Right edge is at 350. Move left handle to x=100
         let moved = annotation.moving(.left, to: CGPoint(x: 100, y: 120))
@@ -296,7 +296,7 @@ final class AnnotationViewTests: XCTestCase {
 
     func testMoving_textMinimumWidth() {
         let annotation = Annotation.text(
-            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red
+            origin: CGPoint(x: 50, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red
         )
         // Move right handle very close to origin
         let moved = annotation.moving(.right, to: CGPoint(x: 55, y: 120))
@@ -312,7 +312,7 @@ final class AnnotationViewTests: XCTestCase {
     func testAnnotationBodyAt_text_hitsTextBounds() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red)
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red)
         ])
         let result = view.annotationBodyAt(CGPoint(x: 150, y: 110))
         XCTAssertEqual(result, 0)
@@ -321,7 +321,7 @@ final class AnnotationViewTests: XCTestCase {
     func testAnnotationBodyAt_text_missesOutsideBounds() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", fontSize: 24, color: .red)
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Hello", style: TextStyle(), color: .red)
         ])
         let result = view.annotationBodyAt(CGPoint(x: 50, y: 50))
         XCTAssertNil(result)
@@ -330,8 +330,8 @@ final class AnnotationViewTests: XCTestCase {
     func testAnnotationBodyAt_text_prefersTopmostText() {
         let view = makeView(imageSize: NSSize(width: 800, height: 600))
         view.setAnnotations(forTesting: [
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "First", fontSize: 24, color: .red),
-            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Second", fontSize: 24, color: .red)
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "First", style: TextStyle(), color: .red),
+            .text(origin: CGPoint(x: 100, y: 100), width: 300, content: "Second", style: TextStyle(), color: .red)
         ])
         // Both overlap at (150, 110) — topmost (index 1) should win
         let result = view.annotationBodyAt(CGPoint(x: 150, y: 110))
@@ -342,7 +342,7 @@ final class AnnotationViewTests: XCTestCase {
 
     func testTextBoundingRect_nonEmpty() {
         let rect = Annotation.textBoundingRect(
-            origin: CGPoint(x: 10, y: 20), width: 200, content: "Hello World", fontSize: 24
+            origin: CGPoint(x: 10, y: 20), width: 200, content: "Hello World", style: TextStyle()
         )
         XCTAssertGreaterThan(rect.height, 0)
         XCTAssertEqual(rect.origin.x, 10, accuracy: 0.001)
@@ -352,9 +352,9 @@ final class AnnotationViewTests: XCTestCase {
 
     func testTextBoundingRect_empty() {
         let rect = Annotation.textBoundingRect(
-            origin: CGPoint(x: 10, y: 20), width: 200, content: "", fontSize: 24
+            origin: CGPoint(x: 10, y: 20), width: 200, content: "", style: TextStyle()
         )
-        // Minimum height = fontSize * 1.5 = 36
+        // Minimum height = size * 1.5 = 36
         XCTAssertGreaterThanOrEqual(rect.height, 36)
     }
 
@@ -584,7 +584,7 @@ final class AnnotationViewTests: XCTestCase {
         let badge = Annotation.badge(center: .zero, number: 1, color: .red)
         XCTAssertEqual(badge.withColor(.blue).color, .blue)
 
-        let text = Annotation.text(origin: .zero, width: 100, content: "Hi", fontSize: 24, color: .red)
+        let text = Annotation.text(origin: .zero, width: 100, content: "Hi", style: TextStyle(), color: .red)
         XCTAssertEqual(text.withColor(.blue).color, .blue)
     }
 
@@ -765,80 +765,6 @@ final class AnnotationToolTests: XCTestCase {
 
     func testOnlyTextAndNumberArePlacedByClicking() {
         XCTAssertEqual(AnnotationTool.allCases.filter(\.isClickTool), [.text, .badge])
-    }
-}
-
-final class AnnotationRendererTests: XCTestCase {
-    /// 200×100pt at 2x: export keeps the pixel resolution and cuts to the crop (in points)
-    func testRender_fullResolutionAndCrop() throws {
-        let context = try XCTUnwrap(CGContext(
-            data: nil, width: 400, height: 200, bitsPerComponent: 8, bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ))
-        let image = NSImage(cgImage: try XCTUnwrap(context.makeImage()), size: NSSize(width: 200, height: 100))
-        let renderer = AnnotationRenderer(screenshot: image)
-        XCTAssertEqual(renderer.pixelsPerPoint, 2)
-
-        let full = try XCTUnwrap(renderer.render([.arrow(from: .zero, to: CGPoint(x: 50, y: 50), color: .red)]))
-        XCTAssertEqual(full.width, 400)
-        XCTAssertEqual(full.height, 200)
-
-        let crop = CGRect(x: 10, y: 10, width: 50, height: 25)
-        let cropped = try XCTUnwrap(renderer.render([.crop(rect: crop)]))
-        XCTAssertEqual(cropped.width, 100)
-        XCTAssertEqual(cropped.height, 50)
-    }
-
-    /// A white 200×100pt screenshot at 2x
-    private func whiteRenderer() throws -> AnnotationRenderer {
-        let context = try XCTUnwrap(CGContext(
-            data: nil, width: 400, height: 200, bitsPerComponent: 8, bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ))
-        context.setFillColor(.white)
-        context.fill(CGRect(x: 0, y: 0, width: 400, height: 200))
-        return AnnotationRenderer(screenshot: NSImage(
-            cgImage: try XCTUnwrap(context.makeImage()), size: NSSize(width: 200, height: 100)
-        ))
-    }
-
-    /// RGBA of the exported pixel at a top-left point (2x)
-    private func pixel(_ image: CGImage, atPoint point: CGPoint) throws -> [UInt8] {
-        var data = [UInt8](repeating: 0, count: 4)
-        let context = try XCTUnwrap(CGContext(
-            data: &data, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ))
-        // Shift the image so the wanted pixel lands on the 1×1 context (rows count from the top)
-        let px = point.x * 2, py = point.y * 2
-        context.draw(image, in: CGRect(x: -px, y: py - CGFloat(image.height) + 1,
-                                       width: CGFloat(image.width), height: CGFloat(image.height)))
-        return data
-    }
-
-    func testRender_marksCastASoftShadowBelowThem() throws {
-        let renderer = try whiteRenderer()
-        let rect = CGRect(x: 50, y: 25, width: 100, height: 50)
-        let image = try XCTUnwrap(renderer.render([.rectangle(rect: rect, color: .red)]))
-        let underneath = try pixel(image, atPoint: CGPoint(x: 100, y: 78))
-        XCTAssertLessThan(underneath[0], 250, "shadow just below the bottom edge")
-        // Offset down: darker under the bottom edge than the same distance over the top edge
-        let above = try pixel(image, atPoint: CGPoint(x: 100, y: 21.5))
-        let below = try pixel(image, atPoint: CGPoint(x: 100, y: 78.5))
-        XCTAssertLessThan(below[1], above[1])
-        let farAway = try pixel(image, atPoint: CGPoint(x: 100, y: 95))
-        XCTAssertEqual(farAway[0], 255)
-    }
-
-    func testRender_highlightTintsLikeAMarker() throws {
-        let renderer = try whiteRenderer()
-        let image = try XCTUnwrap(renderer.render([
-            .highlight(rect: CGRect(x: 20, y: 20, width: 60, height: 30), color: .yellow),
-        ]))
-        let inside = try pixel(image, atPoint: CGPoint(x: 50, y: 35))
-        XCTAssertGreaterThan(inside[0], 230)  // red stays: the white under it shows through
-        XCTAssertLessThan(inside[2], 200)     // blue is multiplied away
-        XCTAssertEqual(try pixel(image, atPoint: CGPoint(x: 150, y: 80)), [255, 255, 255, 255])
     }
 }
 

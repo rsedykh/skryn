@@ -1,7 +1,7 @@
 import AppKit
 
-/// Text annotations: typing at the cursor (T), re-editing on click, font size (⌘= / ⌘-), the UTC
-/// timestamp (U), and turning the text view back into an annotation.
+/// Text annotations: typing at the cursor (T), re-editing on click, the text style (format bar,
+/// ⌘= / ⌘- size, ⌘B bold), the UTC timestamp (U), and turning the text view back into an annotation.
 extension AnnotationView {
     /// Opens a text editor at the cursor. Over an existing text annotation, edits that one instead.
     func startTextAtCursor(keyCode: UInt16) {
@@ -26,41 +26,40 @@ extension AnnotationView {
         let scale = screenshotToViewScale()
         let viewOrigin = screenshotToView(screenshotPoint)
         let viewWidth = 300 * scale
-        let viewFontSize = textFontSize * scale
 
-        let frame = CGRect(x: viewOrigin.x, y: viewOrigin.y, width: viewWidth, height: viewFontSize * 1.5)
-        let textView = createTextView(frame: frame, fontSize: viewFontSize)
+        let frame = CGRect(x: viewOrigin.x, y: viewOrigin.y, width: viewWidth, height: textStyle.size * scale * 1.5)
+        let textView = createTextView(frame: frame)
         addSubview(textView)
         dismissHint()
         interactionState = .editingText(textView: textView, existingIndex: nil)
         window?.makeFirstResponder(textView)
+        showTextFormatBar(over: textView)
     }
 
     func startEditingTextAnnotation(at index: Int) {
-        guard case .text(let origin, let width, let content, let fontSize, let color) = annotations[index]
+        guard case .text(let origin, let width, let content, let style, let color) = annotations[index]
         else { return }
         drawingColor = color
+        textStyle = style  // re-editing picks up the text's style, and new text continues with it
         let scale = screenshotToViewScale()
         let viewOrigin = screenshotToView(origin)
         let viewWidth = width * scale
-        let viewFontSize = fontSize * scale
 
-        let rect = Annotation.textBoundingRect(
-            origin: origin, width: width, content: content, fontSize: fontSize
-        )
+        let rect = Annotation.textBoundingRect(origin: origin, width: width, content: content, style: style)
         let viewHeight = rect.height * scale
 
         let frame = CGRect(x: viewOrigin.x, y: viewOrigin.y, width: viewWidth, height: viewHeight)
-        let textView = createTextView(frame: frame, fontSize: viewFontSize)
+        let textView = createTextView(frame: frame)
         textView.string = content
+        styleTextView(textView)
         addSubview(textView)
         interactionState = .editingText(textView: textView, existingIndex: index)
-        textFontSize = fontSize
         window?.makeFirstResponder(textView)
+        showTextFormatBar(over: textView)
         needsDisplay = true
     }
 
-    func createTextView(frame: CGRect, fontSize: CGFloat) -> NSTextView {
+    func createTextView(frame: CGRect) -> NSTextView {
         let textView = IsolatedUndoTextView(frame: frame)
         textView.isRichText = false
         textView.allowsUndo = true
@@ -72,12 +71,7 @@ extension AnnotationView {
         textView.textContainer?.lineFragmentPadding = 0
         textView.maxSize = NSSize(width: frame.width, height: CGFloat.greatestFiniteMagnitude)
 
-        let font = NSFont.boldSystemFont(ofSize: fontSize)
-        let textColor = drawingColor.nsColor
-        textView.font = font
-        textView.textColor = textColor
-        textView.insertionPointColor = textColor
-        textView.typingAttributes = [.font: font, .foregroundColor: textColor]
+        styleTextView(textView)
 
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
@@ -93,6 +87,7 @@ extension AnnotationView {
         let viewFrame = textView.frame
 
         textView.removeFromSuperview()
+        textFormatBar?.hide()
         interactionState = .idle
         window?.makeFirstResponder(self)
 
@@ -107,7 +102,7 @@ extension AnnotationView {
             } else {
                 let newAnnotation = Annotation.text(
                     origin: screenshotOrigin, width: screenshotWidth,
-                    content: content, fontSize: textFontSize, color: drawingColor
+                    content: content, style: textStyle, color: drawingColor
                 )
                 let old = annotations[idx]
                 replaceAnnotation(at: idx, with: newAnnotation, old: old)
@@ -116,7 +111,7 @@ extension AnnotationView {
             if !content.isEmpty {
                 let annotation = Annotation.text(
                     origin: screenshotOrigin, width: screenshotWidth,
-                    content: content, fontSize: textFontSize, color: drawingColor
+                    content: content, style: textStyle, color: drawingColor
                 )
                 addAnnotation(annotation)
             }
@@ -134,12 +129,11 @@ extension AnnotationView {
 
         let timestamp = Self.utcTimestampFormatter.string(from: captureDate)
 
-        let font = NSFont.boldSystemFont(ofSize: textFontSize)
-        let textWidth = (timestamp as NSString).size(withAttributes: [.font: font]).width + 4
+        let textWidth = (timestamp as NSString).size(withAttributes: [.font: textStyle.font]).width + 4
 
         let annotation = Annotation.text(
             origin: screenshotPoint, width: textWidth,
-            content: timestamp, fontSize: textFontSize, color: drawingColor
+            content: timestamp, style: textStyle, color: drawingColor
         )
         addAnnotation(annotation)
         needsDisplay = true
@@ -154,21 +148,41 @@ extension AnnotationView {
         return formatter
     }()
 
-    func adjustFontSize(larger: Bool) {
-        let newSize = Annotation.steppedFontSize(textFontSize, larger: larger)
-        textFontSize = newSize
-        guard case .editingText(let textView, _) = interactionState else { return }
-        let scale = screenshotToViewScale()
-        let viewFontSize = newSize * scale
-        let font = NSFont.boldSystemFont(ofSize: viewFontSize)
-        textView.font = font
-        textView.typingAttributes = [.font: font, .foregroundColor: drawingColor.nsColor]
-        // Re-apply font to all existing text
-        if !textView.string.isEmpty {
-            let range = NSRange(location: 0, length: (textView.string as NSString).length)
-            textView.textStorage?.addAttribute(.font, value: font, range: range)
+    // MARK: Style
+
+    /// Changes the text style (format bar, ⌘= / ⌘-, ⌘B): restyles the text being typed, and new text
+    /// continues with it. Stored on the annotation when editing finishes (undoable then, as edits are).
+    func updateTextStyle(_ change: (inout TextStyle) -> Void) {
+        change(&textStyle)
+        if case .editingText(let textView, _) = interactionState {
+            styleTextView(textView)
+            textFormatBar?.show(over: textView)  // its size or position may have changed
         }
+        textFormatBar?.refresh()
         needsDisplay = true
+    }
+
+    func stepTextSize(larger: Bool) {
+        updateTextStyle { $0.size = Annotation.steppedFontSize($0.size, larger: larger) }
+    }
+
+    /// The live text view in `textStyle` and the drawing color, at the zoomed size
+    func styleTextView(_ textView: NSTextView) {
+        let font = textStyle.font(ofSize: textStyle.size * screenshotToViewScale())
+        let color = textStyle.textColor(on: drawingColor)
+        textView.font = font
+        textView.textColor = color
+        textView.insertionPointColor = color
+        textView.typingAttributes = [.font: font, .foregroundColor: color]
+        if let storage = textView.textStorage, storage.length > 0 {
+            storage.addAttributes([.font: font, .foregroundColor: color], range: NSRange(location: 0, length: storage.length))
+        }
+    }
+
+    func showTextFormatBar(over textView: NSTextView) {
+        let bar = textFormatBar ?? TextFormatBar(editor: self)
+        textFormatBar = bar
+        bar.show(over: textView)
     }
 }
 
@@ -176,6 +190,7 @@ extension AnnotationView {
 
 extension AnnotationView: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
+        if case .editingText(let textView, _) = interactionState { textFormatBar?.show(over: textView) }
         needsDisplay = true
     }
 

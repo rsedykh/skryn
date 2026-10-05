@@ -223,7 +223,8 @@ private final class RecordingFrameLayers {
 
     private func setUpCountdown(center: CGPoint) {
         let size = Self.circleSize
-        countdown.frame = CGRect(x: center.x - size / 2, y: center.y - size / 2, width: size, height: size)
+        // Whole points, so the caption's small text lands on the pixel grid instead of smearing across it
+        countdown.frame = CGRect(x: round(center.x - size / 2), y: round(center.y - size / 2), width: size, height: size)
         HUDStyle.paintSurface(countdown, radius: size / 2)
         countdown.opacity = 0
         root.addSublayer(countdown)
@@ -247,7 +248,7 @@ private final class RecordingFrameLayers {
         caption.string = "Esc to cancel"
         caption.font = captionFont
         caption.fontSize = captionFont.pointSize
-        caption.foregroundColor = HUDStyle.dimmed.withAlphaComponent(0.5).cgColor
+        caption.foregroundColor = HUDStyle.dimmed.cgColor
         caption.alignmentMode = .center
         caption.contentsScale = scale
         caption.frame = CGRect(x: 0, y: 34, width: size, height: ceil(captionFont.ascender - captionFont.descender))

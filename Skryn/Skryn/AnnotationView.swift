@@ -31,6 +31,14 @@ final class AnnotationView: NSView {
         }
     }
     var hoveredAnnotationIndex: Int?
+    /// The current press on a mark: where it started (view space), whether that mark was already
+    /// selected (a second click steps to the mark underneath, or edits text), and whether it became a drag
+    private var press: Press?
+    private struct Press {
+        let viewPoint: CGPoint
+        let wasSelected: Bool
+        var isDrag = false
+    }
     /// The annotation clicked or just drawn: it keeps its handles, and Delete, the arrow keys, ⌘D,
     /// C, [ ], the palette and the width control act on it. Cleared by clicking empty canvas, Esc, and undo/redo.
     var selectedIndex: Int? {
@@ -53,7 +61,10 @@ final class AnnotationView: NSView {
     var drawingWidth: StrokeWidth = .medium {
         didSet { onStateChange?() }
     }
-    var textFontSize: CGFloat = 24
+    /// Style of new text (the last one used); the format bar edits it while typing
+    var textStyle = TextStyle()
+    /// Over the text being typed; created on first use
+    var textFormatBar: TextFormatBar?
     /// Color of new annotations; the toolbar's palette sets it, C cycles it
     var drawingColor: AnnotationColor = .red {
         didSet { onStateChange?() }
@@ -201,8 +212,11 @@ final class AnnotationView: NSView {
         // Handles of the selected and hovered annotations (none while drawing or editing text)
         if activeTV == nil, currentAnnotation == nil {
             let padding = 4.0 / screenshotToViewScale()
-            for idx in Set([selectedIndex, hoveredAnnotationIndex].compactMap { $0 }) where idx < annotations.count {
-                renderer.drawHandles(for: annotations[idx], textPadding: padding)
+            if let hovered = hoveredAnnotationIndex, hovered != selectedIndex, hovered < annotations.count {
+                renderer.drawHandles(for: annotations[hovered], textPadding: padding, selected: false)
+            }
+            if let selectedIndex, selectedIndex < annotations.count {
+                renderer.drawHandles(for: annotations[selectedIndex], textPadding: padding)
             }
         }
 
@@ -214,15 +228,20 @@ final class AnnotationView: NSView {
         NSGraphicsContext.restoreGraphicsState()
     }
 
+    /// The text being typed: its label (when the style has one) behind it, and a dashed border with
+    /// width handles around it
     private func drawActiveTextBorder(textView: NSTextView) {
         let viewFrame = textView.frame
-        let padding: CGFloat = 4.0
-        let topLeft = viewToScreenshot(CGPoint(x: viewFrame.minX - padding, y: viewFrame.minY))
-        let bottomRight = viewToScreenshot(CGPoint(x: viewFrame.maxX + padding, y: viewFrame.maxY))
-        renderer.drawActiveTextBorder(CGRect(
-            x: topLeft.x, y: topLeft.y,
-            width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y
-        ))
+        let topLeft = viewToScreenshot(CGPoint(x: viewFrame.minX, y: viewFrame.minY))
+        let bottomRight = viewToScreenshot(CGPoint(x: viewFrame.maxX, y: viewFrame.maxY))
+        let textRect = CGRect(x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y)
+        guard textStyle.background else {
+            return renderer.drawActiveTextBorder(textRect.insetBy(dx: -4 / screenshotToViewScale(), dy: 0))
+        }
+        let padding = textStyle.labelPadding
+        let label = textRect.insetBy(dx: -padding.width, dy: -padding.height)
+        renderer.drawTextLabel(label, style: textStyle, color: drawingColor)
+        renderer.drawActiveTextBorder(label)
     }
 
     // MARK: - Mouse Events
@@ -232,6 +251,7 @@ final class AnnotationView: NSView {
         let screenshotPoint = viewToScreenshot(viewPoint)
         dragModifiers = event.modifierFlags
         lastBadge = nil
+        press = nil
         if isSpaceHeld {
             interactionState = .panning(lastPoint: viewPoint)
             NSCursor.closedHand.set()
@@ -249,6 +269,7 @@ final class AnnotationView: NSView {
             }
             if existingIndex == nil, textView.string.isEmpty, !hasDrawModifiers {
                 textView.setFrameOrigin(screenshotToView(screenshotPoint))
+                textFormatBar?.show(over: textView)
                 needsDisplay = true
                 return
             }
@@ -256,6 +277,7 @@ final class AnnotationView: NSView {
         }
 
         if !hasDrawModifiers, let (index, handle) = handleAt(screenshotPoint) {
+            press = Press(viewPoint: viewPoint, wasSelected: selectedIndex == index)
             selectedIndex = index
             interactionState = .editingHandle(
                 index: index, handle: handle, original: annotations[index]
@@ -265,6 +287,7 @@ final class AnnotationView: NSView {
 
         // Click on annotation body — select it, then move (if dragged) or re-edit text (if clicked)
         if !hasDrawModifiers, let idx = annotationBodyAt(screenshotPoint) {
+            press = Press(viewPoint: viewPoint, wasSelected: selectedIndex == idx)
             selectedIndex = idx
             interactionState = .movingAnnotation(
                 index: idx, original: annotations[idx], lastPoint: screenshotPoint
@@ -312,6 +335,11 @@ final class AnnotationView: NSView {
             return
         }
 
+        if let start = press?.viewPoint, press?.isDrag == false {
+            guard hypot(viewPoint.x - start.x, viewPoint.y - start.y) >= Self.dragThreshold else { return }
+            press?.isDrag = true
+        }
+
         if case .movingAnnotation(let idx, let original, let lastPoint) = interactionState {
             guard idx < annotations.count else { interactionState = .idle; return }
             let dx = point.x - lastPoint.x
@@ -354,11 +382,11 @@ final class AnnotationView: NSView {
             guard idx < annotations.count else { return }
 
             let moved = annotations[idx] != original
+            let click = press
+            press = nil
             if !moved {
-                // Click on text → re-edit; click on other types → no-op
-                if case .text = annotations[idx] {
-                    startEditingTextAnnotation(at: idx)
-                }
+                handleClick(on: idx, at: viewToScreenshot(convert(event.locationInWindow, from: nil)),
+                            wasSelected: click?.wasSelected ?? false, clickCount: event.clickCount)
                 return
             }
 
@@ -370,7 +398,8 @@ final class AnnotationView: NSView {
 
         if case .editingHandle(let idx, _, let original) = interactionState {
             interactionState = .idle
-            guard idx < annotations.count else { return }
+            press = nil
+            guard idx < annotations.count, annotations[idx] != original else { return }
             let edited = annotations[idx]
             replaceAnnotation(at: idx, with: edited, old: original)
             return
@@ -385,6 +414,21 @@ final class AnnotationView: NSView {
 
         addAnnotation(annotation)
         selectedIndex = annotations.count - 1
+    }
+
+    /// A click (no drag) on a mark. Text: the first click selects it, a second click or a double-click
+    /// edits it. Others: clicking the selection again selects the next mark under the pointer, so
+    /// overlapping marks are all reachable.
+    private func handleClick(on index: Int, at point: CGPoint, wasSelected: Bool, clickCount: Int) {
+        if case .text = annotations[index] {
+            if wasSelected || clickCount >= 2 { startEditingTextAnnotation(at: index) }
+            return
+        }
+        guard wasSelected else { return }
+        let candidates = annotations.bodyCandidates(at: point, tolerance: bodyHitRadius)
+        guard candidates.count > 1, let position = candidates.firstIndex(of: index) else { return }
+        selectedIndex = candidates[(position + 1) % candidates.count]
+        refreshHover()
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -409,8 +453,7 @@ final class AnnotationView: NSView {
 
         switch hitTestAnnotations(at: viewToScreenshot(viewPoint)) {
         case .handle(let index, let handle):
-            let isTextEdge = (handle == .left || handle == .right)
-            (isTextEdge ? NSCursor.resizeLeftRight : NSCursor.crosshair).set()
+            Self.cursor(for: handle).set()
             setHoveredIndex(index)
         case .body(let index):
             NSCursor.openHand.set()
@@ -419,6 +462,23 @@ final class AnnotationView: NSView {
             // Empty canvas: what a click or drag here does
             (selectedTool == .text ? NSCursor.iBeam : NSCursor.crosshair).set()
             setHoveredIndex(nil)
+        }
+    }
+
+    /// Resize cursors that point the way each handle drags (diagonal corners need macOS 15)
+    private static func cursor(for handle: AnnotationHandle) -> NSCursor {
+        switch handle {
+        case .left, .right: return .resizeLeftRight
+        case .from, .to: return .crosshair
+        case .topLeft, .bottomRight, .topRight, .bottomLeft:
+            guard #available(macOS 15, *) else { return .crosshair }
+            let position: NSCursor.FrameResizePosition = switch handle {
+            case .topLeft: .topLeft
+            case .topRight: .topRight
+            case .bottomLeft: .bottomLeft
+            default: .bottomRight
+            }
+            return .frameResize(position: position, directions: .all)
         }
     }
 
@@ -437,14 +497,18 @@ final class AnnotationView: NSView {
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if case .editingText = interactionState {
-            // Font size: Cmd+= / Cmd++ to increase, Cmd+- to decrease
+            // Font size: Cmd+= / Cmd++ to increase, Cmd+- to decrease; Cmd+B bold
             if event.modifierFlags.contains(.command) {
                 if Int(event.keyCode) == kVK_ANSI_Equal { // = / + key
-                    adjustFontSize(larger: true)
+                    stepTextSize(larger: true)
                     return true
                 }
                 if Int(event.keyCode) == kVK_ANSI_Minus {
-                    adjustFontSize(larger: false)
+                    stepTextSize(larger: false)
+                    return true
+                }
+                if Int(event.keyCode) == kVK_ANSI_B {
+                    updateTextStyle { $0.bold.toggle() }
                     return true
                 }
             }
@@ -599,11 +663,20 @@ final class AnnotationView: NSView {
 
     // MARK: - Hit Testing
 
-    /// Handles first, then body, for each annotation top to bottom; radii are 10pt / 5pt on screen
+    /// What a press at `point` grabs (see `[Annotation].hitTest`): the visible handles first, then the
+    /// selection, then the most precisely hit mark. Radii are 10pt / 6pt on screen.
     func hitTestAnnotations(at point: CGPoint) -> AnnotationHitTestResult {
-        let scale = screenshotToViewScale()
-        return annotations.hitTest(point, handleRadius: 10.0 / scale, bodyRadius: 5.0 / scale)
+        annotations.hitTest(
+            point, handleRadius: Self.handleHitRadius / screenshotToViewScale(), bodyRadius: bodyHitRadius,
+            preferring: [selectedIndex, hoveredAnnotationIndex].compactMap { $0 }, selection: selectedIndex
+        )
     }
+
+    private static let handleHitRadius: CGFloat = 10
+    /// Stroke tolerance beyond a mark's visible width, in screenshot points (6pt on screen)
+    private var bodyHitRadius: CGFloat { 6 / screenshotToViewScale() }
+    /// How far (on screen) a press must travel before it moves or resizes a mark: a click stays a click
+    private static let dragThreshold: CGFloat = 3
 
     /// Returns the annotation index and handle at the given screenshot-space point
     func handleAt(_ point: CGPoint) -> (index: Int, handle: AnnotationHandle)? {

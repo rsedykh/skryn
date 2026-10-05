@@ -93,7 +93,22 @@ final class RecordingPanel: AnimatedPanel {
     override func present() {
         wantsPresent = true
         guard isFitted else { return }
+        let firstShow = !isVisible
         super.present()
+        if firstShow, backdrop == nil, let screen = screen ?? NSScreen.main {
+            let backdrop = DimmedBackdrop(screen: screen)
+            backdrop.show(below: self)
+            self.backdrop = backdrop
+        }
+    }
+
+    /// Dims the desktop behind the preview, like the screenshot editor. Not a child window: the panel
+    /// moves and resizes, the backdrop stays put, so it's re-ordered just below whenever the panel comes back.
+    private var backdrop: DimmedBackdrop?
+
+    override func becomeKey() {
+        super.becomeKey()
+        if let backdrop, !isClosing { backdrop.order(.below, relativeTo: windowNumber) }
     }
 
     // MARK: - Layout
@@ -438,10 +453,13 @@ final class RecordingPanel: AnimatedPanel {
         ignoresMouseEvents = true
         player.pause()
         HUDHint.shared.hide()
+        backdrop?.hide()
         super.close()
     }
 
     override func didFinishExit() {
+        backdrop?.close()
+        backdrop = nil
         playbackObservation = nil
         playerView.player = nil
         player.replaceCurrentItem(with: nil)

@@ -4,7 +4,7 @@ import AppKit
 /// backdrop behind it and the toolbar under it, which it creates, shows and closes along with itself.
 final class AnnotationWindow: NSWindow {
     let annotationView: AnnotationView
-    private let backdrop: EditorBackdrop
+    private let backdrop: DimmedBackdrop
     private let editorToolbar: AnnotationToolbar
     private let exit = WindowExit()
     /// The exit is playing: input is dropped, later closes are ignored
@@ -38,7 +38,7 @@ final class AnnotationWindow: NSWindow {
         )
 
         annotationView = AnnotationView(frame: NSRect(origin: .zero, size: windowRect.size), screenshot: screenshot)
-        backdrop = EditorBackdrop(screen: screen)
+        backdrop = DimmedBackdrop(screen: screen)
         editorToolbar = AnnotationToolbar(editor: annotationView)
         super.init(
             contentRect: windowRect,
@@ -111,6 +111,7 @@ final class AnnotationWindow: NSWindow {
     func dismiss() {
         guard !isClosing else { return }
         HUDHint.shared.hide()
+        annotationView.textFormatBar?.hide()
         removeChildWindow(editorToolbar)
         editorToolbar.ignoresMouseEvents = true
         if editorToolbar.isVisible { HUDMotion.hide(editorToolbar, travel: .up, distance: 10) {} }
@@ -132,10 +133,10 @@ final class AnnotationWindow: NSWindow {
     }
 }
 
-/// Dims the screen behind the editor, so the screenshot doesn't blend into the real desktop it shows.
+/// Dims the screen behind the editor (and the recording preview), so it doesn't blend into the desktop.
 /// Ordered just below the editor (then attached as its child): above other apps' windows, under the
 /// screenshot and toolbar. A soft vignette, a little darker at the edges, draws the eye to the center.
-final class EditorBackdrop: NSWindow {
+final class DimmedBackdrop: NSWindow {
     init(screen: NSScreen) {
         super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
         isOpaque = false

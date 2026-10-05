@@ -93,14 +93,14 @@ extension AnnotationView {
 
     /// A palette pick: recolors the selection (or the text being typed) and becomes the drawing color
     func applyColor(_ color: AnnotationColor) {
-        if case .editingText(let textView, _) = interactionState {
-            textView.textColor = color.nsColor
-            textView.typingAttributes[.foregroundColor] = color.nsColor
-        }
         if selectedAnnotation?.color != nil, let selectedIndex {
             applyColor(color, to: selectedIndex)
         } else {
             drawingColor = color
+        }
+        if case .editingText(let textView, _) = interactionState {
+            styleTextView(textView)  // the text, or its label, takes the new color
+            needsDisplay = true
         }
     }
 
