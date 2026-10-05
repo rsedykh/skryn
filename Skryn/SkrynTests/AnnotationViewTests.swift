@@ -1,3 +1,4 @@
+import CoreMedia
 import XCTest
 @testable import Skryn
 
@@ -584,9 +585,10 @@ final class AnnotationViewTests: XCTestCase {
 
     // MARK: - Color
 
-    func testAnnotationColor_toggled() {
-        XCTAssertEqual(AnnotationColor.red.toggled, .blue)
-        XCTAssertEqual(AnnotationColor.blue.toggled, .red)
+    func testAnnotationColor_nextCyclesThePalette() {
+        XCTAssertEqual(AnnotationColor.red.next, .orange)
+        XCTAssertEqual(AnnotationColor.white.next, .red, "wraps around")
+        XCTAssertEqual(Set(AnnotationColor.allCases.map(\.next)).count, AnnotationColor.allCases.count)
     }
 
     func testWithColor_changesColorBearingTypes() {
@@ -681,5 +683,144 @@ final class ScreenRecordingGeometryTests: XCTestCase {
         let odd = ScreenRecorder.outputPixelSize(for: CGRect(x: 0, y: 0, width: 101, height: 51), scale: 1)
         XCTAssertEqual(odd.width, 100)
         XCTAssertEqual(odd.height, 50)
+    }
+}
+
+@MainActor
+final class RecordingElapsedTimeTests: XCTestCase {
+    func testElapsedString() {
+        XCTAssertEqual(AppDelegate.elapsedString(0), "0:00")
+        XCTAssertEqual(AppDelegate.elapsedString(7.9), "0:07")
+        XCTAssertEqual(AppDelegate.elapsedString(754), "12:34")
+        XCTAssertEqual(AppDelegate.elapsedString(3723), "1:02:03")
+        XCTAssertEqual(AppDelegate.elapsedString(-3), "0:00")
+    }
+}
+
+@MainActor
+final class RecordingPanelInfoTests: XCTestCase {
+    func testInfoText_allParts() {
+        let text = RecordingPanel.infoText(
+            duration: CMTime(seconds: 72.4, preferredTimescale: 600), bytes: 4_300_000,
+            pixelSize: CGSize(width: 1920, height: 1080)
+        )
+        XCTAssertTrue(text.hasPrefix("1:12 · "), text)
+        XCTAssertTrue(text.hasSuffix(" · 1920×1080"), text)
+    }
+
+    func testPreviewSize_smallVideo_growsToMinimumWidth() {
+        let size = RecordingPanel.previewSize(
+            pixelSize: CGSize(width: 800, height: 600), backingScale: 2, available: CGSize(width: 2000, height: 1000)
+        )
+        XCTAssertEqual(size, CGSize(width: 640, height: 480))
+    }
+
+    func testPreviewSize_fitsActualSizeWhenRoomy() {
+        let size = RecordingPanel.previewSize(
+            pixelSize: CGSize(width: 2400, height: 1350), backingScale: 2, available: CGSize(width: 2000, height: 1000)
+        )
+        XCTAssertEqual(size, CGSize(width: 1200, height: 675))
+    }
+
+    func testPreviewSize_tallVideo_cappedByHeight() {
+        let size = RecordingPanel.previewSize(
+            pixelSize: CGSize(width: 1000, height: 3000), backingScale: 1, available: CGSize(width: 2000, height: 900)
+        )
+        XCTAssertEqual(size, CGSize(width: 300, height: 900))
+    }
+
+    func testPreviewSize_unreadable_nil() {
+        XCTAssertNil(RecordingPanel.previewSize(pixelSize: .zero, backingScale: 2, available: CGSize(width: 100, height: 100)))
+    }
+
+    func testInfoText_skipsUnknownParts() {
+        XCTAssertEqual(RecordingPanel.infoText(duration: .indefinite, bytes: nil, pixelSize: nil), "")
+    }
+}
+
+final class AnnotationToolTests: XCTestCase {
+    func testModifierDrags_pickTheirTool() {
+        XCTAssertNil(AnnotationTool(modifiers: []))
+        XCTAssertEqual(AnnotationTool(modifiers: .shift), .line)
+        XCTAssertEqual(AnnotationTool(modifiers: .command), .rectangle)
+        XCTAssertEqual(AnnotationTool(modifiers: [.command, .shift]), .ellipse)
+        XCTAssertEqual(AnnotationTool(modifiers: .option), .crop)
+        XCTAssertEqual(AnnotationTool(modifiers: .control), .blur)
+    }
+
+    func testOnlyTextAndNumberArePlacedByClicking() {
+        XCTAssertEqual(AnnotationTool.allCases.filter(\.isClickTool), [.text, .badge])
+    }
+}
+
+final class ScreenCaptureCropTests: XCTestCase {
+    /// A 200×100pt image at 2x: the crop rect is in points with a top-left origin
+    func testCrop_usesPointsTopLeftAndBackingScale() throws {
+        let width = 400, height = 200
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        // Paint the top-left 100×50 pixels red (CGContext's origin is bottom-left)
+        context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(x: 0, y: height - 50, width: 100, height: 50))
+        let image = NSImage(cgImage: try XCTUnwrap(context.makeImage()), size: NSSize(width: 200, height: 100))
+
+        let cropped = try XCTUnwrap(ScreenCapture.crop(image, to: CGRect(x: 0, y: 0, width: 50, height: 25)))
+        XCTAssertEqual(cropped.size, NSSize(width: 50, height: 25))
+        let cgImage = try XCTUnwrap(cropped.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        XCTAssertEqual(cgImage.width, 100)
+        XCTAssertEqual(cgImage.height, 50)
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        XCTAssertEqual(rep.colorAt(x: 50, y: 25)?.redComponent ?? 0, 1, accuracy: 0.01)
+    }
+}
+
+@MainActor
+final class MenuBarSettingsTests: XCTestCase {
+    private let keys = ["menuBarIcons", "menuBarClickOpensMenu", "menuBarTiles", "menuBarLayout"]
+    private var saved: [String: Any] = [:]
+
+    override func setUp() {
+        super.setUp()
+        for key in keys { saved[key] = UserDefaults.standard.object(forKey: key) }
+        keys.forEach(UserDefaults.standard.removeObject)
+    }
+
+    override func tearDown() {
+        for key in keys { UserDefaults.standard.set(saved[key], forKey: key) }
+        super.tearDown()
+    }
+
+    func testDefaults_oneScreenshotIconAndAllTiles() {
+        let settings = MenuBarSettings.current
+        XCTAssertEqual(settings.icons, [.screenshot])
+        XCTAssertFalse(settings.clickOpensMenu)
+        XCTAssertEqual(settings.menuTiles, MenuBarAction.available)
+    }
+
+    func testLegacyLayout_migratesToIcons() {
+        UserDefaults.standard.set("splitWithArea", forKey: "menuBarLayout")
+        XCTAssertEqual(MenuBarSettings.current.icons, MenuBarAction.available)
+        UserDefaults.standard.set("single", forKey: "menuBarLayout")
+        XCTAssertEqual(MenuBarSettings.current.icons, [.screenshot])
+    }
+
+    func testNormalized_neverWithoutAnIcon_andInFixedOrder() {
+        var settings = MenuBarSettings()
+        settings.icons = []
+        XCTAssertEqual(settings.normalized.icons, [.screenshot])
+        settings.icons = [.area, .screenshot]
+        XCTAssertEqual(settings.normalized.icons, [.screenshot, .area])
+    }
+
+    func testRoundTrip() {
+        var settings = MenuBarSettings()
+        settings.icons = [.area]
+        settings.clickOpensMenu = true
+        settings.menuTiles = [.screenshot]
+        MenuBarSettings.current = settings
+        XCTAssertEqual(MenuBarSettings.current, settings)
+        XCTAssertNil(UserDefaults.standard.object(forKey: "menuBarLayout"), "legacy key is dropped once saved")
     }
 }
