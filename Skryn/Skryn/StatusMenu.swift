@@ -11,13 +11,9 @@ import UniformTypeIdentifiers
 /// navigation and ⌘, / ⌘Q work.
 @MainActor
 enum StatusMenu {
-    struct Shortcut { let keyCode: UInt32; let modifiers: UInt32 }  // Carbon, like Defaults.hotkey
-
     struct Actions {
-        /// Each tile appears only when its action is set (Settings → Menu bar → Menu buttons; no Record on macOS 14)
-        var screenshot: (() -> Void)?
-        var areaScreenshot: (() -> Void)?
-        var record: (() -> Void)?
+        /// A tile's action
+        var perform: (MenuBarAction) -> Void
         var copyLink: (RecentUpload) -> Void
         var saveUpload: (RecentUpload) -> Void  // ⌥-click
         var retryUpload: (RecentUpload) -> Void  // uploads without a link
@@ -28,9 +24,10 @@ enum StatusMenu {
     }
 
     struct Content {
-        var screenshotShortcut: Shortcut
-        var areaShortcut: Shortcut
-        var recordShortcut: Shortcut?
+        /// The action tiles, in order (Settings → Menu Bar; no Record on macOS 14)
+        var tiles: [MenuBarAction]
+        /// Each action's global shortcut, shown on its tile
+        var shortcuts: [MenuBarAction: Hotkey]
         var recentUploads: [RecentUpload]
         var errorText: String?
         var screenRecordingPermissionMissing: Bool
@@ -80,20 +77,36 @@ enum StatusMenu {
 
     /// The enabled action tiles, or nil when they're all switched off.
     private static func tilesItem(_ content: Content, actions: Actions) -> NSMenuItem? {
-        var tiles: [ActionTile] = []
-        if let screenshot = actions.screenshot {
-            tiles.append(ActionTile(title: "Screenshot", symbol: "camera.fill", shortcut: content.screenshotShortcut,
-                                    tint: .systemBlue, action: screenshot))
+        guard !content.tiles.isEmpty else { return nil }
+        let tiles = content.tiles.map { action in
+            ActionTile(title: action.tileTitle, symbol: action.tileSymbol, shortcut: content.shortcuts[action],
+                       tint: action.tint) { actions.perform(action) }
         }
-        if let area = actions.areaScreenshot {
-            tiles.append(ActionTile(title: "Area", symbol: "rectangle.dashed", shortcut: content.areaShortcut,
-                                    tint: .systemTeal, action: area))
+        return viewItem(TileRow(tiles: tiles))
+    }
+
+    // MARK: - Recording
+
+    /// Right-click on the stop button: stop (keep the video) or discard it, under any notices from
+    /// starting the recording (e.g. no Accessibility permission for keystrokes).
+    static func makeRecording(notice: String?, stop: @escaping () -> Void, discard: @escaping () -> Void) -> NSMenu {
+        let menu = NSMenu()
+        if let notice {
+            let noticeItem = NSMenuItem(title: notice, action: nil, keyEquivalent: "")
+            noticeItem.attributedTitle = NSAttributedString(
+                string: notice,
+                attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.menuFont(ofSize: 11)]
+            )
+            menu.addItem(noticeItem)
+            menu.addItem(.separator())
         }
-        if let record = actions.record {
-            tiles.append(ActionTile(title: "Record", symbol: "record.circle", shortcut: content.recordShortcut,
-                                    tint: .systemRed, action: record))
-        }
-        return tiles.isEmpty ? nil : viewItem(TileRow(tiles: tiles))
+        let stopItem = item("Stop Recording", handler: stop)
+        stopItem.image = NSImage(systemSymbolName: "stop.circle", accessibilityDescription: "Stop")
+        menu.addItem(stopItem)
+        let discardItem = item("Discard Recording", handler: discard)
+        discardItem.image = NSImage(systemSymbolName: "trash", accessibilityDescription: "Discard")
+        menu.addItem(discardItem)
+        return menu
     }
 
     // MARK: - Uploads
@@ -213,9 +226,9 @@ private final class ActionTile: NSView {
     private var hovered = false { didSet { refresh() } }
     private var pressed = false { didSet { refresh() } }
 
-    init(title: String, symbol: String, shortcut: StatusMenu.Shortcut?, tint: NSColor, action: @escaping () -> Void) {
+    init(title: String, symbol: String, shortcut: Hotkey?, tint: NSColor, action: @escaping () -> Void) {
         self.action = action
-        let shortcutText = shortcut.map { hotkeyDisplayString(keyCode: $0.keyCode, carbonModifiers: $0.modifiers) }
+        let shortcutText = shortcut?.displayString
         super.init(frame: .zero)
         wantsLayer = true
         addSubview(fill)

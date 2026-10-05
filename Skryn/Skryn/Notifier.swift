@@ -5,7 +5,6 @@ import UserNotifications
 /// macOS asks for permission the first time one is shown; if the user declines, nothing is shown.
 @MainActor
 final class Notifier: NSObject {
-    enum Style { case success, failure, info }
     /// A button on the notification; clicking the notification itself runs it too.
     struct Action {
         let title: String
@@ -24,11 +23,11 @@ final class Notifier: NSObject {
         UNUserNotificationCenter.current().delegate = shared
     }
 
-    static func show(_ message: String, detail: String? = nil, style: Style = .success, action: Action? = nil) {
+    static func show(_ message: String, detail: String? = nil, style: FeedbackStyle = .success, action: Action? = nil) {
         shared.post(message, detail: detail, style: style, action: action)
     }
 
-    private func post(_ message: String, detail: String?, style: Style, action: Action?) {
+    private func post(_ message: String, detail: String?, style: FeedbackStyle, action: Action?) {
         let content = UNMutableNotificationContent()
         content.title = message
         if let detail { content.body = detail }

@@ -5,9 +5,11 @@ enum ScreenRecorderError: LocalizedError {
     case permissionDenied
     case displayNotFound
     case failed(Error)
+    case finishTimedOut
 
     var errorDescription: String? {
         switch self {
+        case .finishTimedOut: return "Screen recording failed: ScreenCaptureKit didn't finish the recording"
         case .permissionDenied: return "Screen recording failed: Screen Recording permission is missing"
         case .displayNotFound: return "Screen recording failed: display not found"
         case .failed(let error): return "Screen recording failed: \(error.localizedDescription)"
@@ -25,39 +27,27 @@ final class ScreenRecorder: NSObject {
     /// Call `stop()` afterwards to collect the file.
     var onUnexpectedStop: ((Error?) -> Void)?
 
-    private let displayID: CGDirectDisplayID
-    private let sourceRect: CGRect
-    private let scale: CGFloat
+    private let area: CaptureArea
     private let options: RecordingOptions
+    private let frameRate: FrameRate
     /// Skryn's own windows (keystroke overlay, webcam bubble) that are recorded although the app is excluded
     private let capturedWindowIDs: [CGWindowID]
-    private let outputURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("skryn-\(UUID().uuidString).mp4")
+    private let outputURL = FileManager.default.skrynTemporaryFile(extension: "mp4")
 
     private var stream: SCStream?
     private var recordingOutput: SCRecordingOutput?
-    private var isStopping = false
-    /// Set once the recording output finished (successfully or not) before `stop()` started waiting.
-    private var finishResult: Result<Void, Error>?
-    private var finishContinuation: CheckedContinuation<Void, Error>?
+    private var stopRequested = false
+    /// The recording output reports the end of the file once; `stop()` waits for it here
+    private let (finished, finishedContinuation) = AsyncThrowingStream<Void, Error>.makeStream()
+    private var hasFinished = false
     /// True when the microphone was requested but access is denied; the recording goes on without it.
     private(set) var microphoneUnavailable = false
 
-    init(
-        displayID: CGDirectDisplayID, sourceRect: CGRect, scale: CGFloat,
-        options: RecordingOptions, capturedWindowIDs: [CGWindowID]
-    ) {
-        self.displayID = displayID
-        self.sourceRect = sourceRect
-        self.scale = scale
+    init(area: CaptureArea, options: RecordingOptions, frameRate: FrameRate, capturedWindowIDs: [CGWindowID]) {
+        self.area = area
         self.options = options
+        self.frameRate = frameRate
         self.capturedWindowIDs = capturedWindowIDs
-    }
-
-    /// Pixel size of the recording: rect × scale, rounded down to even numbers (H.264 needs even dimensions).
-    static func outputPixelSize(for rect: CGRect, scale: CGFloat) -> (width: Int, height: Int) {
-        func even(_ value: CGFloat) -> Int { max(2, Int((value * scale).rounded()) & ~1) }
-        return (even(rect.width), even(rect.height))
     }
 
     func start() async throws {
@@ -69,7 +59,7 @@ final class ScreenRecorder: NSObject {
             throw CGPreflightScreenCaptureAccess() ? ScreenRecorderError.failed(error) : .permissionDenied
         }
 
-        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
+        guard let display = content.displays.first(where: { $0.displayID == area.displayID }) else {
             print("ScreenRecorder: display not found")
             throw ScreenRecorderError.displayNotFound
         }
@@ -117,17 +107,17 @@ final class ScreenRecorder: NSObject {
     }
 
     private func streamConfiguration(captureMicrophone: Bool) -> SCStreamConfiguration {
-        let size = Self.outputPixelSize(for: sourceRect, scale: scale)
+        let size = VideoExporter.evenPixelSize(area.rect.size, scale: area.scale, rounding: .toNearestOrAwayFromZero)
         let config = SCStreamConfiguration()
-        config.sourceRect = sourceRect
-        config.width = size.width
-        config.height = size.height
+        config.sourceRect = area.rect
+        config.width = Int(size.width)
+        config.height = Int(size.height)
         config.scalesToFit = false
         config.showsCursor = options.showCursor
         config.showMouseClicks = options.highlightClicks
         // The click highlight is only drawn in BGRA frames (SCStream.h)
         config.pixelFormat = kCVPixelFormatType_32BGRA
-        config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(OutputSettings.current.frameRate))
+        config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(frameRate.rawValue))
         config.capturesAudio = options.systemAudio
         config.excludesCurrentProcessAudio = true
         config.captureMicrophone = captureMicrophone
@@ -137,36 +127,18 @@ final class ScreenRecorder: NSObject {
         return config
     }
 
-    private static let finishTimedOut = NSError(
-        domain: "ScreenRecorder", code: 1,
-        userInfo: [NSLocalizedDescriptionKey: "ScreenCaptureKit didn't finish the recording"]
-    )
-
     /// Stops capture and waits until ScreenCaptureKit has finished writing the file.
     /// After a failure (e.g. the display went away) the partial file is still returned if it plays.
     func stop() async throws -> URL {
-        isStopping = true
-        var result = finishResult
-        if result == nil, let stream, let recordingOutput {
+        stopRequested = true
+        var failure: Error?
+        if let stream, let recordingOutput {
             do {
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                    finishContinuation = continuation
-                    // A dead stream may never report the end of the file; give up after a few seconds
-                    Task { [weak self] in
-                        try? await Task.sleep(for: .seconds(5))
-                        self?.recordingFinished(.failure(Self.finishTimedOut))
-                    }
-                    do {
-                        // Removing the output finalizes the file; the delegate resumes the continuation.
-                        try stream.removeRecordingOutput(recordingOutput)
-                    } catch {
-                        finishContinuation = nil
-                        continuation.resume(throwing: error)
-                    }
-                }
-                result = .success(())
+                // Removing the output finalizes the file (unless it already ended); the delegate reports the end
+                if !hasFinished { try stream.removeRecordingOutput(recordingOutput) }
+                try await waitUntilFinished()
             } catch {
-                result = .failure(error)
+                failure = error
             }
         }
         // Stop on every path, or the Screen Recording indicator stays on
@@ -174,26 +146,43 @@ final class ScreenRecorder: NSObject {
         stream = nil
         recordingOutput = nil
 
-        if case .failure(let error)? = result {
+        if let failure {
             let playable = (try? await AVURLAsset(url: outputURL).load(.isPlayable)) ?? false
             guard playable else {
                 try? FileManager.default.removeItem(at: outputURL)
-                throw error as? ScreenRecorderError ?? .failed(error)
+                throw failure as? ScreenRecorderError ?? .failed(failure)
             }
         }
         return outputURL
     }
 
-    private func recordingFinished(_ result: Result<Void, Error>) {
-        if let continuation = finishContinuation {
-            finishContinuation = nil
-            continuation.resume(with: result.mapError { ScreenRecorderError.failed($0) })
-            return
+    /// A dead stream may never report the end of the file; give up after a few seconds
+    private func waitUntilFinished() async throws {
+        try await withThrowingTaskGroup(of: Void.self) { [finished] group in
+            group.addTask {
+                for try await _ in finished { return }
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(5))
+                throw ScreenRecorderError.finishTimedOut
+            }
+            try await group.next()
+            group.cancelAll()
         }
-        guard finishResult == nil else { return }
-        finishResult = result
-        guard !isStopping else { return }
-        // A clean finish we didn't ask for: the system's stop button ended the recording
+    }
+
+    private func recordingFinished(_ result: Result<Void, Error>) {
+        guard !hasFinished else { return }
+        hasFinished = true
+        switch result {
+        case .success:
+            finishedContinuation.yield()
+            finishedContinuation.finish()
+        case .failure(let error):
+            finishedContinuation.finish(throwing: ScreenRecorderError.failed(error))
+        }
+        guard !stopRequested else { return }
+        // An end we didn't ask for; a clean one means the system's stop button ended the recording
         switch result {
         case .success: onUnexpectedStop?(nil)
         case .failure(let error): onUnexpectedStop?(ScreenRecorderError.failed(error))
@@ -201,7 +190,7 @@ final class ScreenRecorder: NSObject {
     }
 
     private func streamStopped(_ error: Error) {
-        guard !isStopping else { return }
+        guard !stopRequested else { return }
         print("ScreenRecorder: stream stopped — \(error)")
         let stoppedByUser = (error as NSError).code == SCStreamError.Code.userStopped.rawValue
         onUnexpectedStop?(stoppedByUser ? nil : ScreenRecorderError.failed(error))

@@ -58,32 +58,53 @@ final class UploadHistoryTests: XCTestCase {
     // MARK: - updateCDNURL
 
     func testUpdateCDNURL_updatesCorrectEntry() {
-        UploadHistory.add(makeUpload(filename: "a.png"))
+        let first = makeUpload(filename: "a.png")
+        UploadHistory.add(first)
         UploadHistory.add(makeUpload(filename: "b.png"))
 
-        UploadHistory.updateCDNURL(for: "a.png", url: "https://cdn.example.com/a")
+        UploadHistory.updateCDNURL(for: first.id, url: "https://cdn.example.com/a")
 
         let updated = UploadHistory.recentUploads().first { $0.filename == "a.png" }
         XCTAssertEqual(updated?.cdnURL, "https://cdn.example.com/a")
     }
 
-    func testUpdateCDNURL_doesNotAffectOtherEntries() {
-        UploadHistory.add(makeUpload(filename: "a.png"))
-        UploadHistory.add(makeUpload(filename: "b.png"))
+    func testUpdateCDNURL_sameFilename_updatesOnlyThatUpload() {
+        let first = makeUpload(filename: "same.png")
+        UploadHistory.add(first)
+        UploadHistory.add(makeUpload(filename: "same.png"))
 
-        UploadHistory.updateCDNURL(for: "a.png", url: "https://cdn.example.com/a")
+        UploadHistory.updateCDNURL(for: first.id, url: "https://cdn.example.com/a")
 
-        let other = UploadHistory.recentUploads().first { $0.filename == "b.png" }
-        XCTAssertNil(other?.cdnURL)
+        let uploads = UploadHistory.recentUploads()
+        XCTAssertNil(uploads[0].cdnURL)
+        XCTAssertEqual(uploads[1].cdnURL, "https://cdn.example.com/a")
     }
 
-    func testUpdateCDNURL_unknownFilename_noOp() {
+    func testUpdateCDNURL_unknownID_noOp() {
         UploadHistory.add(makeUpload(filename: "a.png"))
-        UploadHistory.updateCDNURL(for: "nonexistent.png", url: "https://cdn.example.com/x")
+        UploadHistory.updateCDNURL(for: UUID(), url: "https://cdn.example.com/x")
 
         let uploads = UploadHistory.recentUploads()
         XCTAssertEqual(uploads.count, 1)
         XCTAssertNil(uploads[0].cdnURL)
+    }
+
+    // MARK: - Stored history
+
+    func testRecentUploads_savedBeforeIDs_stillLoad() throws {
+        let json = #"[{"filename":"old.png","date":0,"cacheFilePath":"/tmp/old.png","cdnURL":"https://x"}]"#
+        UserDefaults.standard.set(Data(json.utf8), forKey: defaultsKey)
+
+        let uploads = UploadHistory.recentUploads()
+        XCTAssertEqual(uploads.count, 1)
+        XCTAssertEqual(uploads[0].filename, "old.png")
+        XCTAssertEqual(uploads[0].cdnURL, "https://x")
+    }
+
+    func testRecentUpload_idSurvivesSaving() {
+        let upload = makeUpload(filename: "a.png")
+        UploadHistory.add(upload)
+        XCTAssertEqual(UploadHistory.recentUploads().first?.id, upload.id)
     }
 
     // MARK: - cacheFile
@@ -97,7 +118,7 @@ final class UploadHistoryTests: XCTestCase {
         let path = try XCTUnwrap(UploadHistory.cacheFile(copyingFrom: source, filename: filename))
         defer { UploadHistory.removeCacheFile(at: path) }
 
-        XCTAssertEqual(UploadHistory.cachedData(at: path), Data("video".utf8))
+        XCTAssertEqual(FileManager.default.contents(atPath: path), Data("video".utf8))
     }
 
     func testCacheFile_missingSource_returnsNil() {

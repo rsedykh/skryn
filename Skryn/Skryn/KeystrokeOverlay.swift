@@ -29,7 +29,7 @@ final class KeystrokeOverlay {
         var text: String { count > 1 ? "\(label) ×\(count)" : label }
     }
 
-    private let window: NSWindow
+    private let window: OverlayPanel
     private let stack = NSStackView()
     private let heldChip = KeycapView(text: "")
     private var entries: [Entry] = []
@@ -38,33 +38,20 @@ final class KeystrokeOverlay {
 
     var windowID: CGWindowID { CGWindowID(window.windowNumber) }
 
-    /// Starts listening and shows the (empty) HUD over the bottom center of `area`
-    /// (`screen`-local points, top-left origin, same as `SCStreamConfiguration.sourceRect`).
+    /// Starts listening and shows the (empty) HUD over the bottom center of `area`.
     /// Returns nil when Accessibility permission is missing, after asking macOS to show its prompt.
     /// `layoutID` names the keys with that keyboard layout instead of the active one.
-    static func start(screen: NSScreen, area: CGRect, layoutID: String?) -> KeystrokeOverlay? {
+    static func start(area: CaptureArea, layoutID: String?) -> KeystrokeOverlay? {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         guard AXIsProcessTrustedWithOptions(options) else { return nil }
-        return KeystrokeOverlay(screen: screen, area: area, layout: layoutID.flatMap(KeyboardLayout.init(id:)))
+        return KeystrokeOverlay(area: area.globalFrame, layout: layoutID.flatMap(KeyboardLayout.init(id:)))
     }
 
-    private init(screen: NSScreen, area: CGRect, layout: KeyboardLayout?) {
+    private init(area: CGRect, layout: KeyboardLayout?) {
         self.layout = layout
-        // Top-left screen-local → AppKit global (bottom-left origin)
-        let frame = NSRect(
-            x: screen.frame.minX + area.minX,
-            y: screen.frame.maxY - area.maxY + Self.bottomInset,
-            width: area.width,
-            height: Self.windowHeight
-        )
-        window = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = false
+        let frame = NSRect(x: area.minX, y: area.minY + Self.bottomInset, width: area.width, height: Self.windowHeight)
+        window = OverlayPanel(frame: frame, level: .statusBar, behavior: [.stationary, .ignoresCycle])
         window.ignoresMouseEvents = true
-        window.level = .statusBar
-        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-        window.isReleasedWhenClosed = false
 
         stack.orientation = .horizontal
         stack.spacing = 10
@@ -286,9 +273,9 @@ private final class KeycapView: NSView {
     /// Pops in: grows from 0.85 while fading in.
     func popIn() {
         let group = CAAnimationGroup()
-        group.animations = [Self.basic("opacity", from: 0, to: 1)]
+        group.animations = [CABasicAnimation(keyPath: "opacity", from: 0, to: 1)]
         if !HUDMotion.reduceMotion {
-            group.animations?.append(Self.basic("transform", from: NSValue(caTransform3D: scaled(0.85)),
+            group.animations?.append(CABasicAnimation(keyPath: "transform", from: NSValue(caTransform3D: scaled(0.85)),
                                                 to: NSValue(caTransform3D: scaled(1))))
         }
         group.duration = HUDMotion.enterDuration * 1.2
@@ -319,9 +306,9 @@ private final class KeycapView: NSView {
     /// Fades out while sinking a few points, then runs `completion`.
     func sinkOut(completion: @escaping @MainActor () -> Void) {
         let group = CAAnimationGroup()
-        group.animations = [Self.basic("opacity", from: 1, to: 0)]
+        group.animations = [CABasicAnimation(keyPath: "opacity", from: 1, to: 0)]
         let sink: CGFloat = superview?.isFlipped == true ? 6 : -6  // down on screen either way
-        if !HUDMotion.reduceMotion { group.animations?.append(Self.basic("transform.translation.y", from: 0, to: sink)) }
+        if !HUDMotion.reduceMotion { group.animations?.append(CABasicAnimation(keyPath: "transform.translation.y", from: 0, to: sink)) }
         group.duration = HUDMotion.exitDuration * 1.4
         group.timingFunction = HUDMotion.exitTiming
         group.fillMode = .forwards
@@ -339,13 +326,6 @@ private final class KeycapView: NSView {
         let dy = (0.5 - layer.anchorPoint.y) * bounds.height
         let moved = CATransform3DMakeTranslation(dx, dy, 0)
         return CATransform3DTranslate(CATransform3DScale(moved, scale, scale, 1), -dx, -dy, 0)
-    }
-
-    private static func basic(_ keyPath: String, from: Any, to: Any) -> CABasicAnimation {
-        let animation = CABasicAnimation(keyPath: keyPath)
-        animation.fromValue = from
-        animation.toValue = to
-        return animation
     }
 }
 

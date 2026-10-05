@@ -16,18 +16,3 @@ final class IsolatedUndoTextView: NSTextView {
         super.keyDown(with: event)
     }
 }
-
-/// Blur cache key: a rect, made hashable
-struct BlurCacheKey: Hashable {
-    let x: Double
-    let y: Double
-    let width: Double
-    let height: Double
-
-    init(_ rect: CGRect) {
-        x = Double(rect.origin.x)
-        y = Double(rect.origin.y)
-        width = Double(rect.width)
-        height = Double(rect.height)
-    }
-}

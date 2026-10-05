@@ -36,23 +36,37 @@
 		AA000031 /* ImageEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000034 /* ImageEncoder.swift */; };
 		AA000032 /* VideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000035 /* VideoExporter.swift */; };
 		AA000033 /* StatusMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000036 /* StatusMenu.swift */; };
+		AA000038 /* AnnotationRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000041 /* AnnotationRenderer.swift */; };
+		AA000039 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000042 /* Preferences.swift */; };
+		AA000040 /* SettingsKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000043 /* SettingsKit.swift */; };
+		AA000041 /* SettingsSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000044 /* SettingsSections.swift */; };
+		AA000042 /* CaptureSettingsSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000045 /* CaptureSettingsSections.swift */; };
+		AA000043 /* HotkeyCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000046 /* HotkeyCenter.swift */; };
+		AA000044 /* RecordingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000047 /* RecordingSession.swift */; };
+		AA000045 /* RecordingOptionsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000048 /* RecordingOptionsBar.swift */; };
+		AA000046 /* Problems.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000049 /* Problems.swift */; };
+		AA000047 /* UploadCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000050 /* UploadCoordinator.swift */; };
+		AA000048 /* OutputDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000051 /* OutputDelivery.swift */; };
+		AA000049 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000052 /* MenuBarController.swift */; };
+		AA000050 /* WindowPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000053 /* WindowPresenter.swift */; };
 		AA000035 /* MenuBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000038 /* MenuBar.swift */; };
 		AA000036 /* MenuBarSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000039 /* MenuBarSettingsSection.swift */; };
 		AA000037 /* DropboxSetupGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000040 /* DropboxSetupGuide.swift */; };
 		AA000034 /* AnnotationViewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000037 /* AnnotationViewSupport.swift */; };
 		AA100010 /* ImageEncoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100011 /* ImageEncoderTests.swift */; };
 		AA100011 /* VideoExporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100012 /* VideoExporterTests.swift */; };
-		AA000024 /* DropboxService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000028 /* DropboxService.swift */; };
+		AA000024 /* DropboxClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000028 /* DropboxClient.swift */; };
 		AA000025 /* UploadcareProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000029 /* UploadcareProvider.swift */; };
 		AA000026 /* DropboxProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000030 /* DropboxProvider.swift */; };
 		AA100001 /* AnnotationViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100001 /* AnnotationViewTests.swift */; };
 		AA100002 /* UploadcareServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100003 /* UploadcareServiceTests.swift */; };
 		AA100003 /* UploadHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100004 /* UploadHistoryTests.swift */; };
+		AA100012 /* ProblemsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100013 /* ProblemsTests.swift */; };
 		AA100004 /* HotkeyRecorderButtonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100005 /* HotkeyRecorderButtonTests.swift */; };
-		AA100005 /* RecordingFrameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100006 /* RecordingFrameTests.swift */; };
+		AA100005 /* CaptureAreaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100006 /* CaptureAreaTests.swift */; };
 		AA100006 /* KeystrokeOverlayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100007 /* KeystrokeOverlayTests.swift */; };
 		AA100007 /* WebcamBubbleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100008 /* WebcamBubbleTests.swift */; };
-		AA100008 /* DropboxServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100009 /* DropboxServiceTests.swift */; };
+		AA100008 /* DropboxClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100009 /* DropboxClientTests.swift */; };
 		AA100009 /* UploadProvidersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100010 /* UploadProvidersTests.swift */; };
 		AA000029 /* libwebp in Frameworks */ = {isa = PBXBuildFile; productRef = AG000002 /* libwebp */; };
 /* End PBXBuildFile section */
@@ -101,24 +115,38 @@
 		AB000034 /* ImageEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageEncoder.swift; sourceTree = "<group>"; };
 		AB000035 /* VideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporter.swift; sourceTree = "<group>"; };
 		AB000036 /* StatusMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenu.swift; sourceTree = "<group>"; };
+		AB000041 /* AnnotationRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationRenderer.swift; sourceTree = "<group>"; };
+		AB000042 /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
+		AB000043 /* SettingsKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKit.swift; sourceTree = "<group>"; };
+		AB000044 /* SettingsSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSections.swift; sourceTree = "<group>"; };
+		AB000045 /* CaptureSettingsSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSettingsSections.swift; sourceTree = "<group>"; };
+		AB000046 /* HotkeyCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyCenter.swift; sourceTree = "<group>"; };
+		AB000047 /* RecordingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSession.swift; sourceTree = "<group>"; };
+		AB000048 /* RecordingOptionsBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingOptionsBar.swift; sourceTree = "<group>"; };
+		AB000049 /* Problems.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Problems.swift; sourceTree = "<group>"; };
+		AB000050 /* UploadCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadCoordinator.swift; sourceTree = "<group>"; };
+		AB000051 /* OutputDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputDelivery.swift; sourceTree = "<group>"; };
+		AB000052 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
+		AB000053 /* WindowPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowPresenter.swift; sourceTree = "<group>"; };
 		AB000038 /* MenuBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBar.swift; sourceTree = "<group>"; };
 		AB000039 /* MenuBarSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarSettingsSection.swift; sourceTree = "<group>"; };
 		AB000040 /* DropboxSetupGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropboxSetupGuide.swift; sourceTree = "<group>"; };
 		AB000037 /* AnnotationViewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationViewSupport.swift; sourceTree = "<group>"; };
 		AB100011 /* ImageEncoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageEncoderTests.swift; sourceTree = "<group>"; };
 		AB100012 /* VideoExporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporterTests.swift; sourceTree = "<group>"; };
-		AB000028 /* DropboxService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropboxService.swift; sourceTree = "<group>"; };
+		AB000028 /* DropboxClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropboxClient.swift; sourceTree = "<group>"; };
 		AB000029 /* UploadcareProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadcareProvider.swift; sourceTree = "<group>"; };
 		AB000030 /* DropboxProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropboxProvider.swift; sourceTree = "<group>"; };
 		AB100001 /* AnnotationViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationViewTests.swift; sourceTree = "<group>"; };
 		AB100002 /* SkrynTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SkrynTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB100003 /* UploadcareServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadcareServiceTests.swift; sourceTree = "<group>"; };
 		AB100004 /* UploadHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadHistoryTests.swift; sourceTree = "<group>"; };
+		AB100013 /* ProblemsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProblemsTests.swift; sourceTree = "<group>"; };
 		AB100005 /* HotkeyRecorderButtonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderButtonTests.swift; sourceTree = "<group>"; };
-		AB100006 /* RecordingFrameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingFrameTests.swift; sourceTree = "<group>"; };
+		AB100006 /* CaptureAreaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureAreaTests.swift; sourceTree = "<group>"; };
 		AB100007 /* KeystrokeOverlayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeystrokeOverlayTests.swift; sourceTree = "<group>"; };
 		AB100008 /* WebcamBubbleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebcamBubbleTests.swift; sourceTree = "<group>"; };
-		AB100009 /* DropboxServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropboxServiceTests.swift; sourceTree = "<group>"; };
+		AB100009 /* DropboxClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropboxClientTests.swift; sourceTree = "<group>"; };
 		AB100010 /* UploadProvidersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadProvidersTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -182,11 +210,24 @@
 				AB000034 /* ImageEncoder.swift */,
 				AB000035 /* VideoExporter.swift */,
 				AB000036 /* StatusMenu.swift */,
+				AB000041 /* AnnotationRenderer.swift */,
+				AB000042 /* Preferences.swift */,
+				AB000043 /* SettingsKit.swift */,
+				AB000044 /* SettingsSections.swift */,
+				AB000045 /* CaptureSettingsSections.swift */,
+				AB000046 /* HotkeyCenter.swift */,
+				AB000047 /* RecordingSession.swift */,
+				AB000048 /* RecordingOptionsBar.swift */,
+				AB000049 /* Problems.swift */,
+				AB000050 /* UploadCoordinator.swift */,
+				AB000051 /* OutputDelivery.swift */,
+				AB000052 /* MenuBarController.swift */,
+				AB000053 /* WindowPresenter.swift */,
 				AB000038 /* MenuBar.swift */,
 				AB000039 /* MenuBarSettingsSection.swift */,
 				AB000040 /* DropboxSetupGuide.swift */,
 				AB000037 /* AnnotationViewSupport.swift */,
-				AB000028 /* DropboxService.swift */,
+				AB000028 /* DropboxClient.swift */,
 				AB000029 /* UploadcareProvider.swift */,
 				AB000030 /* DropboxProvider.swift */,
 				AB000007 /* Assets.xcassets */,
@@ -212,12 +253,13 @@
 				AB100005 /* HotkeyRecorderButtonTests.swift */,
 				AB100003 /* UploadcareServiceTests.swift */,
 				AB100004 /* UploadHistoryTests.swift */,
+				AB100013 /* ProblemsTests.swift */,
 				AB100011 /* ImageEncoderTests.swift */,
 				AB100012 /* VideoExporterTests.swift */,
-				AB100006 /* RecordingFrameTests.swift */,
+				AB100006 /* CaptureAreaTests.swift */,
 				AB100007 /* KeystrokeOverlayTests.swift */,
 				AB100008 /* WebcamBubbleTests.swift */,
-				AB100009 /* DropboxServiceTests.swift */,
+				AB100009 /* DropboxClientTests.swift */,
 				AB100010 /* UploadProvidersTests.swift */,
 			);
 			path = SkrynTests;
@@ -356,11 +398,24 @@
 				AA000031 /* ImageEncoder.swift in Sources */,
 				AA000032 /* VideoExporter.swift in Sources */,
 				AA000033 /* StatusMenu.swift in Sources */,
+				AA000038 /* AnnotationRenderer.swift in Sources */,
+				AA000039 /* Preferences.swift in Sources */,
+				AA000040 /* SettingsKit.swift in Sources */,
+				AA000041 /* SettingsSections.swift in Sources */,
+				AA000042 /* CaptureSettingsSections.swift in Sources */,
+				AA000043 /* HotkeyCenter.swift in Sources */,
+				AA000044 /* RecordingSession.swift in Sources */,
+				AA000045 /* RecordingOptionsBar.swift in Sources */,
+				AA000046 /* Problems.swift in Sources */,
+				AA000047 /* UploadCoordinator.swift in Sources */,
+				AA000048 /* OutputDelivery.swift in Sources */,
+				AA000049 /* MenuBarController.swift in Sources */,
+				AA000050 /* WindowPresenter.swift in Sources */,
 				AA000035 /* MenuBar.swift in Sources */,
 				AA000036 /* MenuBarSettingsSection.swift in Sources */,
 				AA000037 /* DropboxSetupGuide.swift in Sources */,
 				AA000034 /* AnnotationViewSupport.swift in Sources */,
-				AA000024 /* DropboxService.swift in Sources */,
+				AA000024 /* DropboxClient.swift in Sources */,
 				AA000025 /* UploadcareProvider.swift in Sources */,
 				AA000026 /* DropboxProvider.swift in Sources */,
 			);
@@ -374,13 +429,14 @@
 				AA100004 /* HotkeyRecorderButtonTests.swift in Sources */,
 				AA100010 /* ImageEncoderTests.swift in Sources */,
 				AA100011 /* VideoExporterTests.swift in Sources */,
-				AA100005 /* RecordingFrameTests.swift in Sources */,
+				AA100005 /* CaptureAreaTests.swift in Sources */,
 				AA100006 /* KeystrokeOverlayTests.swift in Sources */,
 				AA100007 /* WebcamBubbleTests.swift in Sources */,
-				AA100008 /* DropboxServiceTests.swift in Sources */,
+				AA100008 /* DropboxClientTests.swift in Sources */,
 				AA100009 /* UploadProvidersTests.swift in Sources */,
 				AA100002 /* UploadcareServiceTests.swift in Sources */,
 				AA100003 /* UploadHistoryTests.swift in Sources */,
+				AA100012 /* ProblemsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,4 +1,4 @@
-// Dropbox account (DropboxAuth) and HTTP API (DropboxService). The provider and its Settings view
+// Dropbox account (DropboxAccount) and HTTP API (DropboxClient). The provider and its Settings view
 // are in DropboxProvider.swift.
 //
 // Each user creates their own app at https://www.dropbox.com/developers/apps:
@@ -44,39 +44,20 @@ enum DropboxError: LocalizedError, Equatable {
 
 // MARK: - Account
 
-/// Dropbox account connection: App key in UserDefaults, refresh token in the Keychain.
+/// The Dropbox sign-in: App key and account name in UserDefaults, refresh token in `tokens` (the Keychain).
+/// Keeps the short-lived access token in memory and refreshes it once when Dropbox rejects it.
 @MainActor
-enum DropboxAuth {
-    private static let appKeyKey = "dropboxAppKey"
-    private static let accountNameKey = "dropboxAccountName"
-    /// Short-lived access token from the last refresh, kept in memory only.
-    private static var cachedToken: DropboxService.AccessToken?
+final class DropboxAccount {
+    /// Where the refresh token lives
+    struct TokenStore {
+        var read: () -> String?
+        var save: (String) throws -> Void
+        var delete: () -> Void
 
-    static var appKey: String? {
-        get {
-            let key = UserDefaults.standard.string(forKey: appKeyKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return key?.isEmpty == false ? key : nil
-        }
-        set {
-            let key = newValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if key.isEmpty {
-                UserDefaults.standard.removeObject(forKey: appKeyKey)
-            } else {
-                UserDefaults.standard.set(key, forKey: appKeyKey)
-            }
+        static var keychain: TokenStore {
+            TokenStore(read: RefreshTokenKeychain.read, save: RefreshTokenKeychain.save, delete: RefreshTokenKeychain.delete)
         }
     }
-
-    /// Cached: the editor toolbar asks on every refresh, and each Keychain read can prompt after a re-sign
-    static var isConnected: Bool {
-        if let cachedIsConnected { return cachedIsConnected }
-        let connected = RefreshTokenKeychain.read() != nil
-        cachedIsConnected = connected
-        return connected
-    }
-    private static var cachedIsConnected: Bool?
-
-    static var accountName: String? { UserDefaults.standard.string(forKey: accountNameKey) }
 
     /// A sign-in in progress: holds the PKCE verifier between opening the browser and pasting the code.
     struct PendingConnection {
@@ -85,48 +66,103 @@ enum DropboxAuth {
         let authorizeURL: URL
     }
 
+    private static let appKeyKey = "dropboxAppKey"
+    private static let accountNameKey = "dropboxAccountName"
+
+    private let client: DropboxClient
+    private let tokens: TokenStore
+    private let defaults: UserDefaults
+    private var cachedToken: DropboxClient.AccessToken?
+    /// Cached: the editor toolbar asks on every refresh, and each Keychain read can prompt after a re-sign
+    private var cachedIsConnected: Bool?
+
+    init(client: DropboxClient, tokens: TokenStore = .keychain, defaults: UserDefaults = .standard) {
+        self.client = client
+        self.tokens = tokens
+        self.defaults = defaults
+    }
+
+    var appKey: String? {
+        get {
+            let key = defaults.string(forKey: Self.appKeyKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return key?.isEmpty == false ? key : nil
+        }
+        set {
+            let key = newValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if key.isEmpty {
+                defaults.removeObject(forKey: Self.appKeyKey)
+            } else {
+                defaults.set(key, forKey: Self.appKeyKey)
+            }
+        }
+    }
+
+    var isConnected: Bool {
+        if let cachedIsConnected { return cachedIsConnected }
+        let connected = tokens.read() != nil
+        cachedIsConnected = connected
+        return connected
+    }
+
+    var accountName: String? { defaults.string(forKey: Self.accountNameKey) }
+
+    /// What's still missing before uploads can go ahead, or nil
+    var setupProblem: DropboxError? {
+        if appKey == nil { return .noAppKey }
+        return isConnected ? nil : .notConnected
+    }
+
     /// Builds the authorize URL (response_type=code, code_challenge S256, token_access_type=offline, no redirect_uri)
     /// and opens it in the browser.
-    static func beginConnecting(appKey: String) -> PendingConnection {
+    func beginConnecting(appKey: String) -> PendingConnection {
         let key = appKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let verifier = DropboxService.makeVerifier()
-        let url = DropboxService.authorizeURL(appKey: key, challenge: DropboxService.pkceChallenge(for: verifier))
+        let verifier = DropboxClient.makeVerifier()
+        let url = DropboxClient.authorizeURL(appKey: key, challenge: DropboxClient.pkceChallenge(for: verifier))
         NSWorkspace.shared.open(url)
         return PendingConnection(appKey: key, verifier: verifier, authorizeURL: url)
     }
 
-    /// Exchanges the pasted code, stores the refresh token in the Keychain, caches the account display name.
-    static func finishConnecting(_ pending: PendingConnection, code: String, session: URLSession = .shared) async throws {
-        let tokens = try await DropboxService.exchangeCode(
-            code.trimmingCharacters(in: .whitespacesAndNewlines),
-            verifier: pending.verifier, appKey: pending.appKey, session: session)
-        let name = try await DropboxService.accountName(accessToken: tokens.access.value, session: session)
-        try RefreshTokenKeychain.save(tokens.refreshToken)
+    /// Exchanges the pasted code, stores the refresh token, remembers the account display name.
+    func finishConnecting(_ pending: PendingConnection, code: String) async throws {
+        let tokens = try await client.exchangeCode(
+            code.trimmingCharacters(in: .whitespacesAndNewlines), verifier: pending.verifier, appKey: pending.appKey
+        )
+        let name = try await client.accountName(accessToken: tokens.access.value)
+        try self.tokens.save(tokens.refreshToken)
         cachedIsConnected = true
         appKey = pending.appKey
         cachedToken = tokens.access
-        UserDefaults.standard.set(name, forKey: accountNameKey)
+        defaults.set(name, forKey: Self.accountNameKey)
     }
 
     /// Best-effort token revoke, then forgets the token and account name.
-    static func disconnect(session: URLSession = .shared) async {
-        if let token = try? await accessToken(session: session) {
-            try? await DropboxService.revoke(accessToken: token, session: session)
+    func disconnect() async {
+        if let token = try? await accessToken() {
+            try? await client.revoke(accessToken: token)
         }
-        RefreshTokenKeychain.delete()
+        tokens.delete()
         cachedIsConnected = false
         cachedToken = nil
-        UserDefaults.standard.removeObject(forKey: accountNameKey)
+        defaults.removeObject(forKey: Self.accountNameKey)
+    }
+
+    /// Runs `call` with the access token; when Dropbox rejects it (401), refreshes once and retries.
+    func authorized<T>(_ call: (String) async throws -> T) async throws -> T {
+        do {
+            return try await call(await accessToken())
+        } catch DropboxError.expired {
+            return try await call(await accessToken(forceRefresh: true))
+        }
     }
 
     /// The cached access token, refreshed when missing, within 60s of expiry, or when `forceRefresh` is set.
-    static func accessToken(forceRefresh: Bool = false, session: URLSession = .shared) async throws -> String {
+    private func accessToken(forceRefresh: Bool = false) async throws -> String {
         if !forceRefresh, let token = cachedToken, token.expiresAt.timeIntervalSinceNow > 60 {
             return token.value
         }
         guard let appKey else { throw DropboxError.noAppKey }
-        guard let refreshToken = RefreshTokenKeychain.read() else { throw DropboxError.notConnected }
-        let token = try await DropboxService.accessToken(refreshToken: refreshToken, appKey: appKey, session: session)
+        guard let refreshToken = tokens.read() else { throw DropboxError.notConnected }
+        let token = try await client.accessToken(refreshToken: refreshToken, appKey: appKey)
         cachedToken = token
         return token.value
     }
@@ -165,7 +201,14 @@ private enum RefreshTokenKeychain {
 
 // MARK: - HTTP API
 
-enum DropboxService {
+/// The Dropbox HTTP API over one URLSession (a stubbed one in tests).
+struct DropboxClient {
+    let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
+
     struct AccessToken {
         let value: String
         let expiresAt: Date
@@ -211,28 +254,26 @@ enum DropboxService {
     }
 
     /// oauth2/token with grant_type=authorization_code and the PKCE verifier (no client secret).
-    static func exchangeCode(_ code: String, verifier: String, appKey: String,
-                             session: URLSession = .shared) async throws -> Tokens {
+    func exchangeCode(_ code: String, verifier: String, appKey: String) async throws -> Tokens {
         let json = try await tokenRequest([
             ("code", code), ("grant_type", "authorization_code"),
             ("code_verifier", verifier), ("client_id", appKey)
-        ], session: session, onInvalidGrant: .api("The code is invalid or expired. Connect again"))
+        ], onInvalidGrant: .api("The code is invalid or expired. Connect again"))
         guard let refreshToken = json["refresh_token"] as? String else { throw DropboxError.invalidResponse }
-        return Tokens(access: try accessToken(from: json), refreshToken: refreshToken)
+        return Tokens(access: try Self.accessToken(from: json), refreshToken: refreshToken)
     }
 
     /// oauth2/token with grant_type=refresh_token (no client secret).
-    static func accessToken(refreshToken: String, appKey: String,
-                            session: URLSession = .shared) async throws -> AccessToken {
+    func accessToken(refreshToken: String, appKey: String) async throws -> AccessToken {
         let json = try await tokenRequest([
             ("grant_type", "refresh_token"), ("refresh_token", refreshToken), ("client_id", appKey)
-        ], session: session, onInvalidGrant: .expired)
-        return try accessToken(from: json)
+        ], onInvalidGrant: .expired)
+        return try Self.accessToken(from: json)
     }
 
     /// users/get_current_account → name.display_name.
-    static func accountName(accessToken: String, session: URLSession = .shared) async throws -> String {
-        let data = try await rpc("users/get_current_account", args: nil, accessToken: accessToken, session: session)
+    func accountName(accessToken: String) async throws -> String {
+        let data = try await rpc("users/get_current_account", args: nil, accessToken: accessToken)
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let name = (json["name"] as? [String: Any])?["display_name"] as? String else {
             throw DropboxError.invalidResponse
@@ -241,16 +282,15 @@ enum DropboxService {
     }
 
     /// auth/token/revoke: disables the token (and the sign-in it came from).
-    static func revoke(accessToken: String, session: URLSession = .shared) async throws {
-        _ = try await rpc("auth/token/revoke", args: nil, accessToken: accessToken, session: session)
+    func revoke(accessToken: String) async throws {
+        _ = try await rpc("auth/token/revoke", args: nil, accessToken: accessToken)
     }
 
-    private static func tokenRequest(_ params: [(String, String)], session: URLSession,
-                                     onInvalidGrant: DropboxError) async throws -> [String: Any] {
-        var request = URLRequest(url: tokenURL)
+    private func tokenRequest(_ params: [(String, String)], onInvalidGrant: DropboxError) async throws -> [String: Any] {
+        var request = URLRequest(url: Self.tokenURL)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.httpBody = Data(params.map { "\($0)=\(formEncode($1))" }.joined(separator: "&").utf8)
+        request.httpBody = Data(params.map { "\($0)=\(Self.formEncode($1))" }.joined(separator: "&").utf8)
         let (data, response) = try await session.data(for: request)
         guard let status = (response as? HTTPURLResponse)?.statusCode else { throw DropboxError.invalidResponse }
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
@@ -273,18 +313,17 @@ enum DropboxService {
     /// Uploads the file to `path` (mode add, autorename) and returns the stored path_display.
     /// Files up to `singleRequestLimit` go through files/upload, streamed from disk; bigger ones through
     /// an upload session read in `chunkSize` pieces. Both parameters exist for tests.
-    static func upload(fileURL: URL, path: String, accessToken: String, session: URLSession = .shared,
-                       chunkSize: Int = sessionChunkSize,
-                       singleRequestLimit: Int = singleUploadLimit) async throws -> String {
+    func upload(fileURL: URL, path: String, accessToken: String, chunkSize: Int = sessionChunkSize,
+                singleRequestLimit: Int = singleUploadLimit) async throws -> String {
         let size = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         let commit: [String: Any] = ["path": path, "mode": "add", "autorename": true]
         let data: Data
         if size <= singleRequestLimit {
             data = try await contentUpload("files/upload", args: commit, body: .file(fileURL),
-                                           accessToken: accessToken, session: session)
+                                           accessToken: accessToken)
         } else {
             data = try await sessionUpload(fileURL: fileURL, commit: commit, chunkSize: chunkSize,
-                                           accessToken: accessToken, session: session)
+                                           accessToken: accessToken)
         }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let stored = json["path_display"] as? String ?? json["path_lower"] as? String else {
@@ -295,8 +334,8 @@ enum DropboxService {
 
     /// upload_session/start with the first chunk → append_v2 for the middle ones → finish with the last.
     /// Returns finish's response (the file metadata).
-    private static func sessionUpload(fileURL: URL, commit: [String: Any], chunkSize: Int,
-                                      accessToken: String, session: URLSession) async throws -> Data {
+    private func sessionUpload(fileURL: URL, commit: [String: Any], chunkSize: Int,
+                               accessToken: String) async throws -> Data {
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer { try? handle.close() }
         let size = try handle.seekToEnd()
@@ -305,7 +344,7 @@ enum DropboxService {
         // ponytail: sequential chunks, no retry; use session_type concurrent if long recordings upload too slowly
         let first = try handle.read(upToCount: chunkSize) ?? Data()
         let start = try await contentUpload("files/upload_session/start", args: [:], body: .data(first),
-                                            accessToken: accessToken, session: session)
+                                            accessToken: accessToken)
         guard let json = try? JSONSerialization.jsonObject(with: start) as? [String: Any],
               let sessionID = json["session_id"] as? String else { throw DropboxError.invalidResponse }
 
@@ -315,10 +354,10 @@ enum DropboxService {
             let cursor: [String: Any] = ["session_id": sessionID, "offset": offset]
             if offset + UInt64(chunk.count) >= size {
                 return try await contentUpload("files/upload_session/finish", args: ["cursor": cursor, "commit": commit],
-                                               body: .data(chunk), accessToken: accessToken, session: session)
+                                               body: .data(chunk), accessToken: accessToken)
             }
             _ = try await contentUpload("files/upload_session/append_v2", args: ["cursor": cursor],
-                                        body: .data(chunk), accessToken: accessToken, session: session)
+                                        body: .data(chunk), accessToken: accessToken)
             offset += UInt64(chunk.count)
         }
     }
@@ -327,20 +366,20 @@ enum DropboxService {
 
     /// sharing/create_shared_link_with_settings; when a link already exists, reuses the one in the error's
     /// metadata, or looks it up with sharing/list_shared_links.
-    static func sharedLink(path: String, accessToken: String, session: URLSession = .shared) async throws -> String {
+    func sharedLink(path: String, accessToken: String) async throws -> String {
         let (status, data) = try await perform(
-            jsonRequest("sharing/create_shared_link_with_settings", args: ["path": path], accessToken: accessToken),
-            body: nil, session: session)
+            Self.jsonRequest("sharing/create_shared_link_with_settings", args: ["path": path], accessToken: accessToken),
+            body: nil)
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         if (200...299).contains(status), let url = json["url"] as? String { return url }
         guard status == 409, (json["error_summary"] as? String)?.hasPrefix("shared_link_already_exists") == true else {
-            throw apiError(status: status, data: data)
+            throw Self.apiError(status: status, data: data)
         }
         let existing = (json["error"] as? [String: Any])?["shared_link_already_exists"] as? [String: Any]
         if let url = existing?["url"] as? String { return url }
 
         let list = try await rpc("sharing/list_shared_links", args: ["path": path, "direct_only": true],
-                                 accessToken: accessToken, session: session)
+                                 accessToken: accessToken)
         guard let listJSON = try? JSONSerialization.jsonObject(with: list) as? [String: Any],
               let links = listJSON["links"] as? [[String: Any]],
               let url = links.first?["url"] as? String else { throw DropboxError.invalidResponse }
@@ -367,24 +406,22 @@ enum DropboxService {
     }
 
     /// RPC endpoint on api.dropboxapi.com: JSON args in the body (none for Void-arg routes).
-    private static func rpc(_ route: String, args: [String: Any]?, accessToken: String,
-                            session: URLSession) async throws -> Data {
-        let (status, data) = try await perform(jsonRequest(route, args: args, accessToken: accessToken),
-                                               body: nil, session: session)
-        guard (200...299).contains(status) else { throw apiError(status: status, data: data) }
+    private func rpc(_ route: String, args: [String: Any]?, accessToken: String) async throws -> Data {
+        let (status, data) = try await perform(Self.jsonRequest(route, args: args, accessToken: accessToken), body: nil)
+        guard (200...299).contains(status) else { throw Self.apiError(status: status, data: data) }
         return data
     }
 
     /// Content-upload endpoint on content.dropboxapi.com: args in Dropbox-API-Arg, raw bytes in the body.
-    private static func contentUpload(_ route: String, args: [String: Any], body: Body, accessToken: String,
-                                      session: URLSession) async throws -> Data {
-        var request = URLRequest(url: URL(string: contentBase + route)!)
+    private func contentUpload(_ route: String, args: [String: Any], body: Body,
+                               accessToken: String) async throws -> Data {
+        var request = URLRequest(url: URL(string: Self.contentBase + route)!)
         request.httpMethod = "POST"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        request.setValue(try headerSafeJSON(args), forHTTPHeaderField: "Dropbox-API-Arg")
-        let (status, data) = try await perform(request, body: body, session: session)
-        guard (200...299).contains(status) else { throw apiError(status: status, data: data) }
+        request.setValue(try Self.headerSafeJSON(args), forHTTPHeaderField: "Dropbox-API-Arg")
+        let (status, data) = try await perform(request, body: body)
+        guard (200...299).contains(status) else { throw Self.apiError(status: status, data: data) }
         return data
     }
 
@@ -400,8 +437,7 @@ enum DropboxService {
     }
 
     /// Sends the request; maps 401 to `.expired` / `.missingScope` and returns any other status with the body.
-    private static func perform(_ request: URLRequest, body: Body?,
-                                session: URLSession) async throws -> (Int, Data) {
+    private func perform(_ request: URLRequest, body: Body?) async throws -> (Int, Data) {
         let (data, response): (Data, URLResponse)
         switch body {
         case .data(let bytes): (data, response) = try await session.upload(for: request, from: bytes)

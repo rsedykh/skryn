@@ -13,23 +13,18 @@ final class UploadcareProvider: UploadProvider {
         return key
     }
 
-    init() {
-        UserDefaults.standard.removeObject(forKey: "uploadcareCdnBase")  // legacy: the CDN now comes from the key
-    }
-
     var setupProblem: String? {
         Self.publicKey == nil ? "Add your Uploadcare public key in Settings" : nil
     }
 
-    func makeSettingsView(onChange: @escaping () -> Void) -> NSView {
+    func makeSettingsView(onChange: @escaping () -> Void) -> SettingsForm {
         UploadcareSettingsView(onChange: onChange)
     }
 
     func upload(fileURL: URL, filename: String, contentType: String) async throws -> String {
         guard let publicKey = Self.publicKey else { throw UploadcareError.serverError("No public key") }
         return try await UploadcareService.upload(
-            fileURL: fileURL, filename: filename, contentType: contentType, publicKey: publicKey,
-            cdnBase: UploadcareService.cdnBase(forPublicKey: publicKey)
+            fileURL: fileURL, filename: filename, contentType: contentType, publicKey: publicKey
         )
     }
 }

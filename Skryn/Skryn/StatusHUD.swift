@@ -1,13 +1,14 @@
 import AppKit
 
+/// How a confirmation reads: shared by the HUD (`StatusHUD`) and notifications (`Notifier`).
+enum FeedbackStyle { case success, failure, info }
+
 /// Immediate confirmation of what the user just did ("Copied", "Saved to Desktop"): a compact HUD capsule
 /// in the toolbar's look, near the bottom of the screen under the pointer like a system toast, gone after
 /// a moment. Needs no permission and Focus doesn't hide it, unlike notifications (`Notifier`), which carry
 /// results that arrive later or need a button.
 @MainActor
 enum StatusHUD {
-    enum Style { case success, failure, info }
-
     private static var panel: NSPanel?
     private static var hideWork: DispatchWorkItem?
     /// Bumped on every show, so a stale hide doesn't order out a HUD that replaced it
@@ -22,7 +23,7 @@ enum StatusHUD {
     static var isShowing: Bool { panel?.isVisible == true }
 
     /// Shows the HUD, morphing in place from one already on screen. `symbol` overrides the style's icon.
-    static func show(_ message: String, detail: String? = nil, symbol: String? = nil, style: Style = .success) {
+    static func show(_ message: String, detail: String? = nil, symbol: String? = nil, style: FeedbackStyle = .success) {
         hideWork?.cancel()
         generation += 1
         let panel = panel ?? makePanel()
@@ -147,7 +148,7 @@ enum StatusHUD {
 
     private static let iconID = NSUserInterfaceItemIdentifier("StatusHUD.icon")
 
-    private static func tint(for style: Style) -> NSColor {
+    private static func tint(for style: FeedbackStyle) -> NSColor {
         switch style {
         case .success: NSColor(srgbRed: 0.45, green: 0.88, blue: 0.56, alpha: 1)
         case .failure: NSColor(srgbRed: 1, green: 0.64, blue: 0.32, alpha: 1)
@@ -155,7 +156,7 @@ enum StatusHUD {
         }
     }
 
-    private static func defaultSymbol(for style: Style) -> String {
+    private static func defaultSymbol(for style: FeedbackStyle) -> String {
         switch style {
         case .success: "checkmark"
         case .failure: "exclamationmark"
@@ -164,7 +165,7 @@ enum StatusHUD {
     }
 
     /// Icon in a softly tinted circle; its leading inset matches the vertical one so it nests in the capsule
-    private static func makeContent(message: String, detail: String?, symbol: String?, style: Style) -> NSView {
+    private static func makeContent(message: String, detail: String?, symbol: String?, style: FeedbackStyle) -> NSView {
         let tint = tint(for: style)
         let isDefault = symbol == nil
         let image = NSImage(systemSymbolName: symbol ?? defaultSymbol(for: style), accessibilityDescription: nil)
@@ -222,18 +223,10 @@ enum StatusHUD {
     }
 
     private static func makePanel() -> NSPanel {
-        let panel = NSPanel(
-            contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false
-        )
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
+        let panel = HUDPanel()
         panel.ignoresMouseEvents = true
         panel.level = .statusBar
-        panel.hidesOnDeactivate = false
-        panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
-        panel.appearance = NSAppearance(named: .darkAqua)
         let surface = NSView()
         surface.wantsLayer = true
         HUDStyle.paintSurface(surface.layer)

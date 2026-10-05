@@ -7,30 +7,20 @@ import QuartzCore
 final class RecordingFrame {
     private let window: RecordingFrameWindow
     private let layers: RecordingFrameLayers
-    private var countdownTimer: Timer?
-    /// Resumes a running `countdown()` exactly once; nil when no countdown is in progress.
-    private var finishCountdown: ((Bool) -> Void)?
+    /// The running `countdown()`; cancelling it (Esc, `close()`) ends the countdown as cancelled.
+    private var countdownTask: Task<Void, Error>?
 
-    /// `rect` is in `screen`-local points with a TOP-LEFT origin (same as SCStreamConfiguration.sourceRect).
-    init(screen: NSScreen, rect: CGRect) {
-        let screenFrame = screen.frame
-        let area = Self.windowFrame(for: rect, on: screenFrame)
-            .offsetBy(dx: -screenFrame.minX, dy: -screenFrame.minY)
+    init(area: CaptureArea) {
+        let screenFrame = area.screen.frame
         window = RecordingFrameWindow(screenFrame: screenFrame)
         layers = RecordingFrameLayers(
-            bounds: CGRect(origin: .zero, size: screenFrame.size), area: area, scale: screen.backingScaleFactor
+            bounds: CGRect(origin: .zero, size: screenFrame.size),
+            area: area.globalFrame.offsetBy(dx: -screenFrame.minX, dy: -screenFrame.minY),
+            scale: area.screen.backingScaleFactor
         )
         window.contentView?.layer = layers.root
         window.contentView?.wantsLayer = true
-        window.onEscape = { [weak self] in self?.endCountdown(false) }
-    }
-
-    /// Converts a top-left-origin, screen-local rect into AppKit global coordinates (bottom-left origin).
-    static func windowFrame(for rect: CGRect, on screenFrame: CGRect) -> CGRect {
-        CGRect(
-            x: screenFrame.minX + rect.minX, y: screenFrame.maxY - rect.maxY,
-            width: rect.width, height: rect.height
-        )
+        window.onEscape = { [weak self] in self?.countdownTask?.cancel() }
     }
 
     /// Orders the frame in and draws the border in: it settles inward onto the area, then breathes.
@@ -41,7 +31,7 @@ final class RecordingFrame {
 
     /// Fades the frame out quickly, then closes it. Ends a running countdown as cancelled.
     func close() {
-        endCountdown(false)
+        countdownTask?.cancel()
         window.setInteractive(false)
         let window = window
         HUDMotion.hide(window) {
@@ -53,28 +43,22 @@ final class RecordingFrame {
     /// Shows a large 3 → 2 → 1 in the middle of the area (about 1s each, with a subtle scale/fade).
     /// Returns false if the user pressed Esc (cancel), true when it finishes.
     func countdown(from seconds: Int = 3) async -> Bool {
-        guard seconds > 0, finishCountdown == nil else { return seconds <= 0 }
-        var remaining = seconds
+        guard seconds > 0, countdownTask == nil else { return seconds <= 0 }
         layers.setCountdownVisible(true)
-        layers.showDigit(remaining)
         window.setInteractive(true)
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
 
-        let finished = await withCheckedContinuation { continuation in
-            finishCountdown = { continuation.resume(returning: $0) }
-            countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    remaining -= 1
-                    if remaining > 0 {
-                        self.layers.showDigit(remaining)
-                    } else {
-                        self.endCountdown(true)
-                    }
-                }
+        let layers = layers
+        let task = Task {
+            for remaining in stride(from: seconds, to: 0, by: -1) {
+                layers.showDigit(remaining)
+                try await Task.sleep(for: .seconds(1))
             }
         }
+        countdownTask = task
+        let finished = (try? await task.value) != nil
+        countdownTask = nil
 
         layers.setCountdownVisible(false)
         let wasKey = window.isKeyWindow
@@ -83,34 +67,17 @@ final class RecordingFrame {
         if finished && wasKey { NSApp.deactivate() }
         return finished
     }
-
-    /// Resumes the pending countdown (if any) exactly once.
-    private func endCountdown(_ finished: Bool) {
-        countdownTimer?.invalidate()
-        countdownTimer = nil
-        let finish = finishCountdown
-        finishCountdown = nil
-        finish?(finished)
-    }
 }
 
 // MARK: - Window
 
-private final class RecordingFrameWindow: NSWindow {
-    var onEscape: (() -> Void)?
+private final class RecordingFrameWindow: OverlayPanel {
     private var acceptsKey = false
 
     init(screenFrame: CGRect) {
-        super.init(contentRect: screenFrame, styleMask: .borderless, backing: .buffered, defer: false)
-        setFrame(screenFrame, display: false)
         // Above normal windows, below menus, alerts and modal panels.
-        level = .floating
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = false
+        super.init(frame: screenFrame, level: .floating, behavior: [.stationary, .ignoresCycle])
         ignoresMouseEvents = true
-        isReleasedWhenClosed = false
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
     }
 
     override var canBecomeKey: Bool { acceptsKey }
@@ -119,18 +86,6 @@ private final class RecordingFrameWindow: NSWindow {
     func setInteractive(_ interactive: Bool) {
         acceptsKey = interactive
         ignoresMouseEvents = !interactive
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { // ESC
-            onEscape?()
-        } else {
-            super.keyDown(with: event)
-        }
-    }
-
-    override func cancelOperation(_ sender: Any?) {
-        onEscape?()
     }
 }
 
@@ -230,7 +185,7 @@ private final class RecordingFrameLayers {
         countdown.opacity = visible ? 1 : 0
         CATransaction.commit()
         guard !HUDMotion.reduceMotion else { return }
-        let grow = visible ? Self.basic("transform.scale", from: 0.92, to: 1) : Self.basic("transform.scale", from: 1, to: 0.94)
+        let grow = CABasicAnimation(keyPath: "transform.scale", from: visible ? 0.92 : 1, to: visible ? 1 : 0.94)
         grow.duration = duration
         grow.timingFunction = timing
         countdown.add(grow, forKey: "visibility")
@@ -254,13 +209,13 @@ private final class RecordingFrameLayers {
         digit = next
 
         let pop = CAAnimationGroup()
-        pop.animations = [Self.basic("opacity", from: 0, to: 1)]
-        if !reduce { pop.animations?.append(Self.basic("transform.scale", from: 1.25, to: 1)) }
+        pop.animations = [CABasicAnimation(keyPath: "opacity", from: 0, to: 1)]
+        if !reduce { pop.animations?.append(CABasicAnimation(keyPath: "transform.scale", from: 1.25, to: 1)) }
         pop.duration = HUDMotion.enterDuration * 1.6
         pop.timingFunction = HUDMotion.enterTiming
         next.add(pop, forKey: "enter")
 
-        let sweep = Self.basic("strokeEnd", from: 0, to: 1)
+        let sweep = CABasicAnimation(keyPath: "strokeEnd", from: 0, to: 1)
         sweep.duration = 1
         sweep.timingFunction = CAMediaTimingFunction(name: .linear)
         ring.add(sweep, forKey: "sweep")
@@ -322,13 +277,6 @@ private final class RecordingFrameLayers {
 
     // MARK: Helpers
 
-    private static func basic(_ keyPath: String, from: Any, to: Any) -> CABasicAnimation {
-        let animation = CABasicAnimation(keyPath: keyPath)
-        animation.fromValue = from
-        animation.toValue = to
-        return animation
-    }
-
     private static func stroke(_ path: CGPath, color: NSColor, width: CGFloat) -> CAShapeLayer {
         let layer = CAShapeLayer()
         layer.path = path
@@ -352,42 +300,5 @@ private final class RecordingFrameLayers {
         path.addRect(bounds)
         path.addRect(area)
         return path
-    }
-}
-
-/// Everything shown on screen around a recording: the frame (never captured) and, when switched on,
-/// the keystroke HUD and camera bubble (captured by window ID). They must be on screen before the
-/// recorder lists windows, so they're shown before it starts.
-@MainActor
-struct RecordingOverlays {
-    let frame: RecordingFrame
-    let keystrokes: KeystrokeOverlay?
-    let camera: WebcamBubble?
-    /// Things the user should know (missing permissions), shown when recording starts
-    var notices: [String]
-
-    var capturedWindowIDs: [CGWindowID] { [keystrokes?.windowID, camera?.windowID].compactMap { $0 } }
-
-    static func show(screen: NSScreen, area: CGRect, options: RecordingOptions) async -> RecordingOverlays {
-        let frame = RecordingFrame(screen: screen, rect: area)
-        frame.show()
-        var notices: [String] = []
-        let keystrokes = options.showKeystrokes
-            ? KeystrokeOverlay.start(screen: screen, area: area, layoutID: options.keystrokeLayoutID) : nil
-        if options.showKeystrokes && keystrokes == nil {
-            notices.append("Keystrokes need Accessibility permission — allow Skryn, then record again")
-        }
-        let camera = options.camera
-            ? await WebcamBubble.start(screen: screen, area: area, deviceID: options.cameraDeviceID) : nil
-        if options.camera && camera == nil {
-            notices.append("Camera unavailable — check Camera permission for Skryn")
-        }
-        return RecordingOverlays(frame: frame, keystrokes: keystrokes, camera: camera, notices: notices)
-    }
-
-    func tearDown() {
-        frame.close()
-        keystrokes?.stop()
-        camera?.stop()
     }
 }

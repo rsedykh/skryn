@@ -17,14 +17,13 @@ final class WebcamBubble {
     var windowID: CGWindowID { CGWindowID(panel.windowNumber) }
 
     /// Asks for camera permission if needed, starts the camera, and shows the bubble at the bottom-right
-    /// of `area` (`screen`-local points, TOP-LEFT origin, same as SCStreamConfiguration.sourceRect).
-    /// Returns nil if permission is denied or no camera is available. The window is on screen when this returns.
-    static func start(screen: NSScreen, area: CGRect, deviceID: String?) async -> WebcamBubble? {
+    /// of `area`. Returns nil if permission is denied or no camera is available. The window is on screen
+    /// when this returns.
+    static func start(area: CaptureArea, deviceID: String?) async -> WebcamBubble? {
         guard await cameraAccessGranted() else { return nil }
         guard let camera = await CameraSession.make(deviceID: deviceID) else { return nil }
 
-        let globalArea = globalRect(fromTopLeft: area, screenFrame: screen.frame)
-        let bubble = WebcamBubble(camera: camera, frame: initialFrame(in: globalArea))
+        let bubble = WebcamBubble(camera: camera, frame: initialFrame(in: area.globalFrame))
         await camera.startAndWaitForFirstFrame(timeout: 1)
         bubble.panel.orderFrontRegardless()
         bubble.view.animateIn()
@@ -33,16 +32,9 @@ final class WebcamBubble {
 
     private init(camera: CameraSession, frame: CGRect) {
         self.camera = camera
-        panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel],
-                        backing: .buffered, defer: false)
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false  // the circle draws its own; a window shadow would be square
-        panel.level = .floating
-        panel.hidesOnDeactivate = false
+        // No window shadow: the circle draws its own, a window's would be square
+        panel = OverlayPanel(frame: frame, level: .floating, nonactivating: true)
         panel.isMovableByWindowBackground = true
-        panel.isReleasedWhenClosed = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         view = BubbleView(previewLayer: camera.makePreviewLayer(), diameter: frame.width - 2 * Self.shadowPadding)
         panel.contentView = view
@@ -85,12 +77,6 @@ final class WebcamBubble {
     }
 
     // MARK: - Geometry
-
-    /// Converts a top-left-origin rect local to a screen into AppKit global (bottom-left origin) coordinates.
-    static func globalRect(fromTopLeft rect: CGRect, screenFrame: CGRect) -> CGRect {
-        CGRect(x: screenFrame.minX + rect.minX, y: screenFrame.maxY - rect.maxY,
-               width: rect.width, height: rect.height)
-    }
 
     /// Window frame (circle plus shadow padding) placing the circle `inset` from `area`'s bottom-right corner.
     static func initialFrame(in area: CGRect) -> CGRect {
@@ -165,8 +151,8 @@ private final class BubbleView: NSView {
     /// Grows from 0.9 while fading in (a plain fade with Reduce Motion).
     func animateIn() {
         let group = CAAnimationGroup()
-        group.animations = [Self.basic("opacity", from: 0, to: 1)]
-        if !HUDMotion.reduceMotion { group.animations?.append(Self.basic("transform.scale", from: 0.9, to: 1)) }
+        group.animations = [CABasicAnimation(keyPath: "opacity", from: 0, to: 1)]
+        if !HUDMotion.reduceMotion { group.animations?.append(CABasicAnimation(keyPath: "transform.scale", from: 0.9, to: 1)) }
         group.duration = HUDMotion.enterDuration * 1.4
         group.timingFunction = HUDMotion.enterTiming
         bubble.add(group, forKey: "enter")
@@ -218,13 +204,6 @@ private final class BubbleView: NSView {
         bubble.shadowOpacity = shadow.opacity
         bubble.shadowRadius = shadow.radius
         bubble.shadowOffset = CGSize(width: 0, height: shadow.offset)
-    }
-
-    private static func basic(_ keyPath: String, from: Any, to: Any) -> CABasicAnimation {
-        let animation = CABasicAnimation(keyPath: keyPath)
-        animation.fromValue = from
-        animation.toValue = to
-        return animation
     }
 }
 

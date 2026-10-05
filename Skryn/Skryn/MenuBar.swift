@@ -3,8 +3,12 @@ import UniformTypeIdentifiers
 
 // MARK: - Menu Bar Drop Target
 
+/// Sits on top of a status item button: clicks pass through (`hitTest` returns nil), dragged files land here.
 final class StatusItemDropView: NSView {
-    weak var appDelegate: AppDelegate?
+    /// The first dropped image
+    var onDrop: (URL) -> Void = { _ in }
+    /// Something other than images is being dragged over the icon
+    var onReject: () -> Void = {}
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -18,7 +22,7 @@ final class StatusItemDropView: NSView {
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
         guard allFilesAreImages(sender) else {
-            appDelegate?.showRejectedFileIcon()
+            onReject()
             return []
         }
         return .copy
@@ -26,7 +30,7 @@ final class StatusItemDropView: NSView {
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         guard let urls = fileURLs(from: sender), let url = urls.first else { return false }
-        appDelegate?.openDroppedImage(url)
+        onDrop(url)
         return true
     }
 
@@ -64,6 +68,25 @@ enum MenuBarAction: String, CaseIterable {
         }
     }
 
+    /// The menu's action tiles
+    var tileTitle: String {
+        switch self {
+        case .screenshot: "Screenshot"
+        case .area: "Area"
+        case .record: "Record"
+        }
+    }
+
+    var tileSymbol: String { self == .screenshot ? "camera.fill" : symbol }
+
+    var tint: NSColor {
+        switch self {
+        case .screenshot: .systemBlue
+        case .area: .systemTeal
+        case .record: .systemRed
+        }
+    }
+
     /// Recording needs macOS 15
     static var available: [MenuBarAction] {
         if #available(macOS 15.0, *) { return allCases }
@@ -73,44 +96,21 @@ enum MenuBarAction: String, CaseIterable {
 
 /// Menu bar behavior (Settings → Menu Bar): which icons show, what clicking one does, and which
 /// action tiles the menu starts with.
-struct MenuBarSettings: Equatable {
+struct MenuBarSettings: StoredSettings {
     /// At least one; the first in `MenuBarAction` order is the main icon (upload progress, errors)
     var icons: [MenuBarAction] = [.screenshot]
     /// A click opens the menu instead of doing the icon's action (right-click always opens it)
     var clickOpensMenu = false
     var menuTiles: [MenuBarAction] = MenuBarAction.allCases
 
-    private enum Key {
-        static let icons = "menuBarIcons"
-        static let clickOpensMenu = "menuBarClickOpensMenu"
-        static let menuTiles = "menuBarTiles"
-        static let legacyLayout = "menuBarLayout"  // "single" / "split" / "splitWithArea"
-    }
+    static let didChange = Notification.Name("MenuBarSettingsDidChange")
 
-    static var current: MenuBarSettings {
-        get {
-            let defaults = UserDefaults.standard
-            var settings = MenuBarSettings()
-            if let stored = defaults.stringArray(forKey: Key.icons) {
-                settings.icons = stored.compactMap(MenuBarAction.init)
-            } else if let legacy = defaults.string(forKey: Key.legacyLayout) {
-                settings.icons = legacy == "single" ? [.screenshot]
-                    : legacy == "split" ? [.screenshot, .record] : MenuBarAction.allCases
-            }
-            settings.clickOpensMenu = defaults.bool(forKey: Key.clickOpensMenu)
-            if let stored = defaults.stringArray(forKey: Key.menuTiles) {
-                settings.menuTiles = stored.compactMap(MenuBarAction.init)
-            }
-            return settings.normalized
-        }
-        set {
-            let settings = newValue.normalized
-            let defaults = UserDefaults.standard
-            defaults.set(settings.icons.map(\.rawValue), forKey: Key.icons)
-            defaults.set(settings.clickOpensMenu, forKey: Key.clickOpensMenu)
-            defaults.set(settings.menuTiles.map(\.rawValue), forKey: Key.menuTiles)
-            defaults.removeObject(forKey: Key.legacyLayout)
-        }
+    static var fields: [StoredField<Self>] {
+        [
+            .rawList("menuBarIcons", \.icons),
+            .value("menuBarClickOpensMenu", \.clickOpensMenu),
+            .rawList("menuBarTiles", \.menuTiles),
+        ]
     }
 
     /// Ordered like `MenuBarAction.allCases`, without what this Mac can't do, and never without an icon.

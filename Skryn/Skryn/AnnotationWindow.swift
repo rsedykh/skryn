@@ -1,7 +1,17 @@
 import AppKit
 
+/// The screenshot editor: the screenshot (`annotationView`) in a borderless window, with the dimmed
+/// backdrop behind it and the toolbar under it, which it creates, shows and closes along with itself.
 final class AnnotationWindow: NSWindow {
-    init(screen: NSScreen, screenshot: NSImage) {
+    let annotationView: AnnotationView
+    private let backdrop: EditorBackdrop
+    private let editorToolbar: AnnotationToolbar
+    private let exit = WindowExit()
+    /// The exit is playing: input is dropped, later closes are ignored
+    private var isClosing: Bool { exit.isRunning }
+
+    /// `onAction` runs Save / Copy / Upload; the editor closes when it returns true.
+    init(screen: NSScreen, screenshot: NSImage, onAction: @escaping (SaveAction, RenderedScreenshot) -> Bool) {
         // Room under the image for the toolbar, which floats below the window
         let toolbarSpace = AnnotationToolbar.height + AnnotationToolbar.gap
         var maxRect = screen.frame.insetBy(
@@ -27,6 +37,9 @@ final class AnnotationWindow: NSWindow {
             height: windowSize.height
         )
 
+        annotationView = AnnotationView(frame: NSRect(origin: .zero, size: windowRect.size), screenshot: screenshot)
+        backdrop = EditorBackdrop(screen: screen)
+        editorToolbar = AnnotationToolbar(editor: annotationView)
         super.init(
             contentRect: windowRect,
             styleMask: .borderless,
@@ -39,10 +52,10 @@ final class AnnotationWindow: NSWindow {
         self.hasShadow = true
         self.isReleasedWhenClosed = false
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        self.contentView = AnnotationView(
-            frame: NSRect(origin: .zero, size: windowRect.size),
-            screenshot: screenshot
-        )
+        self.contentView = annotationView
+        annotationView.onAction = { [weak self] action, shot in
+            if onAction(action, shot) { self?.close() }
+        }
     }
 
     override var canBecomeKey: Bool { true }
@@ -50,30 +63,23 @@ final class AnnotationWindow: NSWindow {
 
     // MARK: - Entrance and exit
 
-    /// Set by the first `close()`: the exit is playing, input is dropped, later closes are ignored
-    private(set) var isClosing = false
-    private weak var backdrop: EditorBackdrop?
-    private weak var editorToolbar: AnnotationToolbar?
-
     /// Brings the editor in as one sequence: the screen dims, the screenshot grows into place (key at
     /// once, so keys work), and the toolbar rises in just behind it. Backdrop and toolbar become child
     /// windows only once settled: a child follows its parent's frame, which is animating meanwhile.
-    func present(backdrop: EditorBackdrop, toolbar: AnnotationToolbar) {
-        self.backdrop = backdrop
-        self.editorToolbar = toolbar
-        toolbar.place(below: self)  // its final frame, from the window's final frame
-        HUDMotion.show(self, scale: 0.96, makeKey: true) { [weak self, weak backdrop] in
-            guard let self, let backdrop, !isClosing else { return }
+    func present() {
+        editorToolbar.place(below: self)  // its final frame, from the window's final frame
+        HUDMotion.show(self, scale: 0.96, makeKey: true) { [weak self] in
+            guard let self, !isClosing else { return }
             addChildWindow(backdrop, ordered: .below)
         }
         backdrop.show(below: self)
         let delay: TimeInterval = HUDMotion.reduceMotion ? 0 : 0.06
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak toolbar] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, let toolbar, !self.isClosing else { return }
-                HUDMotion.show(toolbar, travel: .up, distance: 12) { [weak self, weak toolbar] in
-                    guard let self, let toolbar, !isClosing else { return }
-                    addChildWindow(toolbar, ordered: .above)
+                guard let self, !self.isClosing else { return }
+                HUDMotion.show(self.editorToolbar, travel: .up, distance: 12) { [weak self] in
+                    guard let self, !isClosing else { return }
+                    addChildWindow(editorToolbar, ordered: .above)
                 }
             }
         }
@@ -84,22 +90,20 @@ final class AnnotationWindow: NSWindow {
     /// `windowWillClose` fires after the animation.
     override func close() {
         guard !isClosing else { return }
-        guard isVisible else { return super.close() }
-        isClosing = true
         HUDHint.shared.hide()
-        if let toolbar = editorToolbar {
-            removeChildWindow(toolbar)
-            toolbar.ignoresMouseEvents = true
-            HUDMotion.hide(toolbar, travel: .up, distance: 10) {}
-        }
-        if let backdrop {
-            removeChildWindow(backdrop)
-            backdrop.hide()
-        }
-        HUDMotion.hide(self, scale: 0.97) { [weak self] in self?.finishClose() }
+        removeChildWindow(editorToolbar)
+        editorToolbar.ignoresMouseEvents = true
+        if editorToolbar.isVisible { HUDMotion.hide(editorToolbar, travel: .up, distance: 10) {} }
+        removeChildWindow(backdrop)
+        backdrop.hide()
+        exit.run(self, scale: 0.97) { [weak self] in self?.finishClose() }
     }
 
-    private func finishClose() { super.close() }
+    private func finishClose() {
+        editorToolbar.close()
+        backdrop.close()
+        super.close()
+    }
 
     // No edits, saves or second closes while the editor is leaving
     override func sendEvent(_ event: NSEvent) {

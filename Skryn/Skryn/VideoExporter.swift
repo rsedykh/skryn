@@ -22,6 +22,9 @@ enum VideoExporterError: LocalizedError {
 /// drop audio, and decode frames one at a time with `AVAssetReader` so long clips don't pile up in memory.
 /// GIF is capped at 800 px wide (after the Retina-off halving), since it gets huge fast; WebP keeps the full width.
 enum VideoExporter {
+    /// Export progress, 0...1, reported on the main actor
+    typealias Progress = @MainActor (Double) -> Void
+
     static let gifFrameRate = 12.5
     static let webpFrameRate = 15.0
     static let gifMaxWidth: CGFloat = 800
@@ -30,13 +33,10 @@ enum VideoExporter {
     /// chosen resolution. Returns a new temp file `skryn-<UUID>.<ext>`; the caller owns both files.
     /// Returns `source` itself when nothing needs to change (MP4 H.264, Retina) — no re-encode.
     /// `progress` (0...1) is called on the main actor.
-    static func export(
-        _ source: URL, settings: OutputSettings, progress: (@MainActor (Double) -> Void)? = nil
-    ) async throws -> URL {
+    static func export(_ source: URL, settings: OutputSettings, progress: Progress? = nil) async throws -> URL {
         let format = settings.videoFormat
         if format == .mp4H264 && settings.retina { return source }
-        let output = FileManager.default.temporaryDirectory
-            .appendingPathComponent("skryn-\(UUID().uuidString).\(format.fileExtension)")
+        let output = FileManager.default.skrynTemporaryFile(extension: format.fileExtension)
         let asset = AVURLAsset(url: source)
         do {
             switch format {
@@ -53,10 +53,27 @@ enum VideoExporter {
         return output
     }
 
+    /// Copies `range` of a recording into a new temp MP4 (no re-encode). The caller owns the file.
+    static func trim(_ asset: AVAsset, range: CMTimeRange) async throws -> URL {
+        // ponytail: recording itself needs macOS 15, so there's no pre-15 export path
+        guard #available(macOS 15, *),
+              let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough)
+        else { throw CocoaError(.featureUnsupported) }
+        let output = FileManager.default.skrynTemporaryFile(extension: "mp4")
+        session.timeRange = range
+        do {
+            try await session.export(to: output, as: .mp4)
+        } catch {
+            try? FileManager.default.removeItem(at: output)
+            throw error
+        }
+        return output
+    }
+
     // MARK: - MP4 / MOV
 
     private static func exportVideo(
-        _ asset: AVURLAsset, settings: OutputSettings, to output: URL, progress: (@MainActor (Double) -> Void)?
+        _ asset: AVURLAsset, settings: OutputSettings, to output: URL, progress: Progress?
     ) async throws {
         // ponytail: recording itself needs macOS 15, so there's no pre-15 export path
         guard #available(macOS 15, *) else { throw CocoaError(.featureUnsupported) }
@@ -68,7 +85,7 @@ enum VideoExporter {
             throw VideoExporterError.exportFailed("unsupported preset")
         }
         if !settings.retina {
-            session.videoComposition = try await halfSizeComposition(asset, frameRate: settings.frameRate)
+            session.videoComposition = try await halfSizeComposition(asset, frameRate: settings.frameRate.rawValue)
         }
         session.shouldOptimizeForNetworkUse = true
         let monitor = Task {
@@ -91,7 +108,7 @@ enum VideoExporter {
         }
         let (size, transform) = try await track.load(.naturalSize, .preferredTransform)
         let duration = try await asset.load(.duration)
-        let target = scaledSize(size, by: 0.5)
+        let target = evenPixelSize(size, scale: 0.5, rounding: .down)
         let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
         let scale = CGAffineTransform(scaleX: target.width / size.width, y: target.height / size.height)
         layer.setTransform(transform.concatenating(scale), at: .zero)
@@ -105,15 +122,17 @@ enum VideoExporter {
         return composition
     }
 
-    /// `size × factor`, rounded down to even pixel counts (H.264 and friends want even dimensions).
-    static func scaledSize(_ size: CGSize, by factor: CGFloat) -> CGSize {
-        CGSize(width: max(2, Int(size.width * factor) & ~1), height: max(2, Int(size.height * factor) & ~1))
+    /// `size × scale` in whole pixels, made even (H.264 and friends want even dimensions) and at least 2.
+    /// The recorder rounds its point sizes to the nearest pixel; scaling an existing video rounds down.
+    static func evenPixelSize(_ size: CGSize, scale: CGFloat, rounding: FloatingPointRoundingRule) -> CGSize {
+        func even(_ value: CGFloat) -> CGFloat { CGFloat(max(2, Int((value * scale).rounded(rounding)) & ~1)) }
+        return CGSize(width: even(size.width), height: even(size.height))
     }
 
     // MARK: - GIF
 
     private static func writeGIF(
-        _ asset: AVAsset, retina: Bool, to output: URL, progress: (@MainActor (Double) -> Void)?
+        _ asset: AVAsset, retina: Bool, to output: URL, progress: Progress?
     ) async throws {
         let plan = try await FramePlan(asset, retina: retina, fps: gifFrameRate, maxWidth: gifMaxWidth)
         guard let destination = CGImageDestinationCreateWithURL(
@@ -137,7 +156,7 @@ enum VideoExporter {
     // MARK: - WebP
 
     private static func writeWebP(
-        _ asset: AVAsset, retina: Bool, to output: URL, progress: (@MainActor (Double) -> Void)?
+        _ asset: AVAsset, retina: Bool, to output: URL, progress: Progress?
     ) async throws {
         let plan = try await FramePlan(asset, retina: retina, fps: webpFrameRate, maxWidth: nil)
         var options = WebPAnimEncoderOptions()
@@ -195,7 +214,7 @@ private struct FramePlan {
         if let maxWidth, natural.width * factor > maxWidth { factor = maxWidth / natural.width }
         self.asset = asset
         self.track = track
-        size = VideoExporter.scaledSize(natural, by: factor)
+        size = VideoExporter.evenPixelSize(natural, scale: factor, rounding: .down)
         self.fps = fps
         count = max(1, Int((duration * fps).rounded(.up)))
     }
@@ -204,7 +223,7 @@ private struct FramePlan {
     /// into a reused BGRX context. A slot shows the latest source frame at or before its time, so static
     /// stretches of a variable-frame-rate recording repeat the frame.
     func forEachFrame(
-        progress: (@MainActor (Double) -> Void)?, body: (CGContext, Int) throws -> Void
+        progress: VideoExporter.Progress?, body: (CGContext, Int) throws -> Void
     ) async throws {
         let reader = try AVAssetReader(asset: asset)
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
@@ -248,5 +267,12 @@ private struct FramePlan {
         )
         context?.interpolationQuality = .high
         return context
+    }
+}
+
+extension FileManager {
+    /// A new, unique `skryn-<UUID>.<ext>` URL in the temp folder (recordings, trims, conversions)
+    func skrynTemporaryFile(extension ext: String) -> URL {
+        temporaryDirectory.appendingPathComponent("skryn-\(UUID().uuidString).\(ext)")
     }
 }

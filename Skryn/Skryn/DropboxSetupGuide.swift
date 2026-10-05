@@ -97,24 +97,7 @@ final class DropboxSetupGuide: AnimatedPanel {
             stack.addArrangedSubview(Self.body("\u{2022} " + tip))
         }
 
-        let document = FlippedView()
-        document.translatesAutoresizingMaskIntoConstraints = false
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        document.addSubview(stack)
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.autohidesScrollers = true
-        scroll.documentView = document
-        NSLayoutConstraint.activate([
-            document.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            stack.topAnchor.constraint(equalTo: document.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: document.bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: document.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: document.trailingAnchor),
-        ])
-        return scroll
+        return SettingsStyle.scrollingDocument(stack)
     }
 
     /// A numbered badge beside the step's title, text, and optional link.

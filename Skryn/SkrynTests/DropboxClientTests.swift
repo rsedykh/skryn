@@ -1,7 +1,7 @@
 import XCTest
 @testable import Skryn
 
-final class DropboxServiceTests: XCTestCase {
+final class DropboxClientTests: XCTestCase {
 
     private var session: URLSession!
     private var tempFiles: [URL] = []
@@ -21,6 +21,8 @@ final class DropboxServiceTests: XCTestCase {
         tempFiles = []
         super.tearDown()
     }
+
+    private var client: DropboxClient { DropboxClient(session: session) }
 
     // MARK: - Helpers
 
@@ -50,19 +52,19 @@ final class DropboxServiceTests: XCTestCase {
 
     /// Expected value from Python: urlsafe_b64encode(sha256(verifier).digest()).rstrip(b"=").
     func testPKCEChallenge_isUnpaddedBase64URLOfSHA256() {
-        XCTAssertEqual(DropboxService.pkceChallenge(for: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWEOEjXk"),
+        XCTAssertEqual(DropboxClient.pkceChallenge(for: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWEOEjXk"),
                        "TP3DZQl9rJnri9eRuZaFS6Q7czCrth7sEZC00LreApo")
     }
 
     func testMakeVerifier_isUnpaddedBase64URL() {
-        let verifier = DropboxService.makeVerifier()
+        let verifier = DropboxClient.makeVerifier()
         XCTAssertEqual(verifier.count, 43)
         XCTAssertNil(verifier.rangeOfCharacter(from: CharacterSet(charactersIn: "+/=")))
-        XCTAssertNotEqual(verifier, DropboxService.makeVerifier())
+        XCTAssertNotEqual(verifier, DropboxClient.makeVerifier())
     }
 
     func testAuthorizeURL_hasPKCEAndOfflineWithoutRedirect() throws {
-        let url = DropboxService.authorizeURL(appKey: "key123", challenge: "chal")
+        let url = DropboxClient.authorizeURL(appKey: "key123", challenge: "chal")
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
         XCTAssertEqual(components.host, "www.dropbox.com")
         XCTAssertEqual(components.path, "/oauth2/authorize")
@@ -78,7 +80,7 @@ final class DropboxServiceTests: XCTestCase {
                 """)
         }
 
-        let tokens = try await DropboxService.exchangeCode("code+1", verifier: "ver", appKey: "key", session: session)
+        let tokens = try await client.exchangeCode("code+1", verifier: "ver", appKey: "key")
 
         XCTAssertEqual(tokens.refreshToken, "rt-1")
         XCTAssertEqual(tokens.access.value, "sl.abc")
@@ -96,7 +98,7 @@ final class DropboxServiceTests: XCTestCase {
             Self.respond($0, 200, "{\"access_token\":\"sl.new\",\"expires_in\":14400,\"token_type\":\"bearer\"}")
         }
 
-        let token = try await DropboxService.accessToken(refreshToken: "rt-1", appKey: "key", session: session)
+        let token = try await client.accessToken(refreshToken: "rt-1", appKey: "key")
 
         XCTAssertEqual(token.value, "sl.new")
         XCTAssertEqual(token.expiresAt.timeIntervalSinceNow, 14400, accuracy: 60)
@@ -109,7 +111,7 @@ final class DropboxServiceTests: XCTestCase {
             Self.respond($0, 400, "{\"error\":\"invalid_grant\",\"error_description\":\"refresh token is invalid\"}")
         }
         do {
-            _ = try await DropboxService.accessToken(refreshToken: "rt", appKey: "key", session: session)
+            _ = try await client.accessToken(refreshToken: "rt", appKey: "key")
             XCTFail("Expected expired")
         } catch {
             XCTAssertEqual(error as? DropboxError, .expired)
@@ -124,8 +126,8 @@ final class DropboxServiceTests: XCTestCase {
             Self.respond($0, 200, "{\"name\":\"rec.mp4\",\"path_display\":\"/rec (1).mp4\",\"path_lower\":\"/rec (1).mp4\"}")
         }
 
-        let path = try await DropboxService.upload(fileURL: fileURL, path: "/rec.mp4", accessToken: "tok",
-                                                   session: session, chunkSize: 10, singleRequestLimit: 20)
+        let path = try await client.upload(fileURL: fileURL, path: "/rec.mp4", accessToken: "tok",
+                                           chunkSize: 10, singleRequestLimit: 20)
 
         XCTAssertEqual(path, "/rec (1).mp4")
         let requests = DropboxMockURLProtocol.requests
@@ -151,8 +153,8 @@ final class DropboxServiceTests: XCTestCase {
             }
         }
 
-        let path = try await DropboxService.upload(fileURL: fileURL, path: "/rec.mp4", accessToken: "tok",
-                                                   session: session, chunkSize: 10, singleRequestLimit: 20)
+        let path = try await client.upload(fileURL: fileURL, path: "/rec.mp4", accessToken: "tok",
+                                           chunkSize: 10, singleRequestLimit: 20)
 
         XCTAssertEqual(path, "/rec.mp4")
         let requests = DropboxMockURLProtocol.requests
@@ -181,7 +183,7 @@ final class DropboxServiceTests: XCTestCase {
             Self.respond($0, 401, "{\"error_summary\":\"expired_access_token/..\",\"error\":{\".tag\":\"expired_access_token\"}}")
         }
         do {
-            _ = try await DropboxService.upload(fileURL: fileURL, path: "/a.png", accessToken: "tok", session: session)
+            _ = try await client.upload(fileURL: fileURL, path: "/a.png", accessToken: "tok")
             XCTFail("Expected expired")
         } catch {
             XCTAssertEqual(error as? DropboxError, .expired)
@@ -196,7 +198,7 @@ final class DropboxServiceTests: XCTestCase {
                 """)
         }
         do {
-            _ = try await DropboxService.upload(fileURL: fileURL, path: "/a.png", accessToken: "tok", session: session)
+            _ = try await client.upload(fileURL: fileURL, path: "/a.png", accessToken: "tok")
             XCTFail("Expected missingScope")
         } catch {
             XCTAssertEqual(error as? DropboxError, .missingScope("files.content.write"))
@@ -210,7 +212,7 @@ final class DropboxServiceTests: XCTestCase {
             Self.respond($0, 200, "{\".tag\":\"file\",\"url\":\"https://www.dropbox.com/scl/fi/x/a.png?rlkey=k&dl=0\"}")
         }
 
-        let url = try await DropboxService.sharedLink(path: "/a.png", accessToken: "tok", session: session)
+        let url = try await client.sharedLink(path: "/a.png", accessToken: "tok")
 
         XCTAssertEqual(url, "https://www.dropbox.com/scl/fi/x/a.png?rlkey=k&dl=0")
         let (request, body) = try XCTUnwrap(DropboxMockURLProtocol.requests.first)
@@ -228,7 +230,7 @@ final class DropboxServiceTests: XCTestCase {
                 """)
         }
 
-        let url = try await DropboxService.sharedLink(path: "/a.png", accessToken: "tok", session: session)
+        let url = try await client.sharedLink(path: "/a.png", accessToken: "tok")
 
         XCTAssertEqual(url, "https://www.dropbox.com/s/old/a.png?dl=0")
         XCTAssertEqual(DropboxMockURLProtocol.requests.count, 1)
@@ -246,7 +248,7 @@ final class DropboxServiceTests: XCTestCase {
                 """)
         }
 
-        let url = try await DropboxService.sharedLink(path: "/a.png", accessToken: "tok", session: session)
+        let url = try await client.sharedLink(path: "/a.png", accessToken: "tok")
 
         XCTAssertEqual(url, "https://www.dropbox.com/s/listed/a.png?dl=0")
         let list = try XCTUnwrap(DropboxMockURLProtocol.requests.last)
@@ -260,7 +262,7 @@ final class DropboxServiceTests: XCTestCase {
             Self.respond($0, 409, "{\"error_summary\":\"path/not_found/...\",\"error\":{\".tag\":\"path\"}}")
         }
         do {
-            _ = try await DropboxService.sharedLink(path: "/a.png", accessToken: "tok", session: session)
+            _ = try await client.sharedLink(path: "/a.png", accessToken: "tok")
             XCTFail("Expected api error")
         } catch {
             XCTAssertEqual(error as? DropboxError, .api("path/not_found"))
@@ -270,31 +272,95 @@ final class DropboxServiceTests: XCTestCase {
     // MARK: - Direct links
 
     func testDirectLink_classicLink() {
-        XCTAssertEqual(DropboxService.directLink(from: "https://www.dropbox.com/s/abc123/shot.png?dl=0"),
+        XCTAssertEqual(DropboxClient.directLink(from: "https://www.dropbox.com/s/abc123/shot.png?dl=0"),
                        "https://dl.dropboxusercontent.com/s/abc123/shot.png")
     }
 
     func testDirectLink_sclLinkKeepsRlkey() {
         XCTAssertEqual(
-            DropboxService.directLink(from: "https://www.dropbox.com/scl/fi/xyz789/shot.png?rlkey=k3y&dl=0"),
+            DropboxClient.directLink(from: "https://www.dropbox.com/scl/fi/xyz789/shot.png?rlkey=k3y&dl=0"),
             "https://dl.dropboxusercontent.com/scl/fi/xyz789/shot.png?rlkey=k3y")
     }
 
     func testDirectLink_noQuery() {
-        XCTAssertEqual(DropboxService.directLink(from: "https://www.dropbox.com/s/abc/shot.png"),
+        XCTAssertEqual(DropboxClient.directLink(from: "https://www.dropbox.com/s/abc/shot.png"),
                        "https://dl.dropboxusercontent.com/s/abc/shot.png")
     }
 
     // MARK: - Header encoding
 
     func testHeaderSafeJSON_escapesNonASCII() throws {
-        let header = try DropboxService.headerSafeJSON(["path": "/caf\u{e9} \u{1F600}\u{7F}.png"])
+        let header = try DropboxClient.headerSafeJSON(["path": "/caf\u{e9} \u{1F600}\u{7F}.png"])
         XCTAssertTrue(header.allSatisfy { $0.isASCII && $0 != "\u{7F}" })
         XCTAssertTrue(header.contains("\\u00e9"))
         XCTAssertTrue(header.contains("\\ud83d\\ude00"))
         XCTAssertTrue(header.contains("\\u007f"))
         let decoded = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(header.utf8)) as? [String: String])
         XCTAssertEqual(decoded["path"], "/caf\u{e9} \u{1F600}\u{7F}.png")
+    }
+
+    // MARK: - Account
+
+    /// An account with an App key, a refresh token in memory, and throwaway defaults
+    @MainActor
+    private func makeAccount() -> DropboxAccount {
+        var stored: String? = "rt-1"
+        let tokens = DropboxAccount.TokenStore(read: { stored }, save: { stored = $0 }, delete: { stored = nil })
+        let defaults = UserDefaults(suiteName: "DropboxAccountTests-\(UUID().uuidString)")!
+        let account = DropboxAccount(client: client, tokens: tokens, defaults: defaults)
+        account.appKey = "key"
+        return account
+    }
+
+    private var tokenRequests: Int {
+        DropboxMockURLProtocol.requests.filter { $0.request.url?.path == "/oauth2/token" }.count
+    }
+
+    @MainActor
+    func testAccount_cachesAccessTokenBetweenCalls() async throws {
+        DropboxMockURLProtocol.requestHandler = {
+            Self.respond($0, 200, "{\"access_token\":\"sl.a\",\"expires_in\":14400,\"token_type\":\"bearer\"}")
+        }
+        let account = makeAccount()
+
+        let first = try await account.authorized { $0 }
+        let second = try await account.authorized { $0 }
+
+        XCTAssertEqual([first, second], ["sl.a", "sl.a"])
+        XCTAssertEqual(tokenRequests, 1)
+    }
+
+    @MainActor
+    func testAccount_refreshesOnceWhenTheTokenIsRejected() async throws {
+        var issued = 0
+        DropboxMockURLProtocol.requestHandler = {
+            issued += 1
+            return Self.respond($0, 200, "{\"access_token\":\"sl.\(issued)\",\"expires_in\":14400}")
+        }
+        let account = makeAccount()
+        var seen: [String] = []
+
+        let result = try await account.authorized { token -> String in
+            seen.append(token)
+            if seen.count == 1 { throw DropboxError.expired }
+            return token
+        }
+
+        XCTAssertEqual(seen, ["sl.1", "sl.2"])
+        XCTAssertEqual(result, "sl.2")
+        XCTAssertEqual(tokenRequests, 2)
+    }
+
+    @MainActor
+    func testAccount_setupProblem_followsAppKeyAndConnection() async {
+        DropboxMockURLProtocol.requestHandler = { Self.respond($0, 200, "null") }
+        let account = makeAccount()
+        XCTAssertNil(account.setupProblem)
+
+        await account.disconnect()
+        XCTAssertEqual(account.setupProblem, .notConnected)
+        account.appKey = "  "
+        XCTAssertEqual(account.setupProblem, .noAppKey)
     }
 }
 

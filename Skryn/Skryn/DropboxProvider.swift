@@ -1,48 +1,39 @@
 import AppKit
 
 /// Uploads to the app's Dropbox folder and returns the file's permanent public URL (dl.dropboxusercontent.com).
-/// Account and HTTP live in DropboxService.swift.
+/// Account and HTTP live in DropboxClient.swift.
 final class DropboxProvider: UploadProvider {
     let id = "dropbox"
     let title = "Dropbox"
-    private let session: URLSession
+    private let client: DropboxClient
+    private let account: DropboxAccount
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(client: DropboxClient = DropboxClient(), tokens: DropboxAccount.TokenStore = .keychain) {
+        self.client = client
+        account = DropboxAccount(client: client, tokens: tokens)
     }
 
-    var setupProblem: String? {
-        if DropboxAuth.appKey == nil { return "Add your Dropbox app key in Settings" }
-        return DropboxAuth.isConnected ? nil : "Connect Dropbox in Settings"
-    }
+    var setupProblem: String? { account.setupProblem?.errorDescription }
 
-    func makeSettingsView(onChange: @escaping () -> Void) -> NSView {
-        DropboxSettingsView(onChange: onChange)
+    func makeSettingsView(onChange: @escaping () -> Void) -> SettingsForm {
+        DropboxSettingsView(account: account, onChange: onChange)
     }
 
     func upload(fileURL: URL, filename: String, contentType: String) async throws -> String {
-        let path = try await withAccessToken { token in
-            try await DropboxService.upload(fileURL: fileURL, path: "/" + filename, accessToken: token, session: session)
+        let path = try await account.authorized { token in
+            try await client.upload(fileURL: fileURL, path: "/" + filename, accessToken: token)
         }
-        let link = try await withAccessToken { token in
-            try await DropboxService.sharedLink(path: path, accessToken: token, session: session)
+        let link = try await account.authorized { token in
+            try await client.sharedLink(path: path, accessToken: token)
         }
-        return DropboxService.directLink(from: link)
-    }
-
-    /// Runs `call` with the cached access token; on a 401 refreshes once and retries.
-    private func withAccessToken<T>(_ call: (String) async throws -> T) async throws -> T {
-        do {
-            return try await call(await DropboxAuth.accessToken(session: session))
-        } catch DropboxError.expired {
-            return try await call(await DropboxAuth.accessToken(forceRefresh: true, session: session))
-        }
+        return DropboxClient.directLink(from: link)
     }
 }
 
 /// The guided connect flow: app setup steps, App key, Connect… (opens the browser), paste the code, Finish;
 /// once connected, "Connected as …" and Disconnect.
 private final class DropboxSettingsView: SettingsForm, NSTextFieldDelegate {
+    private let account: DropboxAccount
     private let onChange: () -> Void
     private let appKeyField = NSTextField(frame: .zero)
     private let codeField = NSTextField(frame: .zero)
@@ -55,16 +46,17 @@ private final class DropboxSettingsView: SettingsForm, NSTextFieldDelegate {
     /// "Code" and its caption: revealed only between Connect and Finish
     private var codeRows: [SettingsRow] = []
     /// The browser authorization in progress, waiting for its code
-    private var pending: DropboxAuth.PendingConnection?
+    private var pending: DropboxAccount.PendingConnection?
     /// A finish or disconnect request is running
     private var busy = false
 
-    init(onChange: @escaping () -> Void) {
+    init(account: DropboxAccount, onChange: @escaping () -> Void) {
+        self.account = account
         self.onChange = onChange
         super.init()
         setupControls()
         addRows()
-        appKeyField.stringValue = DropboxAuth.appKey ?? ""
+        appKeyField.stringValue = account.appKey ?? ""
         refresh()
     }
 
@@ -102,9 +94,9 @@ private final class DropboxSettingsView: SettingsForm, NSTextFieldDelegate {
         let console = LinkButton(title: "Open Dropbox App Console \u{2197}", url: DropboxSetupGuide.appConsoleURL)
         addFullWidthRow(Self.hstack([guide, console]))
         addRow("App key", appKeyField)
-        let account = addRow("Account", accountButton)
-        account.label?.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)  // a long name truncates
-        accountRow = account
+        let row = addRow("Account", accountButton)
+        row.label?.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)  // a long name truncates
+        accountRow = row
         codeRows = [
             // The spinner leads, so Finish stays on the trailing edge with the other controls
             addRow("Code", Self.hstack([spinner, codeField, finishButton])),
@@ -114,18 +106,18 @@ private final class DropboxSettingsView: SettingsForm, NSTextFieldDelegate {
 
     /// Shows the step the user is on and enables what can be done now.
     private func refresh() {
-        let connected = DropboxAuth.isConnected
+        let connected = account.isConnected
         if connected { pending = nil }
         codeRows.forEach { $0.isRevealed = pending != nil }
         accountRow?.label?.stringValue = connected
-            ? DropboxAuth.accountName.map { "Connected as \($0)" } ?? "Connected" : "Account"
+            ? account.accountName.map { "Connected as \($0)" } ?? "Connected" : "Account"
         accountButton.title = connected ? "Disconnect" : "Connect Dropbox\u{2026}"
 
         let idle = !busy
         // A different app key needs a new authorization, so it's locked until Disconnect
         appKeyField.isEnabled = idle && !connected
         appKeyField.toolTip = connected ? "Disconnect to change the app key" : nil
-        accountButton.isEnabled = idle && (connected || DropboxAuth.appKey != nil)
+        accountButton.isEnabled = idle && (connected || account.appKey != nil)
         codeField.isEnabled = idle
         finishButton.isEnabled = idle && !trimmedCode.isEmpty
         if busy { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
@@ -138,7 +130,7 @@ private final class DropboxSettingsView: SettingsForm, NSTextFieldDelegate {
             refresh()  // the code field: Finish needs a code
             return
         }
-        DropboxAuth.appKey = appKeyField.stringValue
+        account.appKey = appKeyField.stringValue
         pending = nil  // its code belongs to the old key
         codeField.stringValue = ""
         refresh()
@@ -146,12 +138,12 @@ private final class DropboxSettingsView: SettingsForm, NSTextFieldDelegate {
     }
 
     @objc private func accountClicked() {
-        if DropboxAuth.isConnected { disconnect() } else { connect() }
+        if account.isConnected { disconnect() } else { connect() }
     }
 
     private func connect() {
-        guard let appKey = DropboxAuth.appKey else { return }
-        pending = DropboxAuth.beginConnecting(appKey: appKey)
+        guard let appKey = account.appKey else { return }
+        pending = account.beginConnecting(appKey: appKey)
         codeField.stringValue = ""
         refresh()
         onChange()
@@ -169,7 +161,7 @@ private final class DropboxSettingsView: SettingsForm, NSTextFieldDelegate {
                 onChange()
             }
             do {
-                try await DropboxAuth.finishConnecting(pending, code: trimmedCode)
+                try await account.finishConnecting(pending, code: trimmedCode)
                 codeField.stringValue = ""
             } catch {
                 let alert = NSAlert()
@@ -185,7 +177,7 @@ private final class DropboxSettingsView: SettingsForm, NSTextFieldDelegate {
         busy = true
         refresh()
         Task {
-            await DropboxAuth.disconnect()
+            await account.disconnect()
             busy = false
             refresh()
             onChange()

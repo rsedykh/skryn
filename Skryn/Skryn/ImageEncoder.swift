@@ -78,6 +78,11 @@ enum ImageEncoder {
             properties[kCGImagePropertyDPIWidth] = dpi
             properties[kCGImagePropertyDPIHeight] = dpi
         }
+        return imageData(from: image, type: type, properties: properties)
+    }
+
+    /// `image` written by ImageIO as `type` (the clipboard's PNG and TIFF, and the formats above).
+    static func imageData(from image: CGImage, type: UTType, properties: [CFString: Any] = [:]) -> Data? {
         let data = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(data as CFMutableData, type.identifier as CFString, 1, nil)
         else { return nil }

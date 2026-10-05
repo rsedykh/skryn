@@ -10,9 +10,9 @@ protocol UploadProvider: AnyObject {
     var title: String { get }
     /// Nil when uploads can go ahead; otherwise what the user still has to set up.
     var setupProblem: String? { get }
-    /// The provider's own Settings controls, shown under the Service menu: a `SettingsForm`, so its labels
+    /// The provider's own Settings controls, shown under the Service menu; a `SettingsForm`, so its labels
     /// line up with the panel's. Call `onChange` after anything that affects `setupProblem` or the view's size.
-    func makeSettingsView(onChange: @escaping () -> Void) -> NSView
+    func makeSettingsView(onChange: @escaping () -> Void) -> SettingsForm
     /// Uploads the file and returns the link to copy.
     func upload(fileURL: URL, filename: String, contentType: String) async throws -> String
 }
@@ -24,12 +24,18 @@ enum UploadProviders {
 
     static let defaultsKey = "uploadDestination"
 
+    /// Posted when the chosen provider changes, or when its `setupProblem` may have (Settings edits)
+    static let didChange = Notification.Name("UploadProvidersDidChange")
+
     /// The chosen provider; an unknown or missing ID falls back to the first.
     static var current: UploadProvider {
         get {
             let id = UserDefaults.standard.string(forKey: defaultsKey)
             return all.first { $0.id == id } ?? all[0]
         }
-        set { UserDefaults.standard.set(newValue.id, forKey: defaultsKey) }
+        set {
+            UserDefaults.standard.set(newValue.id, forKey: defaultsKey)
+            NotificationCenter.default.post(name: didChange, object: nil)
+        }
     }
 }

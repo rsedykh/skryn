@@ -97,13 +97,12 @@ func hotkeyDisplayString(keyCode: UInt32, carbonModifiers mods: UInt32) -> Strin
 // MARK: - HotkeyRecorderButton
 
 final class HotkeyRecorderButton: NSButton {
-    private(set) var recordedKeyCode = Defaults.defaultHotkeyKeyCode
-    private(set) var recordedCarbonModifiers = Defaults.defaultHotkeyModifiers
+    private(set) var hotkey = MenuBarAction.screenshot.defaultHotkey
     private(set) var isRecording = false
     /// Called after the user records a new shortcut (not on `setHotkey`)
     var onChange: (() -> Void)?
-    /// Vetoes a recorded shortcut (keyCode, Carbon modifiers); a vetoed press beeps and keeps listening
-    var shouldAccept: ((UInt32, UInt32) -> Bool)?
+    /// Vetoes a recorded shortcut; a vetoed press beeps and keeps listening
+    var shouldAccept: ((Hotkey) -> Bool)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -123,9 +122,8 @@ final class HotkeyRecorderButton: NSButton {
         updateTitle()
     }
 
-    func setHotkey(keyCode: UInt32, carbonModifiers: UInt32) {
-        recordedKeyCode = keyCode
-        recordedCarbonModifiers = carbonModifiers
+    func setHotkey(_ hotkey: Hotkey) {
+        self.hotkey = hotkey
         updateTitle()
     }
 
@@ -169,16 +167,14 @@ final class HotkeyRecorderButton: NSButton {
             return
         }
 
-        let keyCode = UInt32(event.keyCode)
-        let modifiers = carbonModifiers(from: mods)
-        if let shouldAccept, !shouldAccept(keyCode, modifiers) {
+        let recorded = Hotkey(keyCode: UInt32(event.keyCode), modifiers: carbonModifiers(from: mods))
+        if let shouldAccept, !shouldAccept(recorded) {
             NSSound.beep()
             title = "Already in use"
             return
         }
 
-        recordedKeyCode = keyCode
-        recordedCarbonModifiers = modifiers
+        hotkey = recorded
         isRecording = false
         updateTitle()
         onChange?()
@@ -190,6 +186,6 @@ final class HotkeyRecorderButton: NSButton {
     }
 
     private func updateTitle() {
-        title = hotkeyDisplayString(keyCode: recordedKeyCode, carbonModifiers: recordedCarbonModifiers)
+        title = hotkey.displayString
     }
 }

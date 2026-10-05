@@ -11,6 +11,7 @@ enum HUDStyle {
     static let surfaceOpaque = NSColor(white: 0.11, alpha: 1)
     static let hairline = NSColor.white.withAlphaComponent(0.12)
     static let selectedFill = NSColor.white.withAlphaComponent(0.18)
+    static let divider = NSColor.white.withAlphaComponent(0.18)
     static let dimmed = NSColor.white.withAlphaComponent(0.6)
     static let disabled = NSColor.white.withAlphaComponent(0.25)
     static let barRadius: CGFloat = 14
@@ -18,6 +19,8 @@ enum HUDStyle {
     static let buttonSize: CGFloat = 32
     static let barHeight: CGFloat = 48
     static let iconPointSize: CGFloat = 15
+    /// The icon beside a button's title
+    static let titledIconPointSize: CGFloat = 13
 
     /// Paints `layer` as a HUD surface (call after `wantsLayer = true`).
     static func paintSurface(_ layer: CALayer?, radius: CGFloat? = nil, opaque: Bool = false) {
@@ -97,6 +100,15 @@ enum HUDMotion {
         })
     }
 
+    /// Makes the next change to `view`'s look (tint, background, image) a quick crossfade instead of a jump.
+    static func crossfade(_ view: NSView, duration: TimeInterval = 0.12) {
+        let fade = CATransition()
+        fade.type = .fade
+        fade.duration = duration
+        fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        view.layer?.add(fade, forKey: "crossfade")
+    }
+
     /// `frame` shrunk to `scale` around its center and moved against `travel` by `distance`.
     static func offset(_ frame: NSRect, travel: Travel, distance: CGFloat, scale: CGFloat) -> NSRect {
         var rect = frame.insetBy(dx: frame.width * (1 - scale) / 2, dy: frame.height * (1 - scale) / 2)
@@ -111,6 +123,11 @@ enum HUDMotion {
 
 /// Rounded dark bar holding a row of HUD controls: the look shared by every Skryn toolbar.
 final class HUDBar: NSView {
+    /// The groups in a row, a divider between each two.
+    convenience init(groups: [[NSView]]) {
+        self.init(views: groups.enumerated().flatMap { index, group in index == 0 ? group : [HUDDivider()] + group })
+    }
+
     init(views: [NSView]) {
         super.init(frame: .zero)
         wantsLayer = true
@@ -147,7 +164,7 @@ final class HUDDivider: NSView {
     init() {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.18).cgColor
+        layer?.backgroundColor = HUDStyle.divider.cgColor
         widthAnchor.constraint(equalToConstant: 1).isActive = true
         heightAnchor.constraint(equalToConstant: 20).isActive = true
     }
@@ -170,7 +187,8 @@ final class HUDButton: HUDHintButton {
         didSet {
             imagePosition = showsTitle ? .imageLeading : .imageOnly
             imageHugsTitle = true  // keep icon and title together, centered, when the button is wider
-            image = image?.withSymbolConfiguration(.init(pointSize: showsTitle ? 13 : 15, weight: .regular))
+            let size = showsTitle ? HUDStyle.titledIconPointSize : HUDStyle.iconPointSize
+            image = image?.withSymbolConfiguration(.init(pointSize: size, weight: .regular))
             invalidateIntrinsicContentSize()
         }
     }
@@ -183,15 +201,15 @@ final class HUDButton: HUDHintButton {
         super.init(frame: .zero)
         self.title = title
         image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
-            .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
+            .withSymbolConfiguration(.init(pointSize: HUDStyle.iconPointSize, weight: .regular))
         imagePosition = .imageOnly
         font = .systemFont(ofSize: 12, weight: .medium)
         isBordered = false
         setAccessibilityLabel(title)
         wantsLayer = true
-        layer?.cornerRadius = 8
-        heightAnchor.constraint(equalToConstant: 32).isActive = true
-        widthAnchor.constraint(greaterThanOrEqualToConstant: 32).isActive = true
+        layer?.cornerRadius = HUDStyle.buttonRadius
+        heightAnchor.constraint(equalToConstant: HUDStyle.buttonSize).isActive = true
+        widthAnchor.constraint(greaterThanOrEqualToConstant: HUDStyle.buttonSize).isActive = true
         refresh()
     }
 
@@ -208,10 +226,8 @@ final class HUDButton: HUDHintButton {
 
     private func refresh() {
         let bright = isSelectedTool || isEmphasized || showsTitle
-        contentTintColor = !isEnabled ? NSColor.white.withAlphaComponent(0.25)
-            : bright ? .white : NSColor.white.withAlphaComponent(0.6)
-        let background: NSColor? = isEmphasized ? .controlAccentColor
-            : isSelectedTool ? NSColor.white.withAlphaComponent(0.18) : nil
+        contentTintColor = !isEnabled ? HUDStyle.disabled : bright ? .white : HUDStyle.dimmed
+        let background: NSColor? = isEmphasized ? .controlAccentColor : isSelectedTool ? HUDStyle.selectedFill : nil
         layer?.backgroundColor = background?.cgColor
         guard showsTitle, let font else { return }
         // A leading thin space separates the icon from the title
@@ -243,11 +259,20 @@ class HUDHintButton: NSButton {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// The pointer is over the button; subclasses restyle in `hoverChanged()`
+    private(set) var isHovered = false {
+        didSet { if isHovered != oldValue { hoverChanged() } }
+    }
+
+    func hoverChanged() {}
+
     override func mouseEntered(with event: NSEvent) {
+        isHovered = true
         if let hint { HUDHint.shared.show(hint, above: self) }
     }
 
     override func mouseExited(with event: NSEvent) {
+        isHovered = false
         HUDHint.shared.hide()
     }
 
@@ -267,20 +292,12 @@ final class HUDHint {
     private let label = NSTextField(labelWithString: "")
 
     private init() {
-        panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel = HUDPanel()
         panel.ignoresMouseEvents = true
         panel.level = .floating
-        panel.hidesOnDeactivate = false
-        panel.appearance = NSAppearance(named: .darkAqua)
         let background = NSView()
         background.wantsLayer = true
-        background.layer?.backgroundColor = NSColor(white: 0.1, alpha: 0.95).cgColor
-        background.layer?.cornerRadius = 6
-        background.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
-        background.layer?.borderWidth = 1
+        HUDStyle.paintSurface(background.layer, radius: 6)
         label.font = .systemFont(ofSize: 12, weight: .medium)
         label.textColor = .white
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -334,4 +351,119 @@ final class HUDHint {
 
     /// Set while fading out; a new `show` cancels the pending order-out
     private var hiding = false
+}
+
+/// The window every HUD control floats in: borderless, non-activating (clicks don't take focus from
+/// the app in front), transparent around its rounded surface, dark.
+class HUDPanel: NSPanel {
+    init() {
+        super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        hidesOnDeactivate = false
+        isReleasedWhenClosed = false
+        appearance = NSAppearance(named: .darkAqua)
+    }
+}
+
+/// A full-screen or floating overlay that draws its own look (recording frame, keystrokes, camera bubble,
+/// area picker): borderless, transparent, no window shadow, on every Space and over full-screen apps.
+/// Esc runs `onEscape` while it's key.
+class OverlayPanel: NSPanel {
+    var onEscape: (() -> Void)?
+
+    /// `behavior` is added to joining all Spaces and full-screen apps; `nonactivating` keeps Skryn
+    /// inactive when the overlay is clicked or dragged.
+    init(frame: CGRect, level: NSWindow.Level, behavior: NSWindow.CollectionBehavior = [], nonactivating: Bool = false) {
+        super.init(
+            contentRect: frame, styleMask: nonactivating ? [.borderless, .nonactivatingPanel] : .borderless,
+            backing: .buffered, defer: false
+        )
+        setFrame(frame, display: false)
+        self.level = level
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = false
+        hidesOnDeactivate = false
+        isReleasedWhenClosed = false
+        collectionBehavior = behavior.union([.canJoinAllSpaces, .fullScreenAuxiliary])
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53, let onEscape {  // ESC
+            onEscape()
+        } else {
+            super.keyDown(with: event)
+        }
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        onEscape?()
+    }
+}
+
+extension CABasicAnimation {
+    convenience init(keyPath: String, from: Any, to: Any) {
+        self.init(keyPath: keyPath)
+        fromValue = from
+        toValue = to
+    }
+}
+
+// MARK: - Window motion
+
+/// The exit every animated Skryn window shares: its `close()` calls `run`, which plays the exit once and then
+/// the real close (`finish`, which calls `super.close()`), so `windowWillClose` fires after the animation.
+/// `willBegin` is posted as the exit starts: owners let go of the window then, so a new capture or panel can
+/// open while the old one is still fading.
+@MainActor
+final class WindowExit {
+    static let willBegin = Notification.Name("SkrynWindowExitWillBegin")
+    private(set) var isRunning = false
+
+    /// Plays `window`'s exit (none when it isn't on screen), then `finish`. Ignored while an exit is running.
+    func run(_ window: NSWindow, scale: CGFloat, finish: @escaping @MainActor @Sendable () -> Void) {
+        guard !isRunning else { return }
+        isRunning = true
+        NotificationCenter.default.post(name: Self.willBegin, object: window)
+        guard window.isVisible else { return finish() }
+        HUDMotion.hide(window, scale: scale, completion: finish)
+    }
+}
+
+/// A panel that fades and grows in when presented and plays the reverse when closed (every close path:
+/// Cmd+W, the close button, ESC), through `WindowExit`.
+class AnimatedPanel: NSPanel {
+    /// The panel grows from `entranceScale` as it opens and shrinks toward `exitScale` as it closes
+    var entranceScale: CGFloat = 0.97
+    var exitScale: CGFloat = 0.98
+    private let exit = WindowExit()
+    var isClosing: Bool { exit.isRunning }
+
+    /// Shows the panel with the shared entrance (key); brings it forward if it's already up.
+    func present() {
+        guard !isClosing else { return }
+        collectionBehavior.insert(.moveToActiveSpace)  // open on the Space the user is looking at
+        // Panels hide whenever Skryn isn't active; Skryn's windows should stay like normal windows
+        hidesOnDeactivate = false
+        guard !isVisible else {
+            makeKeyAndOrderFront(nil)
+            orderFrontRegardless()  // in front even if macOS doesn't activate Skryn
+            return
+        }
+        HUDMotion.show(self, scale: entranceScale, makeKey: true)
+    }
+
+    override func close() {
+        exit.run(self, scale: exitScale) { [weak self] in self?.finishClose() }
+    }
+
+    /// Runs once the exit has played, just before the real close: release what the panel holds.
+    func didFinishExit() {}
+
+    private func finishClose() {
+        didFinishExit()
+        super.close()
+    }
 }

@@ -43,25 +43,17 @@ enum UploadcareService {
         return "https://\(prefix).ucarecd.net"
     }
 
-    /// Uploads PNG data to Uploadcare and returns the CDN URL.
-    static func upload(pngData: Data, filename: String, publicKey: String,
-                       cdnBase: String, session: URLSession = .shared) async throws -> String {
-        let fileID = try await directUpload(data: pngData, filename: filename, contentType: "image/png",
-                                            publicKey: publicKey, session: session)
-        return "\(cdnBase)/\(fileID)/"
-    }
-
     /// Smallest file /multipart/ accepts (docs: "Multipart uploads support files larger than 10 megabytes only";
     /// the Swift SDK uses 10485760 and goes direct below it).
     static let multipartMinFileSize = 10_485_760
     /// Part size /multipart/start/ assumes by default (5 MiB, the S3 minimum for every part but the last).
     static let multipartPartSize = 5_242_880
 
-    /// Uploads the file at `fileURL` and returns the CDN URL ("<cdnBase>/<uuid>/").
+    /// Uploads the file at `fileURL` and returns its URL on the key's CDN ("<cdnBase>/<uuid>/").
     /// Files smaller than the multipart minimum go through /base/; larger ones through /multipart/.
     /// `multipartThreshold` and `partSize` exist for tests; keep the defaults in production.
     static func upload(fileURL: URL, filename: String, contentType: String, publicKey: String,
-                       cdnBase: String, session: URLSession = .shared,
+                       session: URLSession = .shared,
                        multipartThreshold: Int = multipartMinFileSize,
                        partSize: Int = multipartPartSize) async throws -> String {
         let size = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
@@ -73,7 +65,7 @@ enum UploadcareService {
             let file = DiskFile(url: fileURL, filename: filename, contentType: contentType)
             fileID = try await multipartUpload(file, publicKey: publicKey, partSize: partSize, session: session)
         }
-        return "\(cdnBase)/\(fileID)/"
+        return "\(cdnBase(forPublicKey: publicKey))/\(fileID)/"
     }
 
     /// POST /base/; returns the file UUID.

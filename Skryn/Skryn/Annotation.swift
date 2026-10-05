@@ -135,16 +135,16 @@ extension Annotation {
                 : .line(from: from, to: point, color: color)
         case .rectangle(let rect, let color):
             let anchor = oppositeCorner(of: handle, in: rect)
-            return .rectangle(rect: rectFromCorners(anchor, point), color: color)
+            return .rectangle(rect: CGRect(spanning: anchor, point), color: color)
         case .ellipse(let rect, let color):
             let anchor = oppositeCorner(of: handle, in: rect)
-            return .ellipse(rect: rectFromCorners(anchor, point), color: color)
+            return .ellipse(rect: CGRect(spanning: anchor, point), color: color)
         case .crop(let rect):
             let anchor = oppositeCorner(of: handle, in: rect)
-            return .crop(rect: rectFromCorners(anchor, point))
+            return .crop(rect: CGRect(spanning: anchor, point))
         case .blur(let rect):
             let anchor = oppositeCorner(of: handle, in: rect)
-            return .blur(rect: rectFromCorners(anchor, point))
+            return .blur(rect: CGRect(spanning: anchor, point))
         case .text(let origin, let width, let content, let fontSize, let color):
             if handle == .left {
                 let rightEdge = origin.x + width
@@ -284,13 +284,31 @@ extension Annotation {
         default: return CGPoint(x: rect.midX, y: rect.midY)
         }
     }
+}
 
-    private func rectFromCorners(_ a: CGPoint, _ b: CGPoint) -> CGRect {
-        CGRect(
-            x: min(a.x, b.x),
-            y: min(a.y, b.y),
-            width: abs(b.x - a.x),
-            height: abs(b.y - a.y)
-        )
+extension CGRect {
+    /// The rect with `a` and `b` as opposite corners, in either order
+    init(spanning a: CGPoint, _ b: CGPoint) {
+        self.init(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
+    }
+}
+
+extension Array where Element == Annotation {
+    /// Topmost annotation at `point`: its nearest handle within `handleRadius`, else its body within
+    /// `bodyRadius` of the outline. Each annotation is checked handles-first, top to bottom.
+    func hitTest(_ point: CGPoint, handleRadius: CGFloat, bodyRadius: CGFloat) -> AnnotationHitTestResult {
+        for i in indices.reversed() {
+            let nearest = self[i].handles
+                .map { (handle: $0.0, distance: hypot(point.x - $0.1.x, point.y - $0.1.y)) }
+                .filter { $0.distance <= handleRadius }
+                .min { $0.distance < $1.distance }
+            if let nearest {
+                return .handle(index: i, handle: nearest.handle)
+            }
+            if self[i].bodyContains(point, hitRadius: bodyRadius) {
+                return .body(index: i)
+            }
+        }
+        return .none
     }
 }

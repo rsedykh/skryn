@@ -153,8 +153,9 @@ final class VideoExporterTests: XCTestCase {
     }
 
     func testScaledSizeIsEven() {
-        XCTAssertEqual(VideoExporter.scaledSize(CGSize(width: 3456, height: 2234), by: 0.5),
+        XCTAssertEqual(VideoExporter.evenPixelSize(CGSize(width: 3456, height: 2234), scale: 0.5, rounding: .down),
                        CGSize(width: 1728, height: 1116))
-        XCTAssertEqual(VideoExporter.scaledSize(CGSize(width: 101, height: 3), by: 0.5), CGSize(width: 50, height: 2))
+        XCTAssertEqual(VideoExporter.evenPixelSize(CGSize(width: 101, height: 3), scale: 0.5, rounding: .down),
+                       CGSize(width: 50, height: 2))
     }
 }

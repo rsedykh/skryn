@@ -33,32 +33,7 @@ final class AboutPanel: AnimatedPanel {
         stack.alignment = .centerX
         stack.spacing = 24
         stack.edgeInsets = NSEdgeInsets(top: 4, left: 20, bottom: 28, right: 20)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        let document = FlippedView()
-        document.translatesAutoresizingMaskIntoConstraints = false
-        document.addSubview(stack)
-        let scrollView = NSScrollView()
-        scrollView.hasVerticalScroller = true
-        scrollView.drawsBackground = false
-        scrollView.documentView = document
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        guard let contentView else { return }
-        contentView.addSubview(scrollView)
-        let clip = scrollView.contentView
-        NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            document.topAnchor.constraint(equalTo: clip.topAnchor),
-            document.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
-            document.widthAnchor.constraint(equalTo: clip.widthAnchor),
-            stack.topAnchor.constraint(equalTo: document.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: document.bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: document.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: document.trailingAnchor),
-        ])
+        contentView = SettingsStyle.scrollingDocument(stack)
     }
 
     // MARK: - Header
@@ -152,8 +127,8 @@ final class AboutPanel: AnimatedPanel {
         uploadAction.append(NSAttributedString(string: UploadProviders.current.title, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: NSColor.labelColor,
         ]))
-        let capture = hotkeyDisplayString(keyCode: Defaults.hotkey.keyCode, carbonModifiers: Defaults.hotkey.modifiers)
-        let area = hotkeyDisplayString(keyCode: Defaults.areaHotkey.keyCode, carbonModifiers: Defaults.areaHotkey.modifiers)
+        let capture = MenuBarAction.screenshot.hotkey.displayString
+        let area = MenuBarAction.area.hotkey.displayString
         var sections = [ShortcutSection(title: "Capture and Save", symbol: "camera.viewfinder", tint: .systemBlue, items: [
             (capture, plain("Take a screenshot")),
             (area, plain("Take a screenshot of an area")),
@@ -162,9 +137,7 @@ final class AboutPanel: AnimatedPanel {
             (SaveAction.cloud.configuredModifier.label, uploadAction),
         ])]
         if #available(macOS 15.0, *) {
-            let record = hotkeyDisplayString(
-                keyCode: Defaults.recordHotkey.keyCode, carbonModifiers: Defaults.recordHotkey.modifiers
-            )
+            let record = MenuBarAction.record.hotkey.displayString
             sections.append(plainSection("Recording", "record.circle", .systemRed, [
                 (record, "Record the screen, press again to stop"),
                 ("Drag / Click", "Record an area / the full screen"),

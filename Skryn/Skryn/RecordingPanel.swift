@@ -7,7 +7,7 @@ import AVKit
 /// Discard) goes through `close()`, which asks before throwing away a recording that hasn't been
 /// saved anywhere. Show it with `present()`, not `makeKeyAndOrderFront`.
 @MainActor
-final class RecordingPanel: NSPanel {
+final class RecordingPanel: AnimatedPanel {
     /// Preview size bounds: at least this wide on open, at most this share of the screen
     private static let minVideoWidth: CGFloat = 640
     private static let maxScreenShare: CGFloat = 0.8
@@ -16,11 +16,9 @@ final class RecordingPanel: NSPanel {
     /// Everything under the video: the action bar and its insets
     private static let chromeHeight: CGFloat = HUDStyle.barHeight + 2 * barInset
     private static let stageRadius: CGFloat = 12
-    /// The window grows from / shrinks to this scale as it opens and closes
-    private static let motionScale: CGFloat = 0.96
-
-    private let onAction: (SaveAction, URL) -> Bool
-    private let onDiscard: () -> Void
+    /// Performs an action on a file, reporting conversion progress; true when the panel should close
+    typealias Action = (SaveAction, URL, @escaping VideoExporter.Progress) async -> Bool
+    private let onAction: Action
     private let player: AVPlayer
     private let stage = NSView()
     private let playerView = AVPlayerView()
@@ -28,33 +26,38 @@ final class RecordingPanel: NSPanel {
     private let infoLabel = NSTextField(labelWithString: "")
     private let spinner = NSProgressIndicator()
     /// Return without modifiers triggers this one (the emphasized button).
-    private let defaultAction: SaveAction = UploadProviders.current.setupProblem == nil ? .cloud : .local
+    private let defaultAction = SaveAction.primary
     private var actionButtons: [HUDButton] = []
     private var trimButton: HUDButton?
     private var playbackObservation: NSKeyValueObservation?
     /// The file the actions act on: the original, or the latest trimmed copy.
     private var currentURL: URL
-    /// Trimmed copies this panel made; deleted on close. The caller owns the original.
-    private var trimmedFiles: [URL] = []
-    /// Set once an action succeeded or the discard was confirmed; after that `close()` just closes.
-    private var isFinished = false
-    /// The exit animation is running; input is ignored.
-    private(set) var isClosing = false
+    /// The original and the trimmed copies this panel made; all deleted on close.
+    private var ownedFiles: [URL]
+    private enum State {
+        /// Action buttons and Return shortcuts work
+        case ready
+        /// In the trim UI, or writing the trimmed copy
+        case trimming
+        /// An action is running (converting, uploading); closing waits for it
+        case performing
+        /// An action succeeded or the discard was confirmed; `close()` just closes
+        case finished
+    }
+    private var state = State.ready {
+        didSet { (actionButtons + [trimButton].compactMap { $0 }).forEach { $0.isEnabled = state == .ready } }
+    }
     /// `present()` was called; the panel shows once it has been fitted to the video.
     private var wantsPresent = false
     private var isFitted = false
-    /// Trimming or exporting: action buttons and Return shortcuts are off.
-    private var isBusy = false {
-        didSet { (actionButtons + [trimButton].compactMap { $0 }).forEach { $0.isEnabled = !isBusy } }
-    }
 
-    /// `onAction` performs the action on the given file (the original or a trimmed copy) and returns true
-    /// if the panel should close (false = keep it open, e.g. cloud with no key configured). `onDiscard` is
-    /// called when the user discards the recording (after confirming).
-    init(videoURL: URL, onAction: @escaping (SaveAction, URL) -> Bool, onDiscard: @escaping () -> Void) {
+    /// Takes ownership of `videoURL` (a temp file, deleted on close). `onAction` performs the action on the
+    /// given file (the original or a trimmed copy) and returns true if the panel should close (false = keep
+    /// it open, e.g. cloud with no key configured, or the conversion failed).
+    init(videoURL: URL, onAction: @escaping Action) {
         self.onAction = onAction
-        self.onDiscard = onDiscard
         currentURL = videoURL
+        ownedFiles = [videoURL]
         player = AVPlayer(url: videoURL)
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 450 + Self.chromeHeight),
@@ -68,6 +71,8 @@ final class RecordingPanel: NSPanel {
         appearance = NSAppearance(named: .darkAqua)
         backgroundColor = HUDStyle.surfaceOpaque
         isReleasedWhenClosed = false
+        entranceScale = 0.96
+        exitScale = 0.96
 
         playerView.player = player
         playerView.controlsStyle = .floating
@@ -85,10 +90,10 @@ final class RecordingPanel: NSPanel {
 
     /// Shows the panel growing in from slightly smaller, once it has been sized to the video
     /// (so it doesn't jump mid-animation). Makes it key.
-    func present() {
+    override func present() {
         wantsPresent = true
-        guard isFitted, !isVisible else { return }
-        HUDMotion.show(self, scale: Self.motionScale, makeKey: true)
+        guard isFitted else { return }
+        super.present()
     }
 
     // MARK: - Layout
@@ -135,10 +140,11 @@ final class RecordingPanel: NSPanel {
         trim.showsTitle = true
         trimButton = trim
         actionButtons = SaveAction.allCases.map { action in
-            let (title, symbol) = Self.titleAndSymbol(of: action)
             let shortcut = action.configuredModifier.label
             let keys = action == defaultAction ? "\u{23CE} or \(shortcut)" : shortcut
-            let button = makeButton(title, symbol: symbol, hint: "\(title) \u{2014} \(keys)") { $0.perform(action) }
+            let button = makeButton(action.title, symbol: action.symbolName, hint: "\(action.title) \u{2014} \(keys)") {
+                $0.perform(action)
+            }
             button.showsTitle = true
             button.isEmphasized = action == defaultAction
             return button
@@ -151,12 +157,13 @@ final class RecordingPanel: NSPanel {
         infoLabel.alphaValue = 0  // fades in once the file has been read
         spinner.style = .spinning
         spinner.controlSize = .small
+        spinner.maxValue = 1  // conversion progress is 0...1
         spinner.alphaValue = 0  // faded rather than hidden, so the bar's layout never shifts
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
         spacer.setContentCompressionResistancePriority(.init(1), for: .horizontal)
-        return HUDBar(views: [discard, HUDDivider(), trim, HUDDivider(), infoLabel, spinner, spacer] + actionButtons)
+        return HUDBar(groups: [[discard], [trim], [infoLabel, spinner, spacer] + actionButtons])
     }
 
     private func makeButton(
@@ -169,14 +176,6 @@ final class RecordingPanel: NSPanel {
             handler(self)
         }
         return button
-    }
-
-    private static func titleAndSymbol(of action: SaveAction) -> (String, String) {
-        switch action {
-        case .local: ("Save", "square.and.arrow.down")
-        case .clipboard: ("Copy", "doc.on.doc")
-        case .cloud: ("Upload", "icloud.and.arrow.up")
-        }
     }
 
     /// A round HUD play button over the poster frame, so the preview reads as a video, not a live window.
@@ -304,8 +303,8 @@ final class RecordingPanel: NSPanel {
     // MARK: - Trim
 
     private func trimClicked() {
-        guard !isBusy, !isClosing, playerView.canBeginTrimming else { NSSound.beep(); return }
-        isBusy = true
+        guard state == .ready, !isClosing, playerView.canBeginTrimming else { NSSound.beep(); return }
+        state = .trimming
         HUDMotion.fade(playOverlay, visible: false)  // the trim UI takes over the stage
         playerView.beginTrimming { [weak self] result in
             DispatchQueue.main.async {
@@ -313,7 +312,7 @@ final class RecordingPanel: NSPanel {
                 if result == .okButton {
                     self.exportTrimmedRange()
                 } else {
-                    self.isBusy = false
+                    self.state = .ready
                 }
                 self.makeFirstResponder(self.playerView)
             }
@@ -322,39 +321,33 @@ final class RecordingPanel: NSPanel {
 
     /// Writes the range picked in the trim UI to a new temp file and swaps the preview to it.
     private func exportTrimmedRange() {
-        guard let item = player.currentItem else { isBusy = false; return }
+        guard let item = player.currentItem else { state = .ready; return }
         let start = item.reversePlaybackEndTime.isValid ? item.reversePlaybackEndTime : .zero
         let range = item.forwardPlaybackEndTime.isValid
             ? CMTimeRange(start: start, end: item.forwardPlaybackEndTime)
             : CMTimeRange(start: start, duration: .positiveInfinity)
-        let output = FileManager.default.temporaryDirectory.appendingPathComponent("skryn-\(UUID().uuidString).mp4")
         let asset = item.asset
         setExporting(true)
         Task { [weak self] in
             do {
-                try await Self.export(asset, range: range, to: output)
+                let output = try await VideoExporter.trim(asset, range: range)
                 guard let self, isVisible, !isClosing else { try? FileManager.default.removeItem(at: output); return }
                 didExport(to: output)
             } catch {
-                try? FileManager.default.removeItem(at: output)
                 self?.exportFailed(error)
             }
         }
     }
 
-    private static func export(_ asset: AVAsset, range: CMTimeRange, to url: URL) async throws {
-        // ponytail: recording itself needs macOS 15, so there's no pre-15 export path
-        guard #available(macOS 15, *),
-              let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough)
-        else { throw CocoaError(.featureUnsupported) }
-        session.timeRange = range
-        try await session.export(to: url, as: .mp4)
-    }
-
     /// While exporting the spinner fades in and the info line dims; both settle back afterwards
-    /// (a new info line crossfades in on its own after a successful trim).
-    private func setExporting(_ exporting: Bool) {
-        if exporting { spinner.startAnimation(nil) }
+    /// (a new info line crossfades in on its own after a successful trim). With `progress` the spinner
+    /// fills up instead of spinning.
+    private func setExporting(_ exporting: Bool, progress: Double? = nil) {
+        if exporting {
+            spinner.isIndeterminate = progress == nil
+            spinner.doubleValue = progress ?? 0
+            spinner.startAnimation(nil)
+        }
         Self.animate(exporting ? HUDMotion.enterDuration : HUDMotion.exitDuration, { [self] in
             spinner.animator().alphaValue = exporting ? 1 : 0
             infoLabel.animator().alphaValue = exporting ? 0.4 : 1
@@ -365,10 +358,10 @@ final class RecordingPanel: NSPanel {
 
     private func didExport(to url: URL) {
         setExporting(false)
-        trimmedFiles.append(url)
+        ownedFiles.append(url)
         currentURL = url
         swapVideo(to: url)
-        isBusy = false
+        state = .ready
         loadInfo(fitPanel: false)
     }
 
@@ -387,7 +380,7 @@ final class RecordingPanel: NSPanel {
         // Undo the trim marks so the preview matches the file the actions will use
         player.currentItem?.reversePlaybackEndTime = .invalid
         player.currentItem?.forwardPlaybackEndTime = .invalid
-        isBusy = false
+        state = .ready
         guard isVisible, !isClosing else { return }
         let alert = NSAlert()
         alert.messageText = "Couldn't trim the recording"
@@ -403,16 +396,23 @@ final class RecordingPanel: NSPanel {
         makeFirstResponder(playerView)
     }
 
+    /// Runs the action with the panel open, so its file stays around while it's converted; a conversion
+    /// shows its progress on the spinner. Closes once the action succeeded.
     private func perform(_ action: SaveAction) {
-        guard !isBusy, !isClosing, onAction(action, currentURL) else { return }
-        isFinished = true
-        close()
+        guard state == .ready, !isClosing else { return }
+        state = .performing
+        Task {
+            let done = await onAction(action, currentURL) { self.setExporting(true, progress: $0) }
+            setExporting(false)
+            state = done ? .finished : .ready
+            if done { close() }
+        }
     }
 
     /// Modifier+Return runs the action configured for that modifier; plain Return runs the default action.
     /// Off while trimming, so Return reaches the trim controls.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if attachedSheet == nil, !isBusy, !isClosing, event.keyCode == 36 {
+        if attachedSheet == nil, state == .ready, !isClosing, event.keyCode == 36 {
             let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
             if let action = modifiers.isEmpty ? defaultAction : SaveAction.action(for: event.modifierFlags) {
                 perform(action)
@@ -426,29 +426,27 @@ final class RecordingPanel: NSPanel {
         close()
     }
 
-    /// The close button, Cmd+W (`AppDelegate.closeKeyWindow` calls `close()`), Esc and Discard all land here.
+    /// The close button, Cmd+W (`WindowPresenter.closeKeyWindow` calls `close()`), Esc and Discard all land here.
     /// Once finished, the panel shrinks and fades out, then really closes.
     override func close() {
-        guard isFinished else {
-            confirmDiscard()
-            return
+        switch state {
+        case .finished: break
+        case .performing: NSSound.beep(); return  // it's converting or handing off this file
+        case .ready, .trimming: confirmDiscard(); return
         }
         guard !isClosing else { return }
-        isClosing = true
         ignoresMouseEvents = true
         player.pause()
         HUDHint.shared.hide()
-        guard isVisible else { finishClose(); return }
-        HUDMotion.hide(self, scale: Self.motionScale) { [self] in finishClose() }
+        super.close()
     }
 
-    private func finishClose() {
+    override func didFinishExit() {
         playbackObservation = nil
         playerView.player = nil
         player.replaceCurrentItem(with: nil)
-        trimmedFiles.forEach { try? FileManager.default.removeItem(at: $0) }
-        trimmedFiles = []
-        super.close()
+        ownedFiles.forEach { try? FileManager.default.removeItem(at: $0) }
+        ownedFiles = []
     }
 
     private func confirmDiscard() {
@@ -462,8 +460,7 @@ final class RecordingPanel: NSPanel {
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: self) { [weak self] response in
             guard let self, response == .alertFirstButtonReturn else { return }
-            isFinished = true
-            onDiscard()
+            state = .finished
             close()
         }
     }

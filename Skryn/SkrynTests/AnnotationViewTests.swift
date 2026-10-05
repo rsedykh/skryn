@@ -4,8 +4,6 @@ import XCTest
 
 final class AnnotationViewTests: XCTestCase {
 
-    // MARK: - rectFromDrag
-
     private func makeView(imageSize: NSSize = NSSize(width: 200, height: 100)) -> AnnotationView {
         let image = NSImage(size: imageSize)
         return AnnotationView(frame: NSRect(origin: .zero, size: imageSize), screenshot: image)
@@ -37,30 +35,18 @@ final class AnnotationViewTests: XCTestCase {
         body()
     }
 
-    func testRectFromDrag_topLeftToBottomRight() {
-        let view = makeView()
-        let rect = view.rectFromDrag(
-            origin: CGPoint(x: 10, y: 20),
-            current: CGPoint(x: 50, y: 60)
-        )
+    func testRectSpanning_topLeftToBottomRight() {
+        let rect = CGRect(spanning: CGPoint(x: 10, y: 20), CGPoint(x: 50, y: 60))
         XCTAssertEqual(rect, CGRect(x: 10, y: 20, width: 40, height: 40))
     }
 
-    func testRectFromDrag_bottomRightToTopLeft() {
-        let view = makeView()
-        let rect = view.rectFromDrag(
-            origin: CGPoint(x: 50, y: 60),
-            current: CGPoint(x: 10, y: 20)
-        )
+    func testRectSpanning_bottomRightToTopLeft() {
+        let rect = CGRect(spanning: CGPoint(x: 50, y: 60), CGPoint(x: 10, y: 20))
         XCTAssertEqual(rect, CGRect(x: 10, y: 20, width: 40, height: 40))
     }
 
-    func testRectFromDrag_zeroSize() {
-        let view = makeView()
-        let rect = view.rectFromDrag(
-            origin: CGPoint(x: 30, y: 30),
-            current: CGPoint(x: 30, y: 30)
-        )
+    func testRectSpanning_zeroSize() {
+        let rect = CGRect(spanning: CGPoint(x: 30, y: 30), CGPoint(x: 30, y: 30))
         XCTAssertEqual(rect, CGRect(x: 30, y: 30, width: 0, height: 0))
     }
 
@@ -674,26 +660,28 @@ final class ScreenRecordingGeometryTests: XCTestCase {
         XCTAssertEqual(rect, CGRect(x: 0, y: 700, width: 100, height: 100))
     }
 
-    @available(macOS 15.0, *)
-    func testOutputPixelSize_scalesAndRoundsToEven() throws {
-        let size = ScreenRecorder.outputPixelSize(for: CGRect(x: 0, y: 0, width: 101.5, height: 51), scale: 2)
-        XCTAssertEqual(size.width, 202)
-        XCTAssertEqual(size.height, 102)
+    func testRecordingPixelSize_scalesAndRoundsToEven() {
+        let size = VideoExporter.evenPixelSize(CGSize(width: 101.5, height: 51), scale: 2, rounding: .toNearestOrAwayFromZero)
+        XCTAssertEqual(size, CGSize(width: 202, height: 102))
 
-        let odd = ScreenRecorder.outputPixelSize(for: CGRect(x: 0, y: 0, width: 101, height: 51), scale: 1)
-        XCTAssertEqual(odd.width, 100)
-        XCTAssertEqual(odd.height, 50)
+        let odd = VideoExporter.evenPixelSize(CGSize(width: 101, height: 51), scale: 1, rounding: .toNearestOrAwayFromZero)
+        XCTAssertEqual(odd, CGSize(width: 100, height: 50))
+
+        // The recorder rounds to the nearest pixel (103.5 → 104); scaling a video rounds down (103 → 102)
+        let fraction = CGSize(width: 51.75, height: 2)
+        XCTAssertEqual(VideoExporter.evenPixelSize(fraction, scale: 2, rounding: .toNearestOrAwayFromZero).width, 104)
+        XCTAssertEqual(VideoExporter.evenPixelSize(fraction, scale: 2, rounding: .down).width, 102)
     }
 }
 
 @MainActor
 final class RecordingElapsedTimeTests: XCTestCase {
     func testElapsedString() {
-        XCTAssertEqual(AppDelegate.elapsedString(0), "0:00")
-        XCTAssertEqual(AppDelegate.elapsedString(7.9), "0:07")
-        XCTAssertEqual(AppDelegate.elapsedString(754), "12:34")
-        XCTAssertEqual(AppDelegate.elapsedString(3723), "1:02:03")
-        XCTAssertEqual(AppDelegate.elapsedString(-3), "0:00")
+        XCTAssertEqual(MenuBarController.elapsedString(0), "0:00")
+        XCTAssertEqual(MenuBarController.elapsedString(7.9), "0:07")
+        XCTAssertEqual(MenuBarController.elapsedString(754), "12:34")
+        XCTAssertEqual(MenuBarController.elapsedString(3723), "1:02:03")
+        XCTAssertEqual(MenuBarController.elapsedString(-3), "0:00")
     }
 }
 
@@ -738,6 +726,7 @@ final class RecordingPanelInfoTests: XCTestCase {
     }
 }
 
+@MainActor
 final class AnnotationToolTests: XCTestCase {
     func testModifierDrags_pickTheirTool() {
         XCTAssertNil(AnnotationTool(modifiers: []))
@@ -748,8 +737,56 @@ final class AnnotationToolTests: XCTestCase {
         XCTAssertEqual(AnnotationTool(modifiers: .control), .blur)
     }
 
+    func testModifierPrecedence_matchesTheOldLadder() {
+        XCTAssertEqual(AnnotationTool(modifiers: [.option, .command]), .crop)
+        XCTAssertEqual(AnnotationTool(modifiers: [.command, .control]), .rectangle)
+        XCTAssertEqual(AnnotationTool(modifiers: [.control, .shift]), .blur)
+        XCTAssertEqual(AnnotationTool(modifiers: [.option, .shift, .command]), .ellipse)
+    }
+
+    func testEachDragModifierPicksItsOwnTool() {
+        for tool in AnnotationTool.allCases {
+            guard let modifiers = tool.dragModifiers else { continue }
+            XCTAssertEqual(AnnotationTool(modifiers: modifiers), tool)
+        }
+    }
+
+    func testSelectionKeys_roundTripAndLabelHints() {
+        for tool in AnnotationTool.allCases {
+            guard let key = tool.selectionKey else { continue }
+            XCTAssertEqual(AnnotationTool(keyCode: UInt16(key.keyCode)), tool)
+        }
+        XCTAssertNil(AnnotationTool(keyCode: 17))  // T types text at the cursor
+        XCTAssertEqual(AnnotationToolbar.toolTip(for: .rectangle), "Rectangle \u{2014} R, or \u{2318} Drag")
+        XCTAssertEqual(AnnotationToolbar.toolTip(for: .ellipse), "Ellipse \u{2014} O, or \u{21E7}\u{2318} Drag")
+        XCTAssertEqual(AnnotationToolbar.toolTip(for: .arrow), "Arrow \u{2014} A, or just drag")
+        XCTAssertEqual(AnnotationToolbar.toolTip(for: .badge), "Number \u{2014} 1\u{2013}0")
+    }
+
     func testOnlyTextAndNumberArePlacedByClicking() {
         XCTAssertEqual(AnnotationTool.allCases.filter(\.isClickTool), [.text, .badge])
+    }
+}
+
+final class AnnotationRendererTests: XCTestCase {
+    /// 200×100pt at 2x: export keeps the pixel resolution and cuts to the crop (in points)
+    func testRender_fullResolutionAndCrop() throws {
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: 400, height: 200, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        let image = NSImage(cgImage: try XCTUnwrap(context.makeImage()), size: NSSize(width: 200, height: 100))
+        let renderer = AnnotationRenderer(screenshot: image)
+        XCTAssertEqual(renderer.pixelsPerPoint, 2)
+
+        let full = try XCTUnwrap(renderer.render([.arrow(from: .zero, to: CGPoint(x: 50, y: 50), color: .red)]))
+        XCTAssertEqual(full.width, 400)
+        XCTAssertEqual(full.height, 200)
+
+        let crop = CGRect(x: 10, y: 10, width: 50, height: 25)
+        let cropped = try XCTUnwrap(renderer.render([.crop(rect: crop)]))
+        XCTAssertEqual(cropped.width, 100)
+        XCTAssertEqual(cropped.height, 50)
     }
 }
 
@@ -778,7 +815,7 @@ final class ScreenCaptureCropTests: XCTestCase {
 
 @MainActor
 final class MenuBarSettingsTests: XCTestCase {
-    private let keys = ["menuBarIcons", "menuBarClickOpensMenu", "menuBarTiles", "menuBarLayout"]
+    private let keys = ["menuBarIcons", "menuBarClickOpensMenu", "menuBarTiles"]
     private var saved: [String: Any] = [:]
 
     override func setUp() {
@@ -799,13 +836,6 @@ final class MenuBarSettingsTests: XCTestCase {
         XCTAssertEqual(settings.menuTiles, MenuBarAction.available)
     }
 
-    func testLegacyLayout_migratesToIcons() {
-        UserDefaults.standard.set("splitWithArea", forKey: "menuBarLayout")
-        XCTAssertEqual(MenuBarSettings.current.icons, MenuBarAction.available)
-        UserDefaults.standard.set("single", forKey: "menuBarLayout")
-        XCTAssertEqual(MenuBarSettings.current.icons, [.screenshot])
-    }
-
     func testNormalized_neverWithoutAnIcon_andInFixedOrder() {
         var settings = MenuBarSettings()
         settings.icons = []
@@ -821,6 +851,30 @@ final class MenuBarSettingsTests: XCTestCase {
         settings.menuTiles = [.screenshot]
         MenuBarSettings.current = settings
         XCTAssertEqual(MenuBarSettings.current, settings)
-        XCTAssertNil(UserDefaults.standard.object(forKey: "menuBarLayout"), "legacy key is dropped once saved")
+    }
+}
+
+final class PreferencesTests: XCTestCase {
+    func testAssigningModifier_swapsWithTheActionThatHadIt() {
+        let defaults = SaveModifiers()  // local ⌥, clipboard ⌘, cloud ⌃
+        let swapped = defaults.assigning(.cmd, to: .local)
+        XCTAssertEqual([swapped.local, swapped.clipboard, swapped.cloud], [.cmd, .opt, .ctrl])
+        XCTAssertEqual(defaults.assigning(.opt, to: .local), defaults, "assigning its own key changes nothing")
+    }
+
+    func testStoredSettings_missingKeysFallBack_andValuesAreNormalized() {
+        let keys = ["outputImageFormat", "outputImageLossless", "outputImageQuality", "outputVideoFormat",
+                    "outputRetina", "outputFrameRate", "outputStripMetadata"]
+        let saved = keys.map { ($0, UserDefaults.standard.object(forKey: $0)) }
+        defer { for (key, value) in saved { UserDefaults.standard.set(value, forKey: key) } }
+        keys.forEach(UserDefaults.standard.removeObject)
+
+        UserDefaults.standard.set("webp", forKey: "outputImageFormat")
+        UserDefaults.standard.set(5.0, forKey: "outputImageQuality")
+        UserDefaults.standard.set(45, forKey: "outputFrameRate")  // not a choice: falls back
+        var expected = OutputSettings()
+        expected.imageFormat = .webp
+        expected.imageQuality = 1
+        XCTAssertEqual(OutputSettings.current, expected)
     }
 }

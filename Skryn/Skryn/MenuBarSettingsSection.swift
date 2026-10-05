@@ -1,12 +1,9 @@
 import AppKit
 
 /// Settings → Menu Bar: which icons show in the menu bar, what clicking one does, and which action
-/// buttons the menu starts with. Edits `MenuBarSettings.current` immediately.
+/// buttons the menu starts with. Edits `MenuBarSettings.current` immediately (the app re-applies the icons).
 @MainActor
 final class MenuBarSettingsSection: NSObject {
-    /// Called after every change (the app re-applies the icons)
-    var onChange: (() -> Void)?
-
     private var iconSwitches: [MenuBarAction: NSSwitch] = [:]
     private var tileSwitches: [MenuBarAction: NSSwitch] = [:]
     private let clickPopup = NSPopUpButton(frame: .zero, pullsDown: false)
@@ -68,6 +65,5 @@ final class MenuBarSettingsSection: NSObject {
         settings.clickOpensMenu = clickPopup.indexOfSelectedItem == 1
         MenuBarSettings.current = settings
         load()
-        onChange?()
     }
 }

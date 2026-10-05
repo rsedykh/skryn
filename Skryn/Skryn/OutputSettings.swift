@@ -52,18 +52,24 @@ enum VideoFormat: String, CaseIterable {
     var isAnimatedImage: Bool { self == .gif || self == .webp }
 }
 
+/// Recording frame rate
+enum FrameRate: Int, CaseIterable {
+    case fps30 = 30, fps60 = 60
+
+    var title: String { "\(rawValue) fps" }
+}
+
 /// Output settings for saved/uploaded files. Settings edits them; the encoders read them.
-struct OutputSettings: Equatable {
+struct OutputSettings: StoredSettings {
     var imageFormat: ImageFormat = .png
     /// For AVIF / HEIC / WebP: lossless instead of `imageQuality`
     var imageLossless = true
-    /// 0...1 for lossy images (JPEG, and AVIF/HEIC/WebP when not lossless)
+    /// 0.1...1 for lossy images (JPEG, and AVIF/HEIC/WebP when not lossless)
     var imageQuality = 0.85
     var videoFormat: VideoFormat = .mp4H264
     /// Full Retina resolution; false saves at 1x (half the pixels each way on Retina displays)
     var retina = true
-    /// Recording frame rate: 30 or 60
-    var frameRate = 30
+    var frameRate = FrameRate.fps30
     /// Drop capture metadata (EXIF, color sync dates, software tags) from saved images
     var stripMetadata = true
 
@@ -92,45 +98,23 @@ struct OutputSettings: Equatable {
         }
     }
 
-    /// Posted whenever `current` is written, so open UIs stay in sync.
     static let didChange = Notification.Name("OutputSettingsDidChange")
 
-    private enum Key {
-        static let imageFormat = "outputImageFormat"
-        static let imageLossless = "outputImageLossless"
-        static let imageQuality = "outputImageQuality"
-        static let videoFormat = "outputVideoFormat"
-        static let retina = "outputRetina"
-        static let frameRate = "outputFrameRate"
-        static let stripMetadata = "outputStripMetadata"
+    static var fields: [StoredField<Self>] {
+        [
+            .raw("outputImageFormat", \.imageFormat),
+            .value("outputImageLossless", \.imageLossless),
+            .value("outputImageQuality", \.imageQuality),
+            .raw("outputVideoFormat", \.videoFormat),
+            .value("outputRetina", \.retina),
+            .raw("outputFrameRate", \.frameRate),
+            .value("outputStripMetadata", \.stripMetadata),
+        ]
     }
 
-    static var current: OutputSettings {
-        get {
-            let defaults = UserDefaults.standard
-            let fallback = OutputSettings()
-            return OutputSettings(
-                imageFormat: defaults.string(forKey: Key.imageFormat).flatMap(ImageFormat.init) ?? fallback.imageFormat,
-                imageLossless: defaults.object(forKey: Key.imageLossless) as? Bool ?? fallback.imageLossless,
-                imageQuality: defaults.object(forKey: Key.imageQuality) as? Double ?? fallback.imageQuality,
-                videoFormat: defaults.string(forKey: Key.videoFormat).flatMap(VideoFormat.init) ?? fallback.videoFormat,
-                retina: defaults.object(forKey: Key.retina) as? Bool ?? fallback.retina,
-                frameRate: [30, 60].contains(defaults.integer(forKey: Key.frameRate))
-                    ? defaults.integer(forKey: Key.frameRate) : fallback.frameRate,
-                stripMetadata: defaults.object(forKey: Key.stripMetadata) as? Bool ?? fallback.stripMetadata
-            )
-        }
-        set {
-            guard newValue != current else { return }
-            let defaults = UserDefaults.standard
-            defaults.set(newValue.imageFormat.rawValue, forKey: Key.imageFormat)
-            defaults.set(newValue.imageLossless, forKey: Key.imageLossless)
-            defaults.set(min(max(newValue.imageQuality, 0.1), 1), forKey: Key.imageQuality)
-            defaults.set(newValue.videoFormat.rawValue, forKey: Key.videoFormat)
-            defaults.set(newValue.retina, forKey: Key.retina)
-            defaults.set(newValue.frameRate, forKey: Key.frameRate)
-            defaults.set(newValue.stripMetadata, forKey: Key.stripMetadata)
-            NotificationCenter.default.post(name: didChange, object: nil)
-        }
+    var normalized: OutputSettings {
+        var copy = self
+        copy.imageQuality = min(max(imageQuality, 0.1), 1)
+        return copy
     }
 }
