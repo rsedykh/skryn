@@ -35,11 +35,48 @@ enum AnnotationColor: String, CaseIterable, Equatable {
     var contrastingTextColor: NSColor { self == .yellow || self == .white ? .black : .white }
 }
 
+/// Line weight of arrows, lines, rectangles and ellipses. Medium is the original 3pt look.
+enum StrokeWidth: Int, CaseIterable, Equatable {
+    case thin, medium, thick
+
+    var points: CGFloat {
+        switch self {
+        case .thin: 2
+        case .medium: 3
+        case .thick: 5
+        }
+    }
+
+    /// Arrowhead length: 18pt at medium, scaled with the line so thin and thick stay in proportion
+    var arrowHeadLength: CGFloat {
+        switch self {
+        case .thin: 13
+        case .medium: 18
+        case .thick: 25
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .thin: "Thin"
+        case .medium: "Medium"
+        case .thick: "Thick"
+        }
+    }
+
+    /// One step thicker or thinner (the ] and [ keys), clamped at the ends
+    func stepped(thicker: Bool) -> StrokeWidth {
+        StrokeWidth(rawValue: rawValue + (thicker ? 1 : -1)) ?? self
+    }
+}
+
 enum Annotation: Equatable {
-    case arrow(from: CGPoint, to: CGPoint, color: AnnotationColor)
-    case line(from: CGPoint, to: CGPoint, color: AnnotationColor)
-    case rectangle(rect: CGRect, color: AnnotationColor)
-    case ellipse(rect: CGRect, color: AnnotationColor)
+    case arrow(from: CGPoint, to: CGPoint, color: AnnotationColor, width: StrokeWidth = .medium)
+    case line(from: CGPoint, to: CGPoint, color: AnnotationColor, width: StrokeWidth = .medium)
+    case rectangle(rect: CGRect, color: AnnotationColor, width: StrokeWidth = .medium)
+    case ellipse(rect: CGRect, color: AnnotationColor, width: StrokeWidth = .medium)
+    /// Translucent marker over a region, multiplied into the screenshot
+    case highlight(rect: CGRect, color: AnnotationColor)
     case crop(rect: CGRect)
     case text(origin: CGPoint, width: CGFloat, content: String, fontSize: CGFloat, color: AnnotationColor)
     case blur(rect: CGRect)
@@ -63,14 +100,27 @@ enum AnnotationHandle {
     case from, to
     case topLeft, topRight, bottomLeft, bottomRight
     case left, right
+
+    /// The handle that stays put while this one is dragged (what Shift constrains against)
+    var opposite: AnnotationHandle? {
+        switch self {
+        case .from: .to
+        case .to: .from
+        case .topLeft: .bottomRight
+        case .bottomRight: .topLeft
+        case .topRight: .bottomLeft
+        case .bottomLeft: .topRight
+        case .left, .right: nil
+        }
+    }
 }
 
 extension Annotation {
     /// The annotation's color, or nil for colorless types (crop, blur)
     var color: AnnotationColor? {
         switch self {
-        case .arrow(_, _, let color), .line(_, _, let color),
-             .rectangle(_, let color), .ellipse(_, let color),
+        case .arrow(_, _, let color, _), .line(_, _, let color, _),
+             .rectangle(_, let color, _), .ellipse(_, let color, _), .highlight(_, let color),
              .text(_, _, _, _, let color), .badge(_, _, let color):
             return color
         case .crop, .blur:
@@ -81,14 +131,16 @@ extension Annotation {
     /// Returns a copy with the given color; unchanged for colorless types
     func withColor(_ newColor: AnnotationColor) -> Annotation {
         switch self {
-        case .arrow(let from, let to, _):
-            return .arrow(from: from, to: to, color: newColor)
-        case .line(let from, let to, _):
-            return .line(from: from, to: to, color: newColor)
-        case .rectangle(let rect, _):
-            return .rectangle(rect: rect, color: newColor)
-        case .ellipse(let rect, _):
-            return .ellipse(rect: rect, color: newColor)
+        case .arrow(let from, let to, _, let width):
+            return .arrow(from: from, to: to, color: newColor, width: width)
+        case .line(let from, let to, _, let width):
+            return .line(from: from, to: to, color: newColor, width: width)
+        case .rectangle(let rect, _, let width):
+            return .rectangle(rect: rect, color: newColor, width: width)
+        case .ellipse(let rect, _, let width):
+            return .ellipse(rect: rect, color: newColor, width: width)
+        case .highlight(let rect, _):
+            return .highlight(rect: rect, color: newColor)
         case .text(let origin, let width, let content, let fontSize, _):
             return .text(origin: origin, width: width, content: content,
                          fontSize: fontSize, color: newColor)
@@ -99,11 +151,34 @@ extension Annotation {
         }
     }
 
+    /// The line weight, or nil for annotations without one
+    var strokeWidth: StrokeWidth? {
+        switch self {
+        case .arrow(_, _, _, let width), .line(_, _, _, let width),
+             .rectangle(_, _, let width), .ellipse(_, _, let width):
+            return width
+        case .highlight, .crop, .text, .blur, .badge:
+            return nil
+        }
+    }
+
+    /// Returns a copy with the given line weight; unchanged for annotations without one
+    func withStrokeWidth(_ width: StrokeWidth) -> Annotation {
+        switch self {
+        case .arrow(let from, let to, let color, _): .arrow(from: from, to: to, color: color, width: width)
+        case .line(let from, let to, let color, _): .line(from: from, to: to, color: color, width: width)
+        case .rectangle(let rect, let color, _): .rectangle(rect: rect, color: color, width: width)
+        case .ellipse(let rect, let color, _): .ellipse(rect: rect, color: color, width: width)
+        case .highlight, .crop, .text, .blur, .badge: self
+        }
+    }
+
     var handles: [(handle: AnnotationHandle, point: CGPoint)] {
         switch self {
-        case .arrow(let from, let to, _), .line(let from, let to, _):
+        case .arrow(let from, let to, _, _), .line(let from, let to, _, _):
             return [(.from, from), (.to, to)]
-        case .rectangle(let rect, _), .ellipse(let rect, _), .crop(let rect), .blur(let rect):
+        case .rectangle(let rect, _, _), .ellipse(let rect, _, _), .highlight(let rect, _), .crop(let rect),
+             .blur(let rect):
             return [
                 (.topLeft, CGPoint(x: rect.minX, y: rect.minY)),
                 (.topRight, CGPoint(x: rect.maxX, y: rect.minY)),
@@ -125,20 +200,23 @@ extension Annotation {
 
     func moving(_ handle: AnnotationHandle, to point: CGPoint) -> Annotation {
         switch self {
-        case .arrow(let from, let to, let color):
+        case .arrow(let from, let to, let color, let width):
             return handle == .from
-                ? .arrow(from: point, to: to, color: color)
-                : .arrow(from: from, to: point, color: color)
-        case .line(let from, let to, let color):
+                ? .arrow(from: point, to: to, color: color, width: width)
+                : .arrow(from: from, to: point, color: color, width: width)
+        case .line(let from, let to, let color, let width):
             return handle == .from
-                ? .line(from: point, to: to, color: color)
-                : .line(from: from, to: point, color: color)
-        case .rectangle(let rect, let color):
+                ? .line(from: point, to: to, color: color, width: width)
+                : .line(from: from, to: point, color: color, width: width)
+        case .rectangle(let rect, let color, let width):
             let anchor = oppositeCorner(of: handle, in: rect)
-            return .rectangle(rect: CGRect(spanning: anchor, point), color: color)
-        case .ellipse(let rect, let color):
+            return .rectangle(rect: CGRect(spanning: anchor, point), color: color, width: width)
+        case .ellipse(let rect, let color, let width):
             let anchor = oppositeCorner(of: handle, in: rect)
-            return .ellipse(rect: CGRect(spanning: anchor, point), color: color)
+            return .ellipse(rect: CGRect(spanning: anchor, point), color: color, width: width)
+        case .highlight(let rect, let color):
+            let anchor = oppositeCorner(of: handle, in: rect)
+            return .highlight(rect: CGRect(spanning: anchor, point), color: color)
         case .crop(let rect):
             let anchor = oppositeCorner(of: handle, in: rect)
             return .crop(rect: CGRect(spanning: anchor, point))
@@ -166,22 +244,24 @@ extension Annotation {
 
     func offsetBy(dx: CGFloat, dy: CGFloat) -> Annotation {
         switch self {
-        case .arrow(let from, let to, let color):
+        case .arrow(let from, let to, let color, let width):
             return .arrow(
                 from: CGPoint(x: from.x + dx, y: from.y + dy),
                 to: CGPoint(x: to.x + dx, y: to.y + dy),
-                color: color
+                color: color, width: width
             )
-        case .line(let from, let to, let color):
+        case .line(let from, let to, let color, let width):
             return .line(
                 from: CGPoint(x: from.x + dx, y: from.y + dy),
                 to: CGPoint(x: to.x + dx, y: to.y + dy),
-                color: color
+                color: color, width: width
             )
-        case .rectangle(let rect, let color):
-            return .rectangle(rect: rect.offsetBy(dx: dx, dy: dy), color: color)
-        case .ellipse(let rect, let color):
-            return .ellipse(rect: rect.offsetBy(dx: dx, dy: dy), color: color)
+        case .rectangle(let rect, let color, let width):
+            return .rectangle(rect: rect.offsetBy(dx: dx, dy: dy), color: color, width: width)
+        case .ellipse(let rect, let color, let width):
+            return .ellipse(rect: rect.offsetBy(dx: dx, dy: dy), color: color, width: width)
+        case .highlight(let rect, let color):
+            return .highlight(rect: rect.offsetBy(dx: dx, dy: dy), color: color)
         case .crop(let rect):
             return .crop(rect: rect.offsetBy(dx: dx, dy: dy))
         case .blur(let rect):
@@ -201,18 +281,18 @@ extension Annotation {
 
     /// Returns true if the given screenshot-space point hits this annotation's body.
     /// Outlined shapes (rectangle, ellipse, crop) hit only near their stroke, so the
-    /// area inside them stays free for drawing new annotations.
+    /// area inside them stays free for drawing new annotations; blur and highlight fill their rect.
     func bodyContains(_ point: CGPoint, hitRadius: CGFloat) -> Bool {
         switch self {
-        case .arrow(let from, let to, _), .line(let from, let to, _):
+        case .arrow(let from, let to, _, _), .line(let from, let to, _, _):
             return distanceToSegment(point: point, a: from, b: to) <= hitRadius
-        case .rectangle(let rect, _), .crop(let rect):
+        case .rectangle(let rect, _, _), .crop(let rect):
             let outer = rect.insetBy(dx: -hitRadius, dy: -hitRadius)
             let inner = rect.insetBy(dx: hitRadius, dy: hitRadius)
             return outer.contains(point) && !inner.contains(point)
-        case .blur(let rect):
+        case .blur(let rect), .highlight(let rect, _):
             return rect.contains(point)
-        case .ellipse(let rect, _):
+        case .ellipse(let rect, _, _):
             return Self.ellipse(rect, inset: -hitRadius, contains: point)
                 && !Self.ellipse(rect, inset: hitRadius, contains: point)
         case .text(let origin, let width, let content, let fontSize, _):

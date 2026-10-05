@@ -36,6 +36,9 @@
 		AA000031 /* ImageEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000034 /* ImageEncoder.swift */; };
 		AA000032 /* VideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000035 /* VideoExporter.swift */; };
 		AA000033 /* StatusMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000036 /* StatusMenu.swift */; };
+		AA000051 /* AnnotationView+Text.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000054 /* AnnotationView+Text.swift */; };
+		AA000052 /* AnnotationView+Commands.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000055 /* AnnotationView+Commands.swift */; };
+		AA000053 /* CanvasViewport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000056 /* CanvasViewport.swift */; };
 		AA000038 /* AnnotationRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000041 /* AnnotationRenderer.swift */; };
 		AA000039 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000042 /* Preferences.swift */; };
 		AA000040 /* SettingsKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000043 /* SettingsKit.swift */; };
@@ -62,6 +65,7 @@
 		AA100002 /* UploadcareServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100003 /* UploadcareServiceTests.swift */; };
 		AA100003 /* UploadHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100004 /* UploadHistoryTests.swift */; };
 		AA100012 /* ProblemsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100013 /* ProblemsTests.swift */; };
+		AA100013 /* CanvasViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100014 /* CanvasViewportTests.swift */; };
 		AA100004 /* HotkeyRecorderButtonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100005 /* HotkeyRecorderButtonTests.swift */; };
 		AA100005 /* CaptureAreaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100006 /* CaptureAreaTests.swift */; };
 		AA100006 /* KeystrokeOverlayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100007 /* KeystrokeOverlayTests.swift */; };
@@ -115,6 +119,9 @@
 		AB000034 /* ImageEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageEncoder.swift; sourceTree = "<group>"; };
 		AB000035 /* VideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporter.swift; sourceTree = "<group>"; };
 		AB000036 /* StatusMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenu.swift; sourceTree = "<group>"; };
+		AB000054 /* AnnotationView+Text.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AnnotationView+Text.swift"; sourceTree = "<group>"; };
+		AB000055 /* AnnotationView+Commands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AnnotationView+Commands.swift"; sourceTree = "<group>"; };
+		AB000056 /* CanvasViewport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CanvasViewport.swift"; sourceTree = "<group>"; };
 		AB000041 /* AnnotationRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationRenderer.swift; sourceTree = "<group>"; };
 		AB000042 /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
 		AB000043 /* SettingsKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKit.swift; sourceTree = "<group>"; };
@@ -142,6 +149,7 @@
 		AB100003 /* UploadcareServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadcareServiceTests.swift; sourceTree = "<group>"; };
 		AB100004 /* UploadHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadHistoryTests.swift; sourceTree = "<group>"; };
 		AB100013 /* ProblemsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProblemsTests.swift; sourceTree = "<group>"; };
+		AB100014 /* CanvasViewportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasViewportTests.swift; sourceTree = "<group>"; };
 		AB100005 /* HotkeyRecorderButtonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderButtonTests.swift; sourceTree = "<group>"; };
 		AB100006 /* CaptureAreaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureAreaTests.swift; sourceTree = "<group>"; };
 		AB100007 /* KeystrokeOverlayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeystrokeOverlayTests.swift; sourceTree = "<group>"; };
@@ -211,6 +219,9 @@
 				AB000035 /* VideoExporter.swift */,
 				AB000036 /* StatusMenu.swift */,
 				AB000041 /* AnnotationRenderer.swift */,
+				AB000056 /* CanvasViewport.swift */,
+				AB000055 /* AnnotationView+Commands.swift */,
+				AB000054 /* AnnotationView+Text.swift */,
 				AB000042 /* Preferences.swift */,
 				AB000043 /* SettingsKit.swift */,
 				AB000044 /* SettingsSections.swift */,
@@ -254,6 +265,7 @@
 				AB100003 /* UploadcareServiceTests.swift */,
 				AB100004 /* UploadHistoryTests.swift */,
 				AB100013 /* ProblemsTests.swift */,
+				AB100014 /* CanvasViewportTests.swift */,
 				AB100011 /* ImageEncoderTests.swift */,
 				AB100012 /* VideoExporterTests.swift */,
 				AB100006 /* CaptureAreaTests.swift */,
@@ -399,6 +411,9 @@
 				AA000032 /* VideoExporter.swift in Sources */,
 				AA000033 /* StatusMenu.swift in Sources */,
 				AA000038 /* AnnotationRenderer.swift in Sources */,
+				AA000053 /* CanvasViewport.swift in Sources */,
+				AA000052 /* AnnotationView+Commands.swift in Sources */,
+				AA000051 /* AnnotationView+Text.swift in Sources */,
 				AA000039 /* Preferences.swift in Sources */,
 				AA000040 /* SettingsKit.swift in Sources */,
 				AA000041 /* SettingsSections.swift in Sources */,
@@ -437,6 +452,7 @@
 				AA100002 /* UploadcareServiceTests.swift in Sources */,
 				AA100003 /* UploadHistoryTests.swift in Sources */,
 				AA100012 /* ProblemsTests.swift in Sources */,
+				AA100013 /* CanvasViewportTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

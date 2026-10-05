@@ -40,6 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case open(URL)
     }
 
+    /// Quitting with an editor that has unsaved marks asks first, like closing it does
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let editor = windows.window(of: AnnotationWindow.self)
+        return editor?.confirmDiscard() == false ? .terminateCancel : .terminateNow
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         Notifier.setUp()
         Defaults.migrate()

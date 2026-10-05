@@ -17,6 +17,9 @@ final class AnnotationRenderer {
 
     private static let blurCIContext = CIContext()
     private var blurCache: [BlurCacheKey: NSImage] = [:]
+    /// Editing chrome (handles, dashed borders) is drawn this much smaller, so it keeps its on-screen
+    /// size when the editor is zoomed in (1 / zoom)
+    var chromeScale: CGFloat = 1
     /// Smallest pixellation block, in screenshot points, so small regions stay unreadable
     private static let minBlurBlockSize: CGFloat = 10
 
@@ -34,8 +37,8 @@ final class AnnotationRenderer {
 
     // MARK: - Layering
 
-    /// Blurs first (between the screenshot and the rest), then everything else, then `current` (the
-    /// annotation being drawn). `skipping` is left out (a text view draws it); the blur at `uncachedIndex`
+    /// Blurs first (between the screenshot and the rest), then highlights, then everything else, with
+    /// `current` (the annotation being drawn) last in its layer. `skipping` is left out (a text view draws it); the blur at `uncachedIndex`
     /// (being dragged) and `current` render uncached so intermediate frames don't pile up in the cache.
     /// Export leaves crop out: it's applied by cutting the image instead.
     func draw(
@@ -51,8 +54,11 @@ final class AnnotationRenderer {
             if case .blur(let rect) = layer.annotation { drawBlur(rect, cache: layer.cached) }
         }
         for layer in layers {
+            if case .highlight(let rect, let color) = layer.annotation { drawHighlight(rect, color: color) }
+        }
+        for layer in layers {
             switch layer.annotation {
-            case .blur: continue
+            case .blur, .highlight: continue
             case .crop where !includeCrop: continue
             default: draw(layer.annotation)
             }
@@ -143,6 +149,13 @@ final class AnnotationRenderer {
             )
             drawDashedBorder(baseRect.insetBy(dx: -padding, dy: 0))
         }
+        // Badges have no handles: a dashed ring shows they're selected / grabbable
+        if case .badge(let center, _, _) = annotation {
+            let radius = Annotation.badgeRadius + 4 * chromeScale
+            drawDashedBorder(NSBezierPath(ovalIn: CGRect(
+                x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2
+            )))
+        }
 
         for (handle, point) in annotation.handles {
             var drawPoint = point
@@ -161,39 +174,73 @@ final class AnnotationRenderer {
     }
 
     private func drawDashedBorder(_ rect: CGRect) {
-        let borderPath = NSBezierPath(rect: rect)
-        borderPath.lineWidth = 1.5
-        let dashPattern: [CGFloat] = [4.0, 4.0]
+        drawDashedBorder(NSBezierPath(rect: rect))
+    }
+
+    /// Editing chrome is in the system accent color, so it never reads as part of a (red) annotation
+    private func drawDashedBorder(_ borderPath: NSBezierPath) {
+        borderPath.lineWidth = 1.5 * chromeScale
+        let dashPattern: [CGFloat] = [4.0 * chromeScale, 4.0 * chromeScale]
         borderPath.setLineDash(dashPattern, count: dashPattern.count, phase: 0)
-        NSColor.red.withAlphaComponent(0.5).setStroke()
+        NSColor.controlAccentColor.withAlphaComponent(0.7).setStroke()
         borderPath.stroke()
     }
 
     private func drawHandle(at point: CGPoint) {
-        let handleRadius: CGFloat = 6.0
+        let handleRadius = 6.0 * chromeScale
         let path = NSBezierPath(ovalIn: CGRect(
             x: point.x - handleRadius, y: point.y - handleRadius,
             width: handleRadius * 2, height: handleRadius * 2
         ))
         NSColor.white.setFill()
         path.fill()
-        NSColor.red.setStroke()
-        path.lineWidth = 2.0
+        NSColor.controlAccentColor.setStroke()
+        path.lineWidth = 2.0 * chromeScale
         path.stroke()
     }
 
     // MARK: - Annotations
 
-    private func draw(_ annotation: Annotation) {
+    /// Marks drawn over a soft shadow, so they stay legible on busy screenshots
+    private static func castsShadow(_ annotation: Annotation) -> Bool {
         switch annotation {
-        case .arrow(let from, let to, let color):
-            drawArrow(from: from, to: to, color: color.nsColor)
-        case .line(let from, let to, let color):
-            drawLine(from: from, to: to, color: color.nsColor)
-        case .rectangle(let rect, let color):
-            drawRectangle(rect, color: color.nsColor)
-        case .ellipse(let rect, let color):
-            drawEllipse(rect, color: color.nsColor)
+        case .arrow, .line, .rectangle, .ellipse, .text, .badge: true
+        case .highlight, .crop, .blur: false
+        }
+    }
+
+    private func draw(_ annotation: Annotation) {
+        guard Self.castsShadow(annotation), let ctx = NSGraphicsContext.current?.cgContext else {
+            return drawMark(annotation)
+        }
+        // Shadow offset and blur are in device space: map 1pt down and 3pt of blur through the
+        // current transform, so screen and export (different scales and flips) look the same.
+        let ctm = ctx.ctm
+        let scale = sqrt(abs(ctm.a * ctm.d - ctm.b * ctm.c))
+        ctx.saveGState()
+        ctx.setShadow(
+            offset: CGSize(width: 0, height: 1).applying(ctm), blur: 3 * scale,
+            color: NSColor.black.withAlphaComponent(0.35).cgColor
+        )
+        // One layer per mark, so an arrow's line and head cast a single shadow
+        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+        drawMark(annotation)
+        ctx.endTransparencyLayer()
+        ctx.restoreGState()
+    }
+
+    private func drawMark(_ annotation: Annotation) {
+        switch annotation {
+        case .arrow(let from, let to, let color, let width):
+            drawArrow(from: from, to: to, color: color.nsColor, width: width)
+        case .line(let from, let to, let color, let width):
+            drawLine(from: from, to: to, color: color.nsColor, width: width)
+        case .rectangle(let rect, let color, let width):
+            drawRectangle(rect, color: color.nsColor, width: width)
+        case .ellipse(let rect, let color, let width):
+            drawEllipse(rect, color: color.nsColor, width: width)
+        case .highlight(let rect, let color):
+            drawHighlight(rect, color: color)
         case .crop(let rect):
             drawCrop(rect)
         case .text(let origin, let width, let content, let fontSize, let color):
@@ -206,19 +253,19 @@ final class AnnotationRenderer {
         }
     }
 
-    private func drawArrow(from: CGPoint, to: CGPoint, color: NSColor) {
+    private func drawArrow(from: CGPoint, to: CGPoint, color: NSColor, width: StrokeWidth) {
         color.setStroke()
         color.setFill()
 
         let path = NSBezierPath()
-        path.lineWidth = 3.0
+        path.lineWidth = width.points
         path.move(to: from)
         path.line(to: to)
         path.stroke()
 
         // Arrowhead
         let angle = atan2(to.y - from.y, to.x - from.x)
-        let headLength: CGFloat = 18.0
+        let headLength = width.arrowHeadLength
         let headAngle: CGFloat = .pi / 6
 
         let p1 = CGPoint(
@@ -238,27 +285,37 @@ final class AnnotationRenderer {
         head.fill()
     }
 
-    private func drawLine(from: CGPoint, to: CGPoint, color: NSColor) {
+    private func drawLine(from: CGPoint, to: CGPoint, color: NSColor, width: StrokeWidth) {
         color.setStroke()
         let path = NSBezierPath()
-        path.lineWidth = 3.0
+        path.lineWidth = width.points
         path.move(to: from)
         path.line(to: to)
         path.stroke()
     }
 
-    private func drawRectangle(_ rect: CGRect, color: NSColor) {
+    private func drawRectangle(_ rect: CGRect, color: NSColor, width: StrokeWidth) {
         color.setStroke()
         let path = NSBezierPath(rect: rect)
-        path.lineWidth = 3.0
+        path.lineWidth = width.points
         path.stroke()
     }
 
-    private func drawEllipse(_ rect: CGRect, color: NSColor) {
+    private func drawEllipse(_ rect: CGRect, color: NSColor, width: StrokeWidth) {
         color.setStroke()
         let path = NSBezierPath(ovalIn: rect)
-        path.lineWidth = 3.0
+        path.lineWidth = width.points
         path.stroke()
+    }
+
+    /// A marker stroke: the color multiplied into the screenshot, so text under it stays readable
+    private func drawHighlight(_ rect: CGRect, color: AnnotationColor) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+        context.compositingOperation = .multiply
+        color.nsColor.withAlphaComponent(0.45).setFill()
+        NSBezierPath(rect: rect).fill()
+        context.restoreGraphicsState()
     }
 
     private func drawBadge(center: CGPoint, number: Int, color: AnnotationColor) {

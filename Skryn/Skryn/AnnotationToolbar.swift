@@ -8,6 +8,7 @@ final class AnnotationToolbar: HUDPanel {
     struct State: Equatable {
         var tool: AnnotationTool
         var color: AnnotationColor
+        var width: StrokeWidth
         var canUndo: Bool
         var canRedo: Bool
     }
@@ -19,6 +20,7 @@ final class AnnotationToolbar: HUDPanel {
     private var toolButtons: [(tool: AnnotationTool, button: HUDButton)] = []
     private var actionButtons: [(action: SaveAction, button: HUDButton)] = []
     private var swatches: [(color: AnnotationColor, button: ColorSwatchButton)] = []
+    private var widthButtons: [(width: StrokeWidth, button: HUDButton)] = []
     private lazy var undoButton = makeButton("Undo", symbol: "arrow.uturn.backward", tip: "Undo \u{2014} \u{2318}Z") {
         $0.undo(nil)
     }
@@ -48,7 +50,7 @@ final class AnnotationToolbar: HUDPanel {
     @objc private func refresh() {
         guard let editor else { return }
         update(State(
-            tool: editor.selectedTool, color: editor.drawingColor,
+            tool: editor.selectedTool, color: editor.displayedColor, width: editor.displayedWidth,
             canUndo: editor.undoManager?.canUndo ?? false, canRedo: editor.undoManager?.canRedo ?? false
         ))
     }
@@ -59,6 +61,9 @@ final class AnnotationToolbar: HUDPanel {
         }
         for (color, swatch) in swatches {
             swatch.isSelectedColor = color == state.color
+        }
+        for (width, button) in widthButtons {
+            Self.crossfade(button, \.isSelectedTool, to: width == state.width)
         }
         Self.crossfade(undoButton, \.isEnabled, to: state.canUndo)
         Self.crossfade(redoButton, \.isEnabled, to: state.canRedo)
@@ -100,8 +105,17 @@ final class AnnotationToolbar: HUDPanel {
         swatches = AnnotationColor.allCases.map { color in
             let swatch = ColorSwatchButton(color: color)
             swatch.hint = "\(color.title) \u{2014} C cycles colors"
-            swatch.handler = { [weak self] in self?.editor?.drawingColor = color }
+            swatch.handler = { [weak self] in self?.editor?.applyColor(color) }
             return (color, swatch)
+        }
+
+        // Line weight of arrows, lines and shapes; [ and ] step it from the keyboard
+        widthButtons = StrokeWidth.allCases.map { width in
+            let button = makeButton(width.title, symbol: "line.diagonal", tip: "\(width.title) line \u{2014} [ thinner, ] thicker") {
+                $0.applyWidth(width)
+            }
+            button.image = Self.lineImage(for: width)
+            return (width, button)
         }
 
         actionButtons = SaveAction.allCases.map { action in
@@ -111,9 +125,27 @@ final class AnnotationToolbar: HUDPanel {
         }
 
         return [
-            [close], toolButtons.map(\.button), swatches.map(\.button), [undoButton, redoButton],
+            [close], toolButtons.map(\.button), swatches.map(\.button), widthButtons.map(\.button),
+            [undoButton, redoButton],
             actionButtons.map(\.button),
         ]
+    }
+
+    /// A short horizontal stroke at `width`'s weight, tinted like the other icons
+    private static func lineImage(for width: StrokeWidth) -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+            let path = NSBezierPath()
+            path.lineWidth = width.points
+            path.lineCapStyle = .round
+            path.move(to: CGPoint(x: rect.minX + 2, y: rect.midY))
+            path.line(to: CGPoint(x: rect.maxX - 2, y: rect.midY))
+            NSColor.black.setStroke()
+            path.stroke()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "\(width.title) line"
+        return image
     }
 
     /// A toolbar button that acts on the editor

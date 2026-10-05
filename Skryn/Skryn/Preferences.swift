@@ -5,6 +5,8 @@ import Carbon.HIToolbox
 enum Defaults {
     static let saveFolderPath = "saveFolderPath"
     static let hasLaunchedBefore = "hasLaunchedBefore"
+    /// How many editors have shown the canvas hint (it stops after a few)
+    static let editorHintCount = "editorHintCount"
 
     /// Posted when `saveFolder` is changed
     static let saveFolderDidChange = Notification.Name("SaveFolderDidChange")

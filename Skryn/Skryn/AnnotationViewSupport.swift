@@ -16,3 +16,28 @@ final class IsolatedUndoTextView: NSTextView {
         super.keyDown(with: event)
     }
 }
+
+/// The first-run hint pill over the top of the editor canvas (HUD look)
+@MainActor
+enum EditorHint {
+    static func make() -> NSView {
+        let label = NSTextField(labelWithString:
+            "Drag to draw \u{00B7} \u{21E7} straightens \u{00B7} T text \u{00B7} 1\u{2013}9 numbers \u{00B7} click a mark to edit")
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = HUDStyle.dimmed
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let pill = NSView()
+        pill.wantsLayer = true
+        pill.appearance = NSAppearance(named: .darkAqua)
+        HUDStyle.paintSurface(pill.layer, radius: 13)
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        pill.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
+            label.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+            pill.heightAnchor.constraint(equalToConstant: 26),
+        ])
+        return pill
+    }
+}

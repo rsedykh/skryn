@@ -4,7 +4,7 @@ import Carbon.HIToolbox
 /// What a plain drag or click does in the screenshot editor. The toolbar picks one; holding a
 /// modifier at mouse-down picks the matching tool for that drag regardless (see `init?(modifiers:)`).
 enum AnnotationTool: CaseIterable {
-    case arrow, line, rectangle, ellipse, text, badge, blur, crop
+    case arrow, line, rectangle, ellipse, text, badge, highlight, blur, crop
 
     var title: String {
         switch self {
@@ -14,6 +14,7 @@ enum AnnotationTool: CaseIterable {
         case .ellipse: "Ellipse"
         case .text: "Text"
         case .badge: "Number"
+        case .highlight: "Highlight"
         case .blur: "Blur"
         case .crop: "Crop"
         }
@@ -27,6 +28,7 @@ enum AnnotationTool: CaseIterable {
         case .ellipse: "circle"
         case .text: "textformat"
         case .badge: "1.circle"
+        case .highlight: "highlighter"
         case .blur: "checkerboard.rectangle"
         case .crop: "crop"
         }
@@ -40,6 +42,7 @@ enum AnnotationTool: CaseIterable {
         case .line: ("L", kVK_ANSI_L)
         case .rectangle: ("R", kVK_ANSI_R)
         case .ellipse: ("O", kVK_ANSI_O)
+        case .highlight: ("H", kVK_ANSI_H)
         case .blur: ("B", kVK_ANSI_B)
         case .crop: ("X", kVK_ANSI_X)
         case .text, .badge: nil
@@ -54,7 +57,7 @@ enum AnnotationTool: CaseIterable {
         case .ellipse: [.shift, .command]
         case .blur: .control
         case .crop: .option
-        case .arrow, .text, .badge: nil
+        case .arrow, .text, .badge, .highlight: nil
         }
     }
 
@@ -93,16 +96,37 @@ enum AnnotationTool: CaseIterable {
     }
 
     /// The annotation a drag from `start` to `end` draws; nil for tools placed by clicking.
-    func annotation(from start: CGPoint, to end: CGPoint, color: AnnotationColor) -> Annotation? {
+    /// `width` applies to the stroked shapes (arrow, line, rectangle, ellipse).
+    func annotation(
+        from start: CGPoint, to end: CGPoint, color: AnnotationColor, width: StrokeWidth = .medium
+    ) -> Annotation? {
         let rect = CGRect(spanning: start, end)
         switch self {
-        case .arrow: return .arrow(from: start, to: end, color: color)
-        case .line: return .line(from: start, to: end, color: color)
-        case .rectangle: return .rectangle(rect: rect, color: color)
-        case .ellipse: return .ellipse(rect: rect, color: color)
+        case .arrow: return .arrow(from: start, to: end, color: color, width: width)
+        case .line: return .line(from: start, to: end, color: color, width: width)
+        case .rectangle: return .rectangle(rect: rect, color: color, width: width)
+        case .ellipse: return .ellipse(rect: rect, color: color, width: width)
+        case .highlight: return .highlight(rect: rect, color: color)
         case .blur: return .blur(rect: rect)
         case .crop: return .crop(rect: rect)
         case .text, .badge: return nil
         }
+    }
+
+    /// Lines and arrows: Shift snaps them to 45° steps; everything else to squares and circles
+    var constrainsAngle: Bool { self == .arrow || self == .line }
+
+    /// `point` adjusted for Shift held while dragging from `anchor`: snapped to the nearest 45° keeping
+    /// its length (`angular`), or pushed out to a square with the longer side.
+    static func constrained(_ point: CGPoint, from anchor: CGPoint, angular: Bool) -> CGPoint {
+        let dx = point.x - anchor.x, dy = point.y - anchor.y
+        if angular {
+            let step = CGFloat.pi / 4
+            let angle = (atan2(dy, dx) / step).rounded() * step
+            let length = hypot(dx, dy)
+            return CGPoint(x: anchor.x + (length * cos(angle)).rounded(), y: anchor.y + (length * sin(angle)).rounded())
+        }
+        let side = max(abs(dx), abs(dy))
+        return CGPoint(x: anchor.x + (dx < 0 ? -side : side), y: anchor.y + (dy < 0 ? -side : side))
     }
 }

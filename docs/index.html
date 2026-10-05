@@ -1336,7 +1336,18 @@
         c.drawImage(t.canvas, r.x, r.y, t.nx * t.b, t.ny * t.b);
         c.restore();
       }
+      // Marks cast the app's soft shadow (1pt down, 3pt blur, black .35). Canvas shadows are in
+      // device pixels, so scale them by the current transform, like AnnotationRenderer does.
+      const SHADOWED = { arrow: 1, line: 1, rect: 1, ellipse: 1, badge: 1, text: 1 };
       function drawAnn(c, a, view) {
+        if (!SHADOWED[a.type]) return drawMark(c, a, view);
+        const k = c.getTransform().a;
+        c.save();
+        c.shadowColor = 'rgba(0,0,0,.35)'; c.shadowBlur = 3 * k; c.shadowOffsetX = 0; c.shadowOffsetY = k;
+        drawMark(c, a, view);
+        c.restore();
+      }
+      function drawMark(c, a, view) {
         switch (a.type) {
           case 'arrow': return drawArrow(c, a);
           case 'line': return drawLine(c, a);

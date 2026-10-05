@@ -53,8 +53,9 @@ final class AnnotationWindow: NSWindow {
         self.isReleasedWhenClosed = false
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         self.contentView = annotationView
+        annotationView.showHintIfNew()
         annotationView.onAction = { [weak self] action, shot in
-            if onAction(action, shot) { self?.close() }
+            if onAction(action, shot) { self?.dismiss() }  // saved: nothing to ask about
         }
     }
 
@@ -85,10 +86,29 @@ final class AnnotationWindow: NSWindow {
         }
     }
 
-    /// Every close path (Cmd+W, the toolbar's ✕, ESC, closing after Save/Copy/Upload) plays the exit:
-    /// toolbar sinks, screenshot shrinks, backdrop lifts. Then the real close runs once, so
-    /// `windowWillClose` fires after the animation.
+    /// ⌘W and the toolbar's ✕: asks before throwing away unsaved marks, then plays the exit.
     override func close() {
+        guard !isClosing, confirmDiscard() else { return }
+        dismiss()
+    }
+
+    /// True when there's nothing to lose, or the user chose Discard. Cancel is the default (Return)
+    /// and Esc, so a stray key never throws the marks away.
+    func confirmDiscard() -> Bool {
+        let count = annotationView.unsavedMarkCount
+        guard count > 0 else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Discard your marks?"
+        alert.informativeText = count == 1 ? "1 mark will be lost." : "\(count) marks will be lost."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Discard").hasDestructiveAction = true
+        return alert.runModal() == .alertSecondButtonReturn
+    }
+
+    /// Every close path ends here (closing after Save/Copy/Upload directly) and plays the exit: toolbar
+    /// sinks, screenshot shrinks, backdrop lifts. Then the real close runs once, so `windowWillClose`
+    /// fires after the animation.
+    func dismiss() {
         guard !isClosing else { return }
         HUDHint.shared.hide()
         removeChildWindow(editorToolbar)
